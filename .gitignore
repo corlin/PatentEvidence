@@ -28,6 +28,7 @@ artifacts/
 
 # Local SDD workspace
 .superpowers/
+.worktrees/
 
 # OS/editor files
 .DS_Store
