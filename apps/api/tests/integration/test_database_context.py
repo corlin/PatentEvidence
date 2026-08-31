@@ -11,15 +11,20 @@ from patent_evidence_api.core.database import (
     create_application_session_factory,
     create_engine,
     create_platform_session_factory,
+    create_worker_session_factory,
     platform_transaction,
     require_tenant_context,
     session_token_transaction,
     tenant_transaction,
+    worker_transaction,
 )
 
 
 ORG_A = UUID("00000000-0000-4000-8000-000000000001")
+ORG_B = UUID("00000000-0000-4000-8000-000000000002")
 ACTOR_A = UUID("10000000-0000-4000-8000-000000000001")
+ACTOR_B = UUID("10000000-0000-4000-8000-000000000002")
+MEMBERSHIP_B = UUID("20000000-0000-4000-8000-000000000002")
 SESSION_HASH = "session-hash-runtime-context"
 RUNTIME_IDENTITY = UUID("10000000-0000-4000-8000-000000000004")
 RUNTIME_SESSION = UUID("50000000-0000-4000-8000-000000000004")
@@ -38,6 +43,14 @@ def _async_platform_url() -> str:
     if not value:
         pytest.skip("PE_TEST_PLATFORM_DATABASE_URL is provided by scripts/test-postgres.sh")
     assert urlsplit(value).username == "patent_evidence_platform"
+    return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+
+def _async_worker_url() -> str:
+    value = os.environ.get("PE_TEST_WORKER_DATABASE_URL")
+    if not value:
+        pytest.skip("PE_TEST_WORKER_DATABASE_URL is provided by scripts/test-postgres.sh")
+    assert urlsplit(value).username == "patent_evidence_worker"
     return value.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 
@@ -142,5 +155,64 @@ async def test_session_token_transaction_binds_hash_for_insert_and_lookup() -> N
                 text("SELECT count(*) FROM user_sessions WHERE id=:session_id"),
                 {"session_id": RUNTIME_SESSION},
             ) == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_worker_transaction_binds_context_for_restricted_worker_role() -> None:
+    engine = create_engine(_async_worker_url())
+    factory = create_worker_session_factory(engine)
+    try:
+        async with worker_transaction(
+            factory,
+            ORG_B,
+            actor_identity_id=ACTOR_B,
+            request_correlation_id="request-worker-context",
+        ) as session:
+            assert await session.scalar(text("SELECT current_user")) == "patent_evidence_worker"
+            assert await require_tenant_context(session) == ORG_B
+            assert await session.scalar(
+                text("SELECT current_setting('app.current_actor_identity_id')")
+            ) == str(ACTOR_B)
+            assert await session.scalar(
+                text("SELECT current_setting('app.current_request_correlation_id')")
+            ) == "request-worker-context"
+            assert await session.scalar(
+                text("SELECT id FROM organization_memberships")
+            ) == MEMBERSHIP_B
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("factory_builder", "expected_factory_label"),
+    (
+        (create_application_session_factory, "application session factory"),
+        (create_platform_session_factory, "patent_evidence_platform session factory"),
+    ),
+)
+@pytest.mark.asyncio
+async def test_worker_transaction_rejects_non_worker_factory(
+    factory_builder, expected_factory_label: str
+) -> None:
+    engine = create_engine(_async_worker_url())
+    factory = factory_builder(engine)
+    try:
+        with pytest.raises(UnexpectedDatabaseRoleError, match=expected_factory_label):
+            async with worker_transaction(factory, ORG_B):
+                pass
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_worker_transaction_rejects_wrong_live_database_role() -> None:
+    engine = create_engine(_async_application_url())
+    factory = create_worker_session_factory(engine)
+    try:
+        with pytest.raises(UnexpectedDatabaseRoleError, match="connected as patent_evidence_app"):
+            async with worker_transaction(factory, ORG_B):
+                pass
     finally:
         await engine.dispose()

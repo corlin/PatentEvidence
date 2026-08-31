@@ -21,6 +21,7 @@ class UnexpectedDatabaseRoleError(RuntimeError):
 
 APPLICATION_DATABASE_ROLE = "patent_evidence_app"
 PLATFORM_DATABASE_ROLE = "patent_evidence_platform"
+WORKER_DATABASE_ROLE = "patent_evidence_worker"
 
 
 def create_engine(database_url: str) -> AsyncEngine:
@@ -44,6 +45,10 @@ def create_application_session_factory(engine: AsyncEngine) -> async_sessionmake
 
 def create_platform_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return _create_role_session_factory(engine, PLATFORM_DATABASE_ROLE)
+
+
+def create_worker_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return _create_role_session_factory(engine, WORKER_DATABASE_ROLE)
 
 
 async def verify_database_role(session: AsyncSession, expected_role: str) -> None:
@@ -134,6 +139,25 @@ async def platform_transaction(
         await bind_transaction_context(
             session,
             organization_id=None,
+            actor_identity_id=actor_identity_id,
+            request_correlation_id=request_correlation_id,
+        )
+        yield session
+
+
+@asynccontextmanager
+async def worker_transaction(
+    factory: async_sessionmaker[AsyncSession],
+    organization_id: UUID,
+    *,
+    actor_identity_id: UUID | None = None,
+    request_correlation_id: str | None = None,
+) -> AsyncIterator[AsyncSession]:
+    async with factory() as session, session.begin():
+        await verify_database_role(session, WORKER_DATABASE_ROLE)
+        await bind_transaction_context(
+            session,
+            organization_id=organization_id,
             actor_identity_id=actor_identity_id,
             request_correlation_id=request_correlation_id,
         )
