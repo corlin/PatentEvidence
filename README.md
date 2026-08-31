@@ -23,6 +23,7 @@ business features.
 
    ```sh
    .venv/bin/pytest
+   ./scripts/test-postgres.sh
    pnpm test:web
    pnpm build:web
    .venv/bin/python scripts/verify-source-lock.py
@@ -30,7 +31,10 @@ business features.
    docker compose config
    ```
 
-5. Start the development stack with `docker compose up --build`.
+5. Start the development stack with `docker compose up --build`. The one-shot
+   `migrate` service must complete before the API and worker start. `GET
+   /health` remains a process-liveness check and intentionally does not query
+   PostgreSQL.
 
 See `docs/operations/local-development.md` for process commands and
 `docs/architecture/p0-scaffold.md` for boundaries.

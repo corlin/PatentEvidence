@@ -4,13 +4,15 @@ services:
       context: .
       dockerfile: ops/docker/api.Dockerfile
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-patent_evidence}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-patent_evidence}
+      PATENT_EVIDENCE_DATABASE_URL: postgresql+asyncpg://patent_evidence_app:${PATENT_EVIDENCE_APP_DB_PASSWORD:-app-change-me-local-only}@postgres:5432/${POSTGRES_DB:-patent_evidence}
       OBJECT_STORAGE_ENDPOINT: http://minio:9000
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       minio:
         condition: service_healthy
     healthcheck:
@@ -25,11 +27,13 @@ services:
       context: .
       dockerfile: ops/docker/worker.Dockerfile
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-patent_evidence}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-patent_evidence}
+      PATENT_EVIDENCE_WORKER_DATABASE_URL: postgresql+asyncpg://patent_evidence_worker:${PATENT_EVIDENCE_WORKER_DB_PASSWORD:-worker-change-me-local-only}@postgres:5432/${POSTGRES_DB:-patent_evidence}
       OBJECT_STORAGE_ENDPOINT: http://minio:9000
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       minio:
         condition: service_healthy
     healthcheck:
@@ -59,17 +63,33 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-patent_evidence}
-      POSTGRES_USER: ${POSTGRES_USER:-patent_evidence}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-change-me-local-only}
+      PATENT_EVIDENCE_MIGRATION_DB_PASSWORD: ${PATENT_EVIDENCE_MIGRATION_DB_PASSWORD:-migration-change-me-local-only}
+      PATENT_EVIDENCE_APP_DB_PASSWORD: ${PATENT_EVIDENCE_APP_DB_PASSWORD:-app-change-me-local-only}
+      PATENT_EVIDENCE_PLATFORM_DB_PASSWORD: ${PATENT_EVIDENCE_PLATFORM_DB_PASSWORD:-platform-change-me-local-only}
+      PATENT_EVIDENCE_WORKER_DB_PASSWORD: ${PATENT_EVIDENCE_WORKER_DB_PASSWORD:-worker-change-me-local-only}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./ops/postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: ops/docker/migrate.Dockerfile
+    environment:
+      PATENT_EVIDENCE_MIGRATION_DATABASE_URL: postgresql+psycopg://patent_evidence_migration:${PATENT_EVIDENCE_MIGRATION_DB_PASSWORD:-migration-change-me-local-only}@postgres:5432/${POSTGRES_DB:-patent_evidence}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
