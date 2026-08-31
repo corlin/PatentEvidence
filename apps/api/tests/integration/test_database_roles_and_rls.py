@@ -12,8 +12,12 @@ ORG_A = UUID("00000000-0000-4000-8000-000000000001")
 ORG_B = UUID("00000000-0000-4000-8000-000000000002")
 IDENTITY_A = UUID("10000000-0000-4000-8000-000000000001")
 IDENTITY_B = UUID("10000000-0000-4000-8000-000000000002")
+IDENTITY_PLATFORM = UUID("10000000-0000-4000-8000-000000000003")
 MEMBERSHIP_A = UUID("20000000-0000-4000-8000-000000000001")
 MEMBERSHIP_B = UUID("20000000-0000-4000-8000-000000000002")
+MFA_A = UUID("30000000-0000-4000-8000-000000000001")
+SESSION_PLATFORM = UUID("50000000-0000-4000-8000-000000000001")
+SESSION_HASH = "session-hash-platform"
 
 
 def _url(variable: str, expected_role: str) -> str:
@@ -33,6 +37,9 @@ def migration_connection() -> Iterator[psycopg.Connection[tuple[object, ...]]]:
         now = datetime.now(UTC)
         connection.execute("DELETE FROM platform_audit_events")
         connection.execute("DELETE FROM audit_events")
+        connection.execute("DELETE FROM user_sessions")
+        connection.execute("DELETE FROM platform_operator_grants")
+        connection.execute("DELETE FROM mfa_recovery_codes")
         connection.execute("DELETE FROM mfa_credentials")
         connection.execute("DELETE FROM organization_memberships")
         connection.execute("DELETE FROM organizations")
@@ -41,8 +48,9 @@ def migration_connection() -> Iterator[psycopg.Connection[tuple[object, ...]]]:
             """INSERT INTO global_identities
             (id,email_normalized,display_name,status,password_hash,created_at,updated_at)
             VALUES (%s,'a@example.test','A','active','hash-a',%s,%s),
-                   (%s,'b@example.test','B','active','hash-b',%s,%s)""",
-            (IDENTITY_A, now, now, IDENTITY_B, now, now),
+                   (%s,'b@example.test','B','active','hash-b',%s,%s),
+                   (%s,'platform@example.test','Platform','active','hash-platform',%s,%s)""",
+            (IDENTITY_A, now, now, IDENTITY_B, now, now, IDENTITY_PLATFORM, now, now),
         )
         connection.execute(
             """INSERT INTO organizations
@@ -62,9 +70,15 @@ def migration_connection() -> Iterator[psycopg.Connection[tuple[object, ...]]]:
             """INSERT INTO mfa_credentials
             (id,global_identity_id,credential_type,label,encrypted_secret_ciphertext,status,
              created_at)
-            VALUES ('30000000-0000-4000-8000-000000000001',%s,'totp','primary',
+            VALUES (%s,%s,'totp','primary',
                     %s,'active',%s)""",
-            (IDENTITY_A, b"ciphertext-a", now),
+            (MFA_A, IDENTITY_A, b"ciphertext-a", now),
+        )
+        connection.execute(
+            """INSERT INTO platform_operator_grants
+            (id,global_identity_id,role,status,granted_at)
+            VALUES ('35000000-0000-4000-8000-000000000001',%s,'platform_admin','active',%s)""",
+            (IDENTITY_PLATFORM, now),
         )
         yield connection
 
@@ -104,6 +118,17 @@ def test_fresh_migration_creates_expected_tables_roles_and_forced_rls(
         ).fetchall()
     }
     assert expected_tables <= tables
+
+    session_columns = {
+        row[0]
+        for row in migration_connection.execute(
+            """SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'user_sessions'"""
+        ).fetchall()
+    }
+    assert "global_identity_id" in session_columns
+    assert "organization_id" not in session_columns
+    assert "membership_id" not in session_columns
 
     roles = migration_connection.execute(
         """SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolinherit, rolbypassrls
@@ -175,6 +200,77 @@ def test_worker_role_uses_the_same_rls_boundary() -> None:
         assert worker.execute("SELECT id FROM organization_memberships").fetchall() == [
             (MEMBERSHIP_B,)
         ]
+
+
+def test_worker_role_cannot_read_password_hashes() -> None:
+    with _runtime_connection("PE_TEST_WORKER_DATABASE_URL", "patent_evidence_worker") as worker:
+        assert worker.execute(
+            "SELECT display_name FROM global_identities WHERE id=%s", (IDENTITY_A,)
+        ).fetchone() == ("A",)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            worker.execute("SELECT password_hash FROM global_identities")
+
+
+def test_session_token_hash_rls_allows_only_matching_session_and_platform_identity() -> None:
+    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
+        app.execute(
+            "SELECT set_config('app.current_session_token_hash', %s, false)", (SESSION_HASH,)
+        )
+        app.execute(
+            """INSERT INTO user_sessions
+            (id,global_identity_id,token_hash,expires_at,last_seen_at,created_at,updated_at)
+            VALUES (%s,%s,%s,now() + interval '1 hour',now(),now(),now())""",
+            (SESSION_PLATFORM, IDENTITY_PLATFORM, SESSION_HASH),
+        )
+        assert app.execute(
+            "SELECT global_identity_id FROM user_sessions WHERE id=%s", (SESSION_PLATFORM,)
+        ).fetchone() == (IDENTITY_PLATFORM,)
+
+        app.execute(
+            "SELECT set_config('app.current_session_token_hash', 'another-session-hash', false)"
+        )
+        assert app.execute("SELECT count(*) FROM user_sessions").fetchone() == (0,)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            app.execute(
+                """INSERT INTO user_sessions
+                (id,global_identity_id,token_hash,expires_at,last_seen_at,created_at,updated_at)
+                VALUES ('50000000-0000-4000-8000-000000000002',%s,%s,
+                        now() + interval '1 hour',now(),now(),now())""",
+                (IDENTITY_A, SESSION_HASH),
+            )
+
+    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
+        assert app.execute("SELECT count(*) FROM user_sessions").fetchone() == (0,)
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            app.execute(
+                """INSERT INTO user_sessions
+                (id,global_identity_id,token_hash,expires_at,last_seen_at,created_at,updated_at)
+                VALUES ('50000000-0000-4000-8000-000000000003',%s,'missing-context-hash',
+                        now() + interval '1 hour',now(),now(),now())""",
+                (IDENTITY_A,),
+            )
+
+
+def test_recovery_code_identity_must_match_mfa_credential() -> None:
+    with psycopg.connect(
+        _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration"),
+        autocommit=True,
+    ) as migration_connection:
+        migration_connection.execute(
+            """INSERT INTO mfa_recovery_codes
+            (id,global_identity_id,mfa_credential_id,batch_id,code_hash,created_at)
+            VALUES ('31000000-0000-4000-8000-000000000002',%s,%s,
+                    '32000000-0000-4000-8000-000000000002','valid-code-hash',now())""",
+            (IDENTITY_A, MFA_A),
+        )
+        with pytest.raises(psycopg.errors.ForeignKeyViolation):
+            migration_connection.execute(
+                """INSERT INTO mfa_recovery_codes
+                (id,global_identity_id,mfa_credential_id,batch_id,code_hash,created_at)
+                VALUES ('31000000-0000-4000-8000-000000000001',%s,%s,
+                        '32000000-0000-4000-8000-000000000001','code-hash',now())""",
+                (IDENTITY_B, MFA_A),
+            )
 
 
 def test_platform_role_can_provision_but_cannot_read_credentials() -> None:

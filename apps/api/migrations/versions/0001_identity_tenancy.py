@@ -6,7 +6,7 @@ Revises:
 
 import sqlalchemy as sa
 from alembic import op
-from helpers.tenancy import add_platform_policy, enable_force_rls
+from helpers.tenancy import add_platform_policy, enable_force_rls, enable_force_session_token_rls
 
 
 revision = "0001_identity_tenancy"
@@ -23,7 +23,6 @@ TENANT_TABLES = (
     "organizations",
     "organization_memberships",
     "organization_plan_quotas",
-    "user_sessions",
     "organization_invitations",
     "audit_events",
 )
@@ -113,22 +112,14 @@ def upgrade() -> None:
     op.create_table(
         "user_sessions",
         _uuid("id", primary_key=True),
-        _uuid("organization_id", nullable=True),
         _uuid("global_identity_id"),
-        _uuid("membership_id", nullable=True),
         sa.Column("token_hash", sa.Text(), nullable=False, unique=True),
         sa.Column("mfa_verified_at", sa.DateTime(timezone=True)),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
         *_timestamps(),
-        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(
-            ["organization_id", "membership_id"],
-            ["organization_memberships.organization_id", "organization_memberships.id"],
-            ondelete="RESTRICT",
-        ),
     )
     op.create_table(
         "platform_operator_grants",
@@ -186,6 +177,7 @@ def upgrade() -> None:
         sa.Column("last_used_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.UniqueConstraint("global_identity_id", "id"),
         sa.CheckConstraint("credential_type = 'totp'"),
         sa.CheckConstraint("status IN ('pending','active','revoked')"),
     )
@@ -198,8 +190,11 @@ def upgrade() -> None:
         sa.Column("code_hash", sa.Text(), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["mfa_credential_id"], ["mfa_credentials.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["global_identity_id", "mfa_credential_id"],
+            ["mfa_credentials.global_identity_id", "mfa_credentials.id"],
+            ondelete="RESTRICT",
+        ),
         sa.UniqueConstraint("mfa_credential_id", "code_hash"),
     )
     op.create_table(
@@ -236,6 +231,7 @@ def upgrade() -> None:
 
     for table in TENANT_TABLES:
         enable_force_rls(table, organization_column="id" if table == "organizations" else "organization_id")
+    enable_force_session_token_rls("user_sessions")
     for table in ("organizations", "organization_plan_quotas", "organization_invitations"):
         add_platform_policy(table)
 
@@ -278,9 +274,13 @@ def upgrade() -> None:
     op.execute("GRANT SELECT, INSERT, UPDATE ON organization_invitations TO patent_evidence_platform")
     op.execute("GRANT SELECT, INSERT ON platform_audit_events TO patent_evidence_platform")
 
-    op.execute("GRANT SELECT ON organizations, global_identities TO patent_evidence_worker")
+    op.execute("GRANT SELECT ON organizations TO patent_evidence_worker")
     op.execute(
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON organization_memberships, organization_plan_quotas, user_sessions, organization_invitations TO patent_evidence_worker"
+        """GRANT SELECT (id,email_normalized,display_name,status,security_version,created_at,updated_at)
+        ON global_identities TO patent_evidence_worker"""
+    )
+    op.execute(
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON organization_memberships, organization_plan_quotas, organization_invitations TO patent_evidence_worker"
     )
     op.execute("GRANT SELECT, INSERT ON audit_events TO patent_evidence_worker")
 

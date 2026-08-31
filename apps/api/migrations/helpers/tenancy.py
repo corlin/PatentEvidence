@@ -43,3 +43,22 @@ def add_platform_policy(table_name: str) -> None:
         f'''CREATE POLICY {table_name}_platform_access ON "{table_name}"
         TO patent_evidence_platform USING (true) WITH CHECK (true)'''
     )
+
+
+def enable_force_session_token_rls(table_name: str) -> None:
+    op.execute(f'ALTER TABLE "{table_name}" ENABLE ROW LEVEL SECURITY')
+    op.execute(f'ALTER TABLE "{table_name}" FORCE ROW LEVEL SECURITY')
+    op.execute(
+        f'''CREATE POLICY {table_name}_token_isolation ON "{table_name}"
+        TO patent_evidence_app
+        USING (token_hash = nullif(
+            current_setting('app.current_session_token_hash', true), ''
+        ))
+        WITH CHECK (token_hash = nullif(
+            current_setting('app.current_session_token_hash', true), ''
+        ))'''
+    )
+    op.execute(
+        f'''CREATE POLICY {table_name}_migration_maintenance ON "{table_name}"
+        TO patent_evidence_migration USING (true) WITH CHECK (true)'''
+    )
