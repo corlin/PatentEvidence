@@ -1,0 +1,34 @@
+name: P0 scaffold validation
+
+on:
+  pull_request:
+  push:
+    branches: [main, build/p0-scaffold]
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install Python dependencies
+        run: pip install uv && uv sync --no-install-project
+      - name: Install Node dependencies
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Python tests
+        run: .venv/bin/pytest
+      - name: Frontend tests
+        run: pnpm test:web
+      - name: Frontend production build
+        run: pnpm build:web
+      - name: Verify source lock
+        run: .venv/bin/python scripts/verify-source-lock.py
+      - name: Verify scaffold
+        run: .venv/bin/python scripts/verify-scaffold.py
+      - name: Validate Compose
+        run: docker compose config

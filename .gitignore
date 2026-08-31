@@ -1,0 +1,35 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+htmlcov/
+
+# Node and frontend output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Runtime data and generated artifacts
+data/
+runtime/
+artifacts/
+*.db
+*.sqlite
+*.sqlite3
+
+# Local SDD workspace
+.superpowers/
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/

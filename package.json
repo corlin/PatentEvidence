@@ -1,0 +1,10 @@
+{
+  "name": "patent-evidence-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "test:web": "pnpm --filter @patent-evidence/web test",
+    "build:web": "pnpm --filter @patent-evidence/web build"
+  }
+}

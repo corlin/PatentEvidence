@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "product": "PatentEvidence",
+  "policy": "All source references are immutable. Updating a source requires a reviewed lockfile change and contract-test run.",
+  "sources": [
+    {
+      "name": "PatentQ",
+      "repository": "https://github.com/corlin/PatentQ.git",
+      "commit": "eb63654464e51fa0d68027679c6626fb2a0c608b",
+      "license_status": "owner-controlled-no-license-file",
+      "integration": "selective-port-and-reimplementation",
+      "scope": ["identity", "organization-tenancy", "postgres-rls", "audit", "provider-governance", "workflow-data-model"]
+    },
+    {
+      "name": "PatentForge",
+      "repository": "https://github.com/corlin/PatentForge.git",
+      "commit": "7b6067a9a57019c1a59831de7841bd71c7bda433",
+      "license_status": "owner-controlled-no-license-file",
+      "integration": "selective-port-and-reimplementation",
+      "scope": ["document-parsing", "preflight-runs", "evidence", "findings", "evaluation", "human-confirmation", "docx-export"]
+    },
+    {
+      "name": "PatentScope",
+      "repository": "https://github.com/corlin/PatentScope.git",
+      "commit": "323ed05b6a148c012e0e163de69c927d7b639a37",
+      "license_status": "owner-controlled-no-license-file",
+      "integration": "contract-and-test-reference",
+      "scope": ["stage-contracts", "review-decisions", "offline-checks", "golden-fixtures"]
+    },
+    {
+      "name": "PatentDraw",
+      "repository": "https://github.com/corlin/PatentDraw.git",
+      "commit": "6a0801f43be962476e9aa276b9b32c6c37677b95",
+      "license_status": "owner-controlled-no-license-file",
+      "integration": "design-reference-and-reimplementation",
+      "scope": ["immutable-candidates", "fingerprints", "stale-conflict-detection", "independent-approval", "protected-export"]
+    },
+    {
+      "name": "epo-cli",
+      "repository": "https://github.com/corlin/epo-cli.git",
+      "commit": "07491e42e6db37871cb51ffe55c84712ea053d69",
+      "license_status": "MIT",
+      "integration": "pinned-binary-or-sidecar",
+      "scope": ["epo-search", "family", "legal-status", "register", "images", "documents"]
+    },
+    {
+      "name": "uspto-cli",
+      "repository": "https://github.com/corlin/uspto-cli.git",
+      "commit": "be955e3ce0cb484a8fed6fa65cd23a33b0ed99f0",
+      "license_status": "MIT",
+      "integration": "pinned-binary-or-sidecar",
+      "scope": ["uspto-search", "dossier", "family", "legal-and-prosecution-data"],
+      "constraints": ["one-api-key-per-authorized-user", "no-organization-wide-shared-key"]
+    },
+    {
+      "name": "cnipr-cli",
+      "repository": "https://github.com/corlin/cnipr-cli.git",
+      "commit": "46d4fbc2b1294bd2ebfb23ffd5046bfb6a13e0de",
+      "license_status": "owner-controlled-no-license-file",
+      "integration": "manual-handoff-contract-only",
+      "scope": ["single-record-visible-browser-handoff", "bounded-login", "pdf-validation"],
+      "constraints": ["no-headless-service", "no-direct-http", "no-cookie-replay", "no-bulk-collection", "no-session-persistence"]
+    }
+  ]
+}
