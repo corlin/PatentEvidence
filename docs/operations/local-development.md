@@ -74,3 +74,43 @@ and its data are removed on exit.
 For focused process checks, run `PYTHONPATH=apps/api/src .venv/bin/uvicorn
 patent_evidence_api.main:app --reload` or `PYTHONPATH=apps/worker/src
 .venv/bin/python -m patent_evidence_worker.main health`.
+
+## Platform bootstrap and manual provisioning
+
+The bootstrap command only succeeds while no platform-operator grant exists.
+It reads the initial password from a hidden prompt, or from
+`PATENT_EVIDENCE_BOOTSTRAP_PASSWORD` when an operator injects the value at
+invocation. It never accepts the password as a command argument. Supply the
+migration-owner URL separately and run:
+
+```sh
+PATENT_EVIDENCE_MIGRATION_DATABASE_URL='postgresql+asyncpg://...' \
+  .venv/bin/python scripts/bootstrap-platform-admin.py \
+  admin@example.test 'Platform Admin'
+```
+
+The resulting administrator must log in and confirm TOTP within the printed
+30-minute enrollment deadline. The deadline is stored on the initial grant and
+enforced by the platform authorization guard; no seed, recovery code, password,
+or session token is printed by the bootstrap command.
+
+After login and recent MFA verification, the HTTP surface can create, inspect,
+suspend, reactivate, or set expiry for organizations. Organization creation is
+atomic across the organization, quota, one-time initial administrator
+invitation, provisioning record, idempotency record, and allowed audit event.
+The same actor and `Idempotency-Key` can replay the same request without
+creating duplicates; a changed payload returns 409. A successful first response
+contains the invitation token once, while a replay deliberately returns null.
+
+`expired` is an effective lifecycle state derived from `expires_at`; it is not
+stored in either the organization or quota status columns. Explicit suspension
+is stored on the organization. Quota status remains an independent allocation
+state, while its externally visible availability inherits an organization's
+suspended or expired lifecycle.
+
+`scripts/create-organization.py` is only a thin HTTP client. It reads the
+already-MFA-verified opaque session from `PATENT_EVIDENCE_SESSION_TOKEN`, calls
+the same API, and contains no database or domain implementation. Treat its JSON
+output as credential material because the first successful response includes
+the initial invitation token; capture it only through an operator-approved
+secret handoff and do not put it in logs or shell history.

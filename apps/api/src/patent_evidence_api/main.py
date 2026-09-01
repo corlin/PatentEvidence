@@ -24,12 +24,20 @@ from patent_evidence_api.auth.security import (
     RateLimiter,
     TotpSecurity,
 )
+from patent_evidence_api.auth.session_authority import SessionAuthority
 from patent_evidence_api.core.database import (
     create_application_session_factory,
     create_engine,
     create_platform_session_factory,
 )
 from patent_evidence_api.core.settings import Settings, get_settings
+from patent_evidence_api.platform.access import PlatformAccess
+from patent_evidence_api.platform.api import create_platform_router
+from patent_evidence_api.platform.audit import PlatformAuditWriter
+from patent_evidence_api.platform.organizations import (
+    OrganizationLifecycle,
+    OrganizationProvisioning,
+)
 
 
 def create_app(
@@ -68,14 +76,21 @@ def create_app(
     platform_engine = create_engine(resolved_settings.platform_database_url)
     session_factory = create_application_session_factory(engine)
     platform_session_factory = create_platform_session_factory(platform_engine)
-    privileged_guard = PrivilegedPrincipalGuard(resolved_clock)
+    session_authority = SessionAuthority(resolved_clock)
+    privileged_guard = PrivilegedPrincipalGuard(session_authority, resolved_clock)
     platform_guard = PlatformPrincipalGuard()
+    platform_access = PlatformAccess(
+        session_factory,
+        platform_session_factory,
+        session_authority=session_authority,
+        platform_guard=platform_guard,
+        audit_writer=PlatformAuditWriter(resolved_clock),
+    )
     application = FastAPI(
         title="PatentEvidence API", version="0.1.0", lifespan=lifespan
     )
     application.state.database_engine = engine
     application.state.platform_database_engine = platform_engine
-    application.state.privileged_principal_guard = privileged_guard
     application.state.password_work_pool = resolved_password_runner
     application.include_router(
         create_auth_router(
@@ -94,14 +109,20 @@ def create_app(
                 monotonic=response_monotonic,
                 sleeper=response_sleeper,
             ),
+            session_authority=session_authority,
         )
     )
     application.include_router(
         create_privileged_auth_router(
             session_factory,
-            platform_session_factory,
             application_guard=privileged_guard,
-            platform_guard=platform_guard,
+            platform_access=platform_access,
+        )
+    )
+    application.include_router(
+        create_platform_router(
+            platform_access,
+            OrganizationProvisioning(resolved_clock, OrganizationLifecycle()),
         )
     )
 

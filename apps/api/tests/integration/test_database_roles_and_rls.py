@@ -1,11 +1,10 @@
-import os
 from collections.abc import Iterator
 from datetime import UTC, datetime
-from urllib.parse import urlsplit
 from uuid import UUID
 
 import psycopg
 import pytest
+from test_support import postgres_url
 
 
 ORG_A = UUID("00000000-0000-4000-8000-000000000001")
@@ -21,11 +20,7 @@ SESSION_HASH = "session-hash-platform"
 
 
 def _url(variable: str, expected_role: str) -> str:
-    value = os.environ.get(variable)
-    if not value:
-        pytest.skip(f"{variable} is provided by scripts/test-postgres.sh")
-    assert urlsplit(value).username == expected_role
-    return value.replace("postgresql+psycopg://", "postgresql://", 1)
+    return postgres_url(variable, expected_role)
 
 
 @pytest.fixture(scope="module")

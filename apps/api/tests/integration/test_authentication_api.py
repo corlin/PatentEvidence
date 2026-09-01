@@ -1,13 +1,9 @@
 import base64
 import asyncio
 import hashlib
-import hmac
-import os
-import struct
 import threading
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urlsplit
 from uuid import UUID
 
 import psycopg
@@ -21,8 +17,8 @@ from patent_evidence_api.auth.security import (
     DeterministicRateLimiter,
     PasswordWorkCapacityError,
 )
-from patent_evidence_api.core.settings import Settings
 from patent_evidence_api.main import create_app
+from test_support import api_settings, postgres_url, totp_code
 
 
 IDENTITY = UUID("10000000-0000-4000-8000-000000000101")
@@ -115,32 +111,16 @@ class ConfirmOnlyRateLimiter:
 
 
 def _url(variable: str, role: str) -> str:
-    value = os.environ.get(variable)
-    if not value:
-        pytest.skip(f"{variable} is provided by scripts/test-postgres.sh")
-    assert urlsplit(value).username == role
-    return value
+    return postgres_url(variable, role)
 
 
 def _settings(
     *, production: bool = False, platform_uses_application_role: bool = False
-) -> Settings:
-    application_url = _url("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app")
-    platform_url = (
-        application_url
-        if platform_uses_application_role
-        else _url("PE_TEST_PLATFORM_DATABASE_URL", "patent_evidence_platform")
-    )
-    return Settings(
-        environment="production" if production else "development",
-        database_url=application_url.replace(
-            "postgresql://", "postgresql+asyncpg://", 1
-        ),
-        platform_database_url=platform_url.replace(
-            "postgresql://", "postgresql+asyncpg://", 1
-        ),
+):
+    return api_settings(
         mfa_encryption_key=MFA_KEY,
-        expose_development_tokens=not production,
+        production=production,
+        platform_uses_application_role=platform_uses_application_role,
     )
 
 
@@ -197,15 +177,7 @@ def seeded_identities() -> Iterator[None]:
 
 
 def _totp(secret: str, now: datetime) -> str:
-    counter = int(now.timestamp()) // 30
-    digest = hmac.new(
-        base64.b32decode(secret), struct.pack(">Q", counter), hashlib.sha1
-    ).digest()
-    offset = digest[-1] & 0x0F
-    value = (
-        struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
-    ) % 1_000_000
-    return f"{value:06d}"
+    return totp_code(secret, now)
 
 
 async def _login(client: AsyncClient, email: str = "user@example.test"):

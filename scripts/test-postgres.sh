@@ -37,7 +37,7 @@ export PE_TEST_MIGRATION_DATABASE_URL="postgresql://patent_evidence_migration:mi
 export PE_TEST_APPLICATION_DATABASE_URL="postgresql://patent_evidence_app:app-test-only@127.0.0.1:${host_port}/patent_evidence_test"
 export PE_TEST_PLATFORM_DATABASE_URL="postgresql://patent_evidence_platform:platform-test-only@127.0.0.1:${host_port}/patent_evidence_test"
 export PE_TEST_WORKER_DATABASE_URL="postgresql://patent_evidence_worker:worker-test-only@127.0.0.1:${host_port}/patent_evidence_test"
-export PYTHONPATH="$repository_root/apps/api/src"
+export PYTHONPATH="$repository_root/apps/api/src:$repository_root/apps/api/tests"
 
 cd "$repository_root"
 uv sync --frozen --no-install-project
@@ -45,4 +45,7 @@ uv sync --frozen --no-install-project
 .venv/bin/pytest \
   apps/api/tests/integration/test_database_roles_and_rls.py \
   apps/api/tests/integration/test_database_context.py \
-  apps/api/tests/integration/test_authentication_api.py
+  apps/api/tests/integration/test_authentication_api.py \
+  apps/api/tests/integration/test_platform_provisioning_api.py
+.venv/bin/alembic -c apps/api/alembic.ini downgrade 0001_identity_tenancy
+.venv/bin/alembic -c apps/api/alembic.ini upgrade head

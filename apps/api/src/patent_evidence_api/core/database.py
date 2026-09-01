@@ -39,15 +39,21 @@ def _create_role_session_factory(
     )
 
 
-def create_application_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+def create_application_session_factory(
+    engine: AsyncEngine,
+) -> async_sessionmaker[AsyncSession]:
     return _create_role_session_factory(engine, APPLICATION_DATABASE_ROLE)
 
 
-def create_platform_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+def create_platform_session_factory(
+    engine: AsyncEngine,
+) -> async_sessionmaker[AsyncSession]:
     return _create_role_session_factory(engine, PLATFORM_DATABASE_ROLE)
 
 
-def create_worker_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+def create_worker_session_factory(
+    engine: AsyncEngine,
+) -> async_sessionmaker[AsyncSession]:
     return _create_role_session_factory(engine, WORKER_DATABASE_ROLE)
 
 
@@ -55,7 +61,9 @@ async def verify_database_role(session: AsyncSession, expected_role: str) -> Non
     factory_role = session.info.get("expected_database_role")
     if factory_role != expected_role:
         factory_label = (
-            "application" if factory_role == APPLICATION_DATABASE_ROLE else str(factory_role)
+            "application"
+            if factory_role == APPLICATION_DATABASE_ROLE
+            else str(factory_role)
         )
         raise UnexpectedDatabaseRoleError(
             f"expected database role {expected_role}; received {factory_label} session factory"
@@ -67,7 +75,9 @@ async def verify_database_role(session: AsyncSession, expected_role: str) -> Non
         )
 
 
-async def bind_session_token_hash(session: AsyncSession, session_token_hash: str) -> None:
+async def bind_session_token_hash(
+    session: AsyncSession, session_token_hash: str
+) -> None:
     if not session_token_hash:
         raise ValueError("session_token_hash must not be empty")
     if not session.in_transaction():
@@ -88,8 +98,14 @@ async def bind_transaction_context(
     if not session.in_transaction():
         raise RuntimeError("database context must be bound inside a transaction")
     values = (
-        ("app.current_organization_id", str(organization_id) if organization_id else ""),
-        ("app.current_actor_identity_id", str(actor_identity_id) if actor_identity_id else ""),
+        (
+            "app.current_organization_id",
+            str(organization_id) if organization_id else "",
+        ),
+        (
+            "app.current_actor_identity_id",
+            str(actor_identity_id) if actor_identity_id else "",
+        ),
         ("app.current_request_correlation_id", request_correlation_id or ""),
     )
     for key, value in values:
@@ -104,8 +120,28 @@ async def require_tenant_context(session: AsyncSession) -> UUID:
         text("SELECT nullif(current_setting('app.current_organization_id', true), '')")
     )
     if value is None:
-        raise MissingTenantContextError("organization repository requires tenant context")
+        raise MissingTenantContextError(
+            "organization repository requires tenant context"
+        )
     return UUID(str(value))
+
+
+@asynccontextmanager
+async def application_transaction(
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    actor_identity_id: UUID | None = None,
+    request_correlation_id: str | None = None,
+) -> AsyncIterator[AsyncSession]:
+    async with factory() as session, session.begin():
+        await verify_database_role(session, APPLICATION_DATABASE_ROLE)
+        await bind_transaction_context(
+            session,
+            organization_id=None,
+            actor_identity_id=actor_identity_id,
+            request_correlation_id=request_correlation_id,
+        )
+        yield session
 
 
 @asynccontextmanager
