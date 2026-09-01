@@ -37,7 +37,9 @@ socket-peer-IP and SHA-256-derived email limits before reserving capacity; a
 full worker/queue budget returns the same temporary-unavailability response for
 known and unknown identities. Snapshot and finalization transactions are
 separate, so no database connection is held while Argon2 runs or waits in the
-bounded queue.
+bounded queue. Once submitted, the executor future owns the reserved capacity
+until it completes or is cancelled before execution; cancelling the request
+coroutine cannot admit replacement work while its worker is still running.
 
 Password-reset confirmation applies an aggregate socket-peer-IP limit and
 reserves password-work capacity before checking the token. With capacity

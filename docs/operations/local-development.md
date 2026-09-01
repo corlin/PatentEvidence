@@ -36,6 +36,12 @@ combined running-plus-queued capacity is full; authentication returns a generic
 executor during application shutdown. Keep these limits conservative because
 each default Argon2 operation uses substantial memory.
 
+Capacity follows submitted executor work rather than the request coroutine. A
+cancelled request therefore remains charged while its Argon2 worker continues;
+capacity returns only after completion or definitive cancellation before the
+worker starts. A reservation cancelled before submission and a rejected
+executor submission both return their slot exactly once.
+
 ```sh
 uv sync --no-install-project --python /opt/homebrew/bin/python3.12
 pnpm install

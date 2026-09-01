@@ -7,10 +7,11 @@ import struct
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from functools import partial
+from threading import Lock
 from typing import Protocol
 
 from argon2 import PasswordHasher
@@ -72,15 +73,55 @@ class PasswordWorkCapacityError(RuntimeError):
     """Raised before password work when the bounded pool has no free capacity."""
 
 
-class _PasswordWorkReservation:
+class _PasswordWorkPermit:
+    """Release one capacity slot exactly once from any executor callback thread."""
+
     def __init__(self, pool: "BoundedPasswordWorkPool") -> None:
         self._pool = pool
+        self._released = False
+        self._lock = Lock()
+
+    def release(self) -> None:
+        with self._lock:
+            if self._released:
+                return
+            self._released = True
+        self._pool._release_capacity()
+
+
+class _PasswordWorkReservation:
+    def __init__(
+        self, pool: "BoundedPasswordWorkPool", permit: _PasswordWorkPermit
+    ) -> None:
+        self._pool = pool
+        self._permit = permit
+        self._state = "reserved"
+
+    def release_if_unsubmitted(self) -> None:
+        if self._state != "reserved":
+            return
+        self._state = "released"
+        self._permit.release()
+
+    def _release_after_completion(self, _: Future[object]) -> None:
+        self._permit.release()
 
     async def run(self, function: Callable[..., object], *args: object) -> object:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            self._pool._executor, partial(function, *args)
-        )
+        if self._state != "reserved":
+            raise RuntimeError("password work reservation has already been used")
+        self._state = "submitted"
+        try:
+            executor_future = self._pool._executor.submit(partial(function, *args))
+        except BaseException:
+            self._permit.release()
+            raise
+        executor_future.add_done_callback(self._release_after_completion)
+        wrapped_future = asyncio.wrap_future(executor_future)
+        try:
+            return await wrapped_future
+        except asyncio.CancelledError:
+            executor_future.cancel()
+            raise
 
 
 class BoundedPasswordWorkPool:
@@ -97,29 +138,43 @@ class BoundedPasswordWorkPool:
         self._capacity = workers + queue_capacity
         self._reserved = 0
         self._closed = False
+        self._state_lock = Lock()
 
     @property
     def closed(self) -> bool:
-        return self._closed
+        with self._state_lock:
+            return self._closed
+
+    def _acquire_capacity(self) -> _PasswordWorkPermit:
+        with self._state_lock:
+            if self._closed or self._reserved >= self._capacity:
+                raise PasswordWorkCapacityError("password work capacity exhausted")
+            self._reserved += 1
+        return _PasswordWorkPermit(self)
+
+    def _release_capacity(self) -> None:
+        with self._state_lock:
+            if self._reserved <= 0:
+                raise RuntimeError("password work capacity released more than once")
+            self._reserved -= 1
 
     @asynccontextmanager
     async def reserve(self) -> AsyncIterator[_PasswordWorkReservation]:
-        if self._closed or self._reserved >= self._capacity:
-            raise PasswordWorkCapacityError("password work capacity exhausted")
-        self._reserved += 1
+        reservation = _PasswordWorkReservation(self, self._acquire_capacity())
         try:
-            yield _PasswordWorkReservation(self)
+            yield reservation
         finally:
-            self._reserved -= 1
+            reservation.release_if_unsubmitted()
 
     async def __call__(self, function: Callable[..., object], *args: object) -> object:
         async with self.reserve() as reservation:
             return await reservation.run(function, *args)
 
     async def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
+        with self._state_lock:
+            if self._closed:
+                return
+            self._closed = True
         await asyncio.to_thread(self._executor.shutdown, wait=True, cancel_futures=True)
 
 
