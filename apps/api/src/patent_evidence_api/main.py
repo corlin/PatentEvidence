@@ -1,6 +1,7 @@
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
@@ -15,6 +16,7 @@ from patent_evidence_api.auth.guards import (
 )
 from patent_evidence_api.auth.security import (
     AsyncPasswordSecurity,
+    BoundedPasswordWorkPool,
     DeterministicRateLimiter,
     MinimumResponseTime,
     PasswordSecurity,
@@ -42,23 +44,46 @@ def create_app(
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_clock = clock or (lambda: datetime.now(UTC))
+    owned_password_pool = (
+        BoundedPasswordWorkPool(
+            workers=resolved_settings.password_work_workers,
+            queue_capacity=resolved_settings.password_work_queue,
+        )
+        if password_work_runner is None
+        else None
+    )
+    resolved_password_runner = password_work_runner or owned_password_pool
+    if resolved_password_runner is None:
+        raise RuntimeError("password work runner is required")
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            if owned_password_pool is not None:
+                await owned_password_pool.close()
+
     engine = create_engine(resolved_settings.database_url)
     platform_engine = create_engine(resolved_settings.platform_database_url)
     session_factory = create_application_session_factory(engine)
     platform_session_factory = create_platform_session_factory(platform_engine)
     privileged_guard = PrivilegedPrincipalGuard(resolved_clock)
     platform_guard = PlatformPrincipalGuard()
-    application = FastAPI(title="PatentEvidence API", version="0.1.0")
+    application = FastAPI(
+        title="PatentEvidence API", version="0.1.0", lifespan=lifespan
+    )
     application.state.database_engine = engine
     application.state.platform_database_engine = platform_engine
     application.state.privileged_principal_guard = privileged_guard
+    application.state.password_work_pool = resolved_password_runner
     application.include_router(
         create_auth_router(
             session_factory,
             clock=resolved_clock,
             passwords=AsyncPasswordSecurity(
                 PasswordSecurity(),
-                runner=password_work_runner or asyncio.to_thread,
+                runner=resolved_password_runner,
             ),
             totp=TotpSecurity(resolved_settings.mfa_encryption_key.get_secret_value()),
             rate_limiter=rate_limiter or DeterministicRateLimiter(),

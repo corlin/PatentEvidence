@@ -1,5 +1,6 @@
 import secrets
 from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from patent_evidence_api.auth.security import (
     AsyncPasswordSecurity,
     MinimumResponseTime,
+    PasswordWorkCapacityError,
     RESET_LIFETIME,
     SESSION_LIFETIME,
     RateLimiter,
@@ -70,11 +72,21 @@ def create_auth_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/auth")
 
-    async def database_session() -> AsyncIterator[AsyncSession]:
+    @asynccontextmanager
+    async def application_transaction() -> AsyncIterator[AsyncSession]:
         async with session_factory() as session, session.begin():
             await verify_database_role(session, APPLICATION_DATABASE_ROLE)
             await bind_transaction_context(session, organization_id=None)
             yield session
+
+    async def database_session() -> AsyncIterator[AsyncSession]:
+        async with application_transaction() as session:
+            yield session
+
+    def capacity_exhausted() -> HTTPException:
+        return HTTPException(
+            status_code=503, detail="authentication_temporarily_unavailable"
+        )
 
     def set_session_cookie(response: Response, token: str) -> None:
         response.set_cookie(
@@ -286,57 +298,66 @@ def create_auth_router(
     async def login(
         body: LoginBody,
         request: Request,
-        session: AsyncSession = Depends(database_session),
     ) -> JSONResponse:
         now = clock()
         normalized_email = body.email.strip().lower()
         client_host = request.client.host if request.client else "unknown"
-        if not rate_limiter.allow(f"login:{client_host}:{normalized_email}", now):
-            raise HTTPException(status_code=429, detail="rate_limited")
-        row = (
-            (
-                await session.execute(
-                    text(
-                        """SELECT id,password_hash,status,security_version
-                    FROM global_identities WHERE email_normalized=:email"""
-                    ),
-                    {"email": normalized_email},
-                )
-            )
-            .mappings()
-            .one_or_none()
+        ip_allowed = rate_limiter.allow(f"login-ip:{client_host}", now)
+        email_allowed = rate_limiter.allow(
+            f"login-email:{digest_secret(normalized_email)}", now
         )
-        encoded = row["password_hash"] if row else None
-        valid = await passwords.verify(encoded, body.password)
+        if not (ip_allowed and email_allowed):
+            raise HTTPException(status_code=429, detail="rate_limited")
+        try:
+            async with passwords.reserve() as password_work:
+                async with application_transaction() as snapshot_session:
+                    row = (
+                        (
+                            await snapshot_session.execute(
+                                text(
+                                    """SELECT id,password_hash,status,security_version
+                                FROM global_identities WHERE email_normalized=:email"""
+                                ),
+                                {"email": normalized_email},
+                            )
+                        )
+                        .mappings()
+                        .one_or_none()
+                    )
+                encoded = row["password_hash"] if row else None
+                valid = await password_work.verify(encoded, body.password)
+        except PasswordWorkCapacityError as exc:
+            raise capacity_exhausted() from exc
         if row is None or row["status"] != "active" or not valid:
             raise HTTPException(status_code=401, detail="invalid_credentials")
-        locked_row = (
-            (
-                await session.execute(
-                    text(
-                        """SELECT password_hash,status,security_version
-                    FROM global_identities WHERE id=:identity_id FOR UPDATE"""
-                    ),
-                    {"identity_id": row["id"]},
+        async with application_transaction() as session:
+            locked_row = (
+                (
+                    await session.execute(
+                        text(
+                            """SELECT password_hash,status,security_version
+                        FROM global_identities WHERE id=:identity_id FOR UPDATE"""
+                        ),
+                        {"identity_id": row["id"]},
+                    )
                 )
+                .mappings()
+                .one_or_none()
             )
-            .mappings()
-            .one_or_none()
-        )
-        if (
-            locked_row is None
-            or locked_row["password_hash"] != row["password_hash"]
-            or locked_row["security_version"] != row["security_version"]
-            or locked_row["status"] != row["status"]
-        ):
-            raise HTTPException(status_code=401, detail="invalid_credentials")
-        await revoke_valid_presented_session(request, session, now)
-        token, _, expires_at = await issue_session(
-            session,
-            identity_id=row["id"],
-            security_version=row["security_version"],
-            now=now,
-        )
+            if (
+                locked_row is None
+                or locked_row["password_hash"] != row["password_hash"]
+                or locked_row["security_version"] != row["security_version"]
+                or locked_row["status"] != row["status"]
+            ):
+                raise HTTPException(status_code=401, detail="invalid_credentials")
+            await revoke_valid_presented_session(request, session, now)
+            token, _, expires_at = await issue_session(
+                session,
+                identity_id=row["id"],
+                security_version=row["security_version"],
+                now=now,
+            )
         response = JSONResponse(
             {"identity_id": str(row["id"]), "expires_at": expires_at.isoformat()}
         )
@@ -403,10 +424,13 @@ def create_auth_router(
             f"reset-email:{digest_secret(normalized_email)}", now
         )
         if ip_allowed and email_allowed:
-            await passwords.perform_dummy_work()
-            async with session_factory() as session, session.begin():
-                await verify_database_role(session, APPLICATION_DATABASE_ROLE)
-                await bind_transaction_context(session, organization_id=None)
+            try:
+                async with passwords.reserve() as password_work:
+                    await password_work.perform_dummy_work()
+            except PasswordWorkCapacityError as exc:
+                await reset_response_floor.wait(response_started)
+                raise capacity_exhausted() from exc
+            async with application_transaction() as session:
                 identity_id = await session.scalar(
                     text(
                         """SELECT id FROM global_identities
@@ -444,18 +468,56 @@ def create_auth_router(
 
     @router.post("/password-reset/confirm", status_code=204)
     async def confirm_password_reset(
-        body: ResetConfirmBody, session: AsyncSession = Depends(database_session)
+        body: ResetConfirmBody,
+        request: Request,
     ) -> Response:
+        now = clock()
+        client_host = request.client.host if request.client else "unknown"
+        if not rate_limiter.allow(f"reset-confirm-ip:{client_host}", now):
+            raise HTTPException(status_code=429, detail="rate_limited")
+        token_hash = digest_secret(body.token)
         try:
-            new_hash = await passwords.hash(body.new_password)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=422, detail="password_policy_failed"
-            ) from exc
-        identity_id = await session.scalar(
-            text("SELECT complete_password_reset(:token_hash,:password_hash)"),
-            {"token_hash": digest_secret(body.token), "password_hash": new_hash},
-        )
+            async with passwords.reserve() as password_work:
+                async with application_transaction() as validation_session:
+                    token_snapshot = (
+                        (
+                            await validation_session.execute(
+                                text(
+                                    """SELECT token_id,identity_id,identity_security_version
+                                FROM inspect_password_reset(:token_hash)"""
+                                ),
+                                {"token_hash": token_hash},
+                            )
+                        )
+                        .mappings()
+                        .one_or_none()
+                    )
+                if token_snapshot is None:
+                    raise HTTPException(
+                        status_code=400, detail="invalid_or_expired_reset_token"
+                    )
+                try:
+                    new_hash = await password_work.hash(body.new_password)
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=422, detail="password_policy_failed"
+                    ) from exc
+        except PasswordWorkCapacityError as exc:
+            raise capacity_exhausted() from exc
+        async with application_transaction() as session:
+            identity_id = await session.scalar(
+                text(
+                    """SELECT complete_password_reset(
+                    :token_hash,:token_id,:identity_id,:security_version,:password_hash)"""
+                ),
+                {
+                    "token_hash": token_hash,
+                    "token_id": token_snapshot["token_id"],
+                    "identity_id": token_snapshot["identity_id"],
+                    "security_version": token_snapshot["identity_security_version"],
+                    "password_hash": new_hash,
+                },
+            )
         if identity_id is None:
             raise HTTPException(
                 status_code=400, detail="invalid_or_expired_reset_token"

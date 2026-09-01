@@ -16,3 +16,24 @@ def test_non_development_cannot_expose_reset_tokens() -> None:
             mfa_encryption_key="E2iW82J-0jQ3AIOaPRdJbaMxFxoMr5yVUOmNe7MnP4Q=",
             expose_development_tokens=True,
         )
+
+
+def test_password_work_pool_has_conservative_defaults() -> None:
+    settings = Settings()
+
+    assert settings.password_work_workers == 2
+    assert settings.password_work_queue == 4
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("password_work_workers", 0),
+        ("password_work_workers", 5),
+        ("password_work_queue", -1),
+        ("password_work_queue", 17),
+    ],
+)
+def test_password_work_pool_rejects_unsafe_capacity(field: str, value: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings(**{field: value})

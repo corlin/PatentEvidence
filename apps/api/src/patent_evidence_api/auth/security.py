@@ -5,9 +5,12 @@ import hmac
 import secrets
 import struct
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Protocol
 
 from argon2 import PasswordHasher
@@ -65,28 +68,126 @@ class PasswordWorkRunner(Protocol):
     ) -> object: ...
 
 
+class PasswordWorkCapacityError(RuntimeError):
+    """Raised before password work when the bounded pool has no free capacity."""
+
+
+class _PasswordWorkReservation:
+    def __init__(self, pool: "BoundedPasswordWorkPool") -> None:
+        self._pool = pool
+
+    async def run(self, function: Callable[..., object], *args: object) -> object:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._pool._executor, partial(function, *args)
+        )
+
+
+class BoundedPasswordWorkPool:
+    """Own a dedicated password executor with bounded running and queued work."""
+
+    def __init__(self, *, workers: int = 2, queue_capacity: int = 4) -> None:
+        if not 1 <= workers <= 4:
+            raise ValueError("password workers must be between 1 and 4")
+        if not 0 <= queue_capacity <= 16:
+            raise ValueError("password queue capacity must be between 0 and 16")
+        self._executor = ThreadPoolExecutor(
+            max_workers=workers, thread_name_prefix="password-work"
+        )
+        self._capacity = workers + queue_capacity
+        self._reserved = 0
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    @asynccontextmanager
+    async def reserve(self) -> AsyncIterator[_PasswordWorkReservation]:
+        if self._closed or self._reserved >= self._capacity:
+            raise PasswordWorkCapacityError("password work capacity exhausted")
+        self._reserved += 1
+        try:
+            yield _PasswordWorkReservation(self)
+        finally:
+            self._reserved -= 1
+
+    async def __call__(self, function: Callable[..., object], *args: object) -> object:
+        async with self.reserve() as reservation:
+            return await reservation.run(function, *args)
+
+    async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        await asyncio.to_thread(self._executor.shutdown, wait=True, cancel_futures=True)
+
+
+class _CallablePasswordWorkReservation:
+    def __init__(self, runner: PasswordWorkRunner) -> None:
+        self._runner = runner
+
+    async def run(self, function: Callable[..., object], *args: object) -> object:
+        return await self._runner(function, *args)
+
+
+class ReservedPasswordSecurity:
+    def __init__(
+        self,
+        passwords: PasswordSecurity,
+        reservation: _PasswordWorkReservation | _CallablePasswordWorkReservation,
+    ) -> None:
+        self._passwords = passwords
+        self._reservation = reservation
+
+    async def hash(self, password: str) -> str:
+        encoded = await self._reservation.run(self._passwords.hash, password)
+        if not isinstance(encoded, str):
+            raise TypeError("password hash runner returned an invalid result")
+        return encoded
+
+    async def verify(self, encoded: str | None, password: str) -> bool:
+        return bool(
+            await self._reservation.run(self._passwords.verify, encoded, password)
+        )
+
+    async def perform_dummy_work(self) -> None:
+        await self._reservation.run(self._passwords.perform_dummy_work)
+
+
 class AsyncPasswordSecurity:
     """Offload synchronous password KDF operations from async request handlers."""
 
     def __init__(
         self,
         passwords: PasswordSecurity,
-        runner: PasswordWorkRunner = asyncio.to_thread,
+        runner: PasswordWorkRunner,
     ) -> None:
         self._passwords = passwords
         self._runner = runner
 
+    @asynccontextmanager
+    async def reserve(self) -> AsyncIterator[ReservedPasswordSecurity]:
+        reserve = getattr(self._runner, "reserve", None)
+        if reserve is None:
+            yield ReservedPasswordSecurity(
+                self._passwords, _CallablePasswordWorkReservation(self._runner)
+            )
+            return
+        async with reserve() as reservation:
+            yield ReservedPasswordSecurity(self._passwords, reservation)
+
     async def hash(self, password: str) -> str:
-        encoded = await self._runner(self._passwords.hash, password)
-        if not isinstance(encoded, str):
-            raise TypeError("password hash runner returned an invalid result")
-        return encoded
+        async with self.reserve() as reserved:
+            return await reserved.hash(password)
 
     async def verify(self, encoded: str | None, password: str) -> bool:
-        return bool(await self._runner(self._passwords.verify, encoded, password))
+        async with self.reserve() as reserved:
+            return await reserved.verify(encoded, password)
 
     async def perform_dummy_work(self) -> None:
-        await self._runner(self._passwords.perform_dummy_work)
+        async with self.reserve() as reserved:
+            await reserved.perform_dummy_work()
 
 
 class MinimumResponseTime:

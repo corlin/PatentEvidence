@@ -34,6 +34,18 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="PATENT_EVIDENCE_EXPOSE_DEVELOPMENT_TOKENS",
     )
+    password_work_workers: int = Field(
+        default=2,
+        ge=1,
+        le=4,
+        validation_alias="PATENT_EVIDENCE_PASSWORD_WORK_WORKERS",
+    )
+    password_work_queue: int = Field(
+        default=4,
+        ge=0,
+        le=16,
+        validation_alias="PATENT_EVIDENCE_PASSWORD_WORK_QUEUE",
+    )
 
     @model_validator(mode="after")
     def require_deployment_mfa_key(self) -> "Settings":

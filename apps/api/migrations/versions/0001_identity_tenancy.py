@@ -389,7 +389,26 @@ def upgrade() -> None:
         $$"""
     )
     op.execute(
-        """CREATE FUNCTION complete_password_reset(requested_token_hash text, new_password_hash text)
+        """CREATE FUNCTION inspect_password_reset(requested_token_hash text)
+        RETURNS TABLE(token_id uuid, identity_id uuid, identity_security_version integer)
+        LANGUAGE sql
+        SECURITY DEFINER
+        SET search_path = pg_catalog, public
+        AS $$
+          SELECT reset_token.id,reset_token.global_identity_id,account.security_version
+          FROM public.password_reset_tokens reset_token
+          JOIN public.global_identities account
+            ON account.id=reset_token.global_identity_id
+          WHERE reset_token.token_hash=requested_token_hash
+            AND reset_token.used_at IS NULL AND reset_token.expires_at > now()
+            AND account.status='active'
+        $$"""
+    )
+    op.execute(
+        """CREATE FUNCTION complete_password_reset(
+          requested_token_hash text, expected_token_id uuid, expected_identity uuid,
+          expected_security_version integer, new_password_hash text
+        )
         RETURNS uuid
         LANGUAGE plpgsql
         SECURITY DEFINER
@@ -399,16 +418,26 @@ def upgrade() -> None:
         BEGIN
           SELECT global_identity_id INTO reset_identity
           FROM public.password_reset_tokens
-          WHERE token_hash=requested_token_hash AND used_at IS NULL AND expires_at > now()
+          WHERE id=expected_token_id AND token_hash=requested_token_hash
+            AND global_identity_id=expected_identity
+            AND used_at IS NULL AND expires_at > now()
           FOR UPDATE;
           IF reset_identity IS NULL THEN
             RETURN NULL;
           END IF;
+          PERFORM 1 FROM public.global_identities
+          WHERE id=expected_identity AND status='active'
+            AND security_version=expected_security_version
+          FOR UPDATE;
+          IF NOT FOUND THEN
+            RETURN NULL;
+          END IF;
           UPDATE public.password_reset_tokens SET used_at=now()
-          WHERE token_hash=requested_token_hash;
+          WHERE id=expected_token_id;
           UPDATE public.global_identities
           SET password_hash=new_password_hash,security_version=security_version+1,updated_at=now()
-          WHERE id=reset_identity AND status='active';
+          WHERE id=expected_identity AND status='active'
+            AND security_version=expected_security_version;
           IF NOT FOUND THEN
             RETURN NULL;
           END IF;
@@ -529,7 +558,8 @@ def upgrade() -> None:
     )
     for function in (
         "revoke_current_identity_sessions(uuid)",
-        "complete_password_reset(text,text)",
+        "inspect_password_reset(text)",
+        "complete_password_reset(text,uuid,uuid,integer,text)",
         "reset_identity_mfa_as_organization_administrator(uuid,uuid)",
     ):
         op.execute(f"REVOKE ALL ON FUNCTION {function} FROM PUBLIC")
@@ -559,7 +589,10 @@ def downgrade() -> None:
     op.execute(
         "DROP FUNCTION IF EXISTS reset_identity_mfa_as_organization_administrator(uuid,uuid)"
     )
-    op.execute("DROP FUNCTION IF EXISTS complete_password_reset(text,text)")
+    op.execute(
+        "DROP FUNCTION IF EXISTS complete_password_reset(text,uuid,uuid,integer,text)"
+    )
+    op.execute("DROP FUNCTION IF EXISTS inspect_password_reset(text)")
     op.execute("DROP FUNCTION IF EXISTS revoke_current_identity_sessions(uuid)")
     for table in reversed(TENANT_TABLES[1:]):
         op.execute(f"DROP TRIGGER IF EXISTS {table}_organization_immutable ON {table}")

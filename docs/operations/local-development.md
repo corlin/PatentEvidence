@@ -28,6 +28,14 @@ resource consumption. Login verification, reset dummy work, and new-password
 hashing all run through the API's worker-thread seam rather than on the async
 event loop.
 
+The default password-work pool allows 2 concurrent workers and 4 queued
+requests. Configure it with `PATENT_EVIDENCE_PASSWORD_WORK_WORKERS` (1–4) and
+`PATENT_EVIDENCE_PASSWORD_WORK_QUEUE` (0–16). Admission is non-blocking once the
+combined running-plus-queued capacity is full; authentication returns a generic
+503 and does not open a database transaction. The API closes its dedicated
+executor during application shutdown. Keep these limits conservative because
+each default Argon2 operation uses substantial memory.
+
 ```sh
 uv sync --no-install-project --python /opt/homebrew/bin/python3.12
 pnpm install

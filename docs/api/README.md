@@ -31,3 +31,18 @@ identity snapshot, then locks and rechecks its password hash, security version,
 and status before rotating or issuing a session; concurrent identity changes
 therefore fail with the generic credential error without holding a row lock
 during Argon2 verification.
+
+The API owns a dedicated bounded password-work executor. Login applies both
+socket-peer-IP and SHA-256-derived email limits before reserving capacity; a
+full worker/queue budget returns the same temporary-unavailability response for
+known and unknown identities. Snapshot and finalization transactions are
+separate, so no database connection is held while Argon2 runs or waits in the
+bounded queue.
+
+Password-reset confirmation applies an aggregate socket-peer-IP limit and
+reserves password-work capacity before checking the token. With capacity
+available, it validates unused/unexpired token and active identity snapshots
+before hashing, closes that transaction for KDF, then locks and rechecks token
+identity plus identity security version before applying the password change.
+Invalid tokens therefore schedule no Argon2, while capacity and race failures
+do not disclose token validity.
