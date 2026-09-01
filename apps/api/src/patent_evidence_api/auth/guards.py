@@ -20,6 +20,7 @@ class Principal:
     identity_id: UUID
     email: str
     token_hash: str
+    security_version: int
     expires_at: datetime
     mfa_verified_at: datetime | None
 
@@ -48,6 +49,8 @@ class PrivilegedPrincipalGuard:
                     text(
                         """SELECT s.id AS session_id,s.global_identity_id AS identity_id,
                     i.email_normalized AS email,i.status AS identity_status,
+                    i.security_version AS identity_security_version,
+                    s.security_version AS session_security_version,
                     s.expires_at,s.mfa_verified_at
                     FROM user_sessions s JOIN global_identities i ON i.id=s.global_identity_id
                     WHERE s.token_hash=:token_hash AND s.revoked_at IS NULL"""
@@ -63,6 +66,7 @@ class PrivilegedPrincipalGuard:
             row is None
             or row["expires_at"] <= now
             or row["identity_status"] != "active"
+            or row["session_security_version"] != row["identity_security_version"]
         ):
             raise HTTPException(status_code=401, detail="session_required")
         return Principal(
@@ -70,6 +74,7 @@ class PrivilegedPrincipalGuard:
             identity_id=row["identity_id"],
             email=row["email"],
             token_hash=token_hash,
+            security_version=row["session_security_version"],
             expires_at=row["expires_at"],
             mfa_verified_at=row["mfa_verified_at"],
         )
@@ -117,16 +122,28 @@ class PrivilegedPrincipalGuard:
             raise HTTPException(status_code=403, detail="forbidden")
         return principal
 
+
+class PlatformPrincipalGuard:
+    """Authorize an application-authenticated principal through the platform role."""
+
     async def platform_administrator(
-        self, request: Request, session: AsyncSession
+        self, principal: Principal, session: AsyncSession
     ) -> Principal:
-        principal = await self.recent_mfa(request, session)
         authorized = await session.scalar(
             text(
-                """SELECT EXISTS(SELECT 1 FROM platform_operator_grants
-                WHERE global_identity_id=:actor AND role='platform_admin' AND status='active')"""
+                """SELECT EXISTS(
+                SELECT 1 FROM global_identities identity
+                JOIN platform_operator_grants grant_record
+                  ON grant_record.global_identity_id=identity.id
+                WHERE identity.id=:actor AND identity.status='active'
+                  AND identity.security_version=:security_version
+                  AND grant_record.role='platform_admin'
+                  AND grant_record.status='active')"""
             ),
-            {"actor": principal.identity_id},
+            {
+                "actor": principal.identity_id,
+                "security_version": principal.security_version,
+            },
         )
         if not authorized:
             raise HTTPException(status_code=403, detail="forbidden")

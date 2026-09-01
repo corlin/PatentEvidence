@@ -64,7 +64,18 @@ def migration_connection() -> Iterator[psycopg.Connection[tuple[object, ...]]]:
             (id,organization_id,global_identity_id,role,status,created_at,updated_at)
             VALUES (%s,%s,%s,'organization_admin','active',%s,%s),
                    (%s,%s,%s,'reviewer','active',%s,%s)""",
-            (MEMBERSHIP_A, ORG_A, IDENTITY_A, now, now, MEMBERSHIP_B, ORG_B, IDENTITY_B, now, now),
+            (
+                MEMBERSHIP_A,
+                ORG_A,
+                IDENTITY_A,
+                now,
+                now,
+                MEMBERSHIP_B,
+                ORG_B,
+                IDENTITY_B,
+                now,
+                now,
+            ),
         )
         connection.execute(
             """INSERT INTO mfa_credentials
@@ -83,11 +94,15 @@ def migration_connection() -> Iterator[psycopg.Connection[tuple[object, ...]]]:
         yield connection
 
 
-def _runtime_connection(variable: str, role: str) -> psycopg.Connection[tuple[object, ...]]:
+def _runtime_connection(
+    variable: str, role: str
+) -> psycopg.Connection[tuple[object, ...]]:
     return psycopg.connect(_url(variable, role), autocommit=True)
 
 
-def _set_tenant(connection: psycopg.Connection[tuple[object, ...]], organization_id: UUID) -> None:
+def _set_tenant(
+    connection: psycopg.Connection[tuple[object, ...]], organization_id: UUID
+) -> None:
     connection.execute(
         "SELECT set_config('app.current_organization_id', %s, false)",
         (str(organization_id),),
@@ -127,6 +142,7 @@ def test_fresh_migration_creates_expected_tables_roles_and_forced_rls(
         ).fetchall()
     }
     assert "global_identity_id" in session_columns
+    assert "security_version" in session_columns
     assert "organization_id" not in session_columns
     assert "membership_id" not in session_columns
 
@@ -160,18 +176,26 @@ def test_fresh_migration_creates_expected_tables_roles_and_forced_rls(
 
 
 def test_application_role_cannot_select_or_mutate_another_organization() -> None:
-    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
+    with _runtime_connection(
+        "PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app"
+    ) as app:
         _set_tenant(app, ORG_A)
         assert app.execute(
             "SELECT id FROM organization_memberships ORDER BY id"
         ).fetchall() == [(MEMBERSHIP_A,)]
-        assert app.execute(
-            "UPDATE organization_memberships SET status='suspended' WHERE id=%s",
-            (MEMBERSHIP_B,),
-        ).rowcount == 0
-        assert app.execute(
-            "DELETE FROM organization_memberships WHERE id=%s", (MEMBERSHIP_B,)
-        ).rowcount == 0
+        assert (
+            app.execute(
+                "UPDATE organization_memberships SET status='suspended' WHERE id=%s",
+                (MEMBERSHIP_B,),
+            ).rowcount
+            == 0
+        )
+        assert (
+            app.execute(
+                "DELETE FROM organization_memberships WHERE id=%s", (MEMBERSHIP_B,)
+            ).rowcount
+            == 0
+        )
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             app.execute(
                 """INSERT INTO organization_memberships
@@ -182,8 +206,12 @@ def test_application_role_cannot_select_or_mutate_another_organization() -> None
 
 
 def test_missing_tenant_context_sees_no_rows_and_cannot_insert() -> None:
-    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
-        assert app.execute("SELECT count(*) FROM organization_memberships").fetchone() == (0,)
+    with _runtime_connection(
+        "PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app"
+    ) as app:
+        assert app.execute(
+            "SELECT count(*) FROM organization_memberships"
+        ).fetchone() == (0,)
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             app.execute(
                 """INSERT INTO organization_memberships
@@ -194,8 +222,12 @@ def test_missing_tenant_context_sees_no_rows_and_cannot_insert() -> None:
 
 
 def test_worker_role_uses_the_same_rls_boundary() -> None:
-    with _runtime_connection("PE_TEST_WORKER_DATABASE_URL", "patent_evidence_worker") as worker:
-        assert worker.execute("SELECT count(*) FROM organization_memberships").fetchone() == (0,)
+    with _runtime_connection(
+        "PE_TEST_WORKER_DATABASE_URL", "patent_evidence_worker"
+    ) as worker:
+        assert worker.execute(
+            "SELECT count(*) FROM organization_memberships"
+        ).fetchone() == (0,)
         _set_tenant(worker, ORG_B)
         assert worker.execute("SELECT id FROM organization_memberships").fetchall() == [
             (MEMBERSHIP_B,)
@@ -203,7 +235,9 @@ def test_worker_role_uses_the_same_rls_boundary() -> None:
 
 
 def test_worker_role_cannot_read_password_hashes() -> None:
-    with _runtime_connection("PE_TEST_WORKER_DATABASE_URL", "patent_evidence_worker") as worker:
+    with _runtime_connection(
+        "PE_TEST_WORKER_DATABASE_URL", "patent_evidence_worker"
+    ) as worker:
         assert worker.execute(
             "SELECT display_name FROM global_identities WHERE id=%s", (IDENTITY_A,)
         ).fetchone() == ("A",)
@@ -212,15 +246,24 @@ def test_worker_role_cannot_read_password_hashes() -> None:
 
 
 def test_application_role_cannot_read_password_reset_token_hashes() -> None:
-    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
+    with _runtime_connection(
+        "PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app"
+    ) as app:
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             app.execute("SELECT token_hash FROM password_reset_tokens")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            app.execute("SELECT role FROM platform_operator_grants")
 
 
-def test_session_token_hash_rls_allows_only_matching_session_and_platform_identity() -> None:
-    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
+def test_session_token_hash_rls_allows_only_matching_session_and_platform_identity() -> (
+    None
+):
+    with _runtime_connection(
+        "PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app"
+    ) as app:
         app.execute(
-            "SELECT set_config('app.current_session_token_hash', %s, false)", (SESSION_HASH,)
+            "SELECT set_config('app.current_session_token_hash', %s, false)",
+            (SESSION_HASH,),
         )
         app.execute(
             """INSERT INTO user_sessions
@@ -229,7 +272,8 @@ def test_session_token_hash_rls_allows_only_matching_session_and_platform_identi
             (SESSION_PLATFORM, IDENTITY_PLATFORM, SESSION_HASH),
         )
         assert app.execute(
-            "SELECT global_identity_id FROM user_sessions WHERE id=%s", (SESSION_PLATFORM,)
+            "SELECT global_identity_id FROM user_sessions WHERE id=%s",
+            (SESSION_PLATFORM,),
         ).fetchone() == (IDENTITY_PLATFORM,)
 
         app.execute(
@@ -245,7 +289,9 @@ def test_session_token_hash_rls_allows_only_matching_session_and_platform_identi
                 (IDENTITY_A, SESSION_HASH),
             )
 
-    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
+    with _runtime_connection(
+        "PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app"
+    ) as app:
         assert app.execute("SELECT count(*) FROM user_sessions").fetchone() == (0,)
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             app.execute(
@@ -279,8 +325,33 @@ def test_recovery_code_identity_must_match_mfa_credential() -> None:
             )
 
 
+@pytest.mark.parametrize("status", ["active", "pending"])
+def test_identity_cannot_have_duplicate_current_totp_credentials(status: str) -> None:
+    migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    duplicate_id = {
+        "active": "30000000-0000-4000-8000-000000000098",
+        "pending": "30000000-0000-4000-8000-000000000099",
+    }[status]
+    with psycopg.connect(migration_url) as connection:
+        if status == "pending":
+            connection.execute(
+                "UPDATE mfa_credentials SET status='pending' WHERE id=%s", (MFA_A,)
+            )
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            connection.execute(
+                """INSERT INTO mfa_credentials
+                (id,global_identity_id,credential_type,label,encrypted_secret_ciphertext,
+                 status,created_at)
+                VALUES (%s,%s,'totp','duplicate',
+                        %s,%s,now())""",
+                (duplicate_id, IDENTITY_A, b"duplicate-ciphertext", status),
+            )
+
+
 def test_platform_role_can_provision_but_cannot_read_credentials() -> None:
-    with _runtime_connection("PE_TEST_PLATFORM_DATABASE_URL", "patent_evidence_platform") as platform:
+    with _runtime_connection(
+        "PE_TEST_PLATFORM_DATABASE_URL", "patent_evidence_platform"
+    ) as platform:
         provisioned_id = UUID("00000000-0000-4000-8000-000000000003")
         platform.execute(
             """INSERT INTO organizations
@@ -295,12 +366,32 @@ def test_platform_role_can_provision_but_cannot_read_credentials() -> None:
             platform.execute("SELECT password_hash FROM global_identities")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             platform.execute("SELECT encrypted_secret_ciphertext FROM mfa_credentials")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            platform.execute("SELECT token_hash FROM user_sessions")
+
+
+def test_platform_mfa_reset_cannot_impersonate_a_different_context_actor() -> None:
+    with _runtime_connection(
+        "PE_TEST_PLATFORM_DATABASE_URL", "patent_evidence_platform"
+    ) as platform:
+        platform.execute(
+            "SELECT set_config('app.current_actor_identity_id', %s, true)",
+            (str(IDENTITY_B),),
+        )
+        reset = platform.execute(
+            "SELECT reset_identity_mfa_as_platform_administrator(%s, %s, %s)",
+            (IDENTITY_A, 1, IDENTITY_B),
+        ).fetchone()
+
+    assert reset == (False,)
 
 
 def test_application_and_platform_audit_rows_are_append_only() -> None:
     event_a = UUID("40000000-0000-4000-8000-000000000001")
     event_platform = UUID("40000000-0000-4000-8000-000000000002")
-    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
+    with _runtime_connection(
+        "PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app"
+    ) as app:
         _set_tenant(app, ORG_A)
         app.execute(
             """INSERT INTO audit_events
@@ -311,11 +402,15 @@ def test_application_and_platform_audit_rows_are_append_only() -> None:
             (event_a, ORG_A, IDENTITY_A, MEMBERSHIP_A),
         )
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
-            app.execute("UPDATE audit_events SET safe_summary='changed' WHERE id=%s", (event_a,))
+            app.execute(
+                "UPDATE audit_events SET safe_summary='changed' WHERE id=%s", (event_a,)
+            )
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             app.execute("DELETE FROM audit_events WHERE id=%s", (event_a,))
 
-    with _runtime_connection("PE_TEST_PLATFORM_DATABASE_URL", "patent_evidence_platform") as platform:
+    with _runtime_connection(
+        "PE_TEST_PLATFORM_DATABASE_URL", "patent_evidence_platform"
+    ) as platform:
         platform.execute(
             """INSERT INTO platform_audit_events
             (id,actor_identity_id,action,target_type,target_id,result,request_correlation_id,
@@ -330,4 +425,6 @@ def test_application_and_platform_audit_rows_are_append_only() -> None:
                 (event_platform,),
             )
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
-            platform.execute("DELETE FROM platform_audit_events WHERE id=%s", (event_platform,))
+            platform.execute(
+                "DELETE FROM platform_audit_events WHERE id=%s", (event_platform,)
+            )

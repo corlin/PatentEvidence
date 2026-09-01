@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from patent_evidence_api.auth.security import (
+    MinimumResponseTime,
     RESET_LIFETIME,
     SESSION_LIFETIME,
     PasswordSecurity,
@@ -18,11 +19,16 @@ from patent_evidence_api.auth.security import (
     digest_secret,
     issue_opaque_token,
 )
-from patent_evidence_api.auth.guards import Principal, PrivilegedPrincipalGuard
+from patent_evidence_api.auth.guards import (
+    PlatformPrincipalGuard,
+    Principal,
+    PrivilegedPrincipalGuard,
+)
 from patent_evidence_api.core.database import (
     APPLICATION_DATABASE_ROLE,
     bind_session_token_hash,
     bind_transaction_context,
+    platform_transaction,
     verify_database_role,
 )
 
@@ -60,6 +66,7 @@ def create_auth_router(
     rate_limiter: RateLimiter,
     secure_cookies: bool,
     expose_development_tokens: bool,
+    reset_response_floor: MinimumResponseTime,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/auth")
 
@@ -88,17 +95,17 @@ def create_auth_router(
             raise HTTPException(status_code=401, detail="session_required")
         token_hash = digest_secret(token)
         await bind_session_token_hash(session, token_hash)
-        lock_sql = " FOR UPDATE" if lock else ""
         row = (
             (
                 await session.execute(
                     text(
                         """SELECT s.id AS session_id,s.global_identity_id AS identity_id,
                     i.email_normalized AS email,i.status AS identity_status,
+                    i.security_version AS identity_security_version,
+                    s.security_version AS session_security_version,
                     s.expires_at,s.mfa_verified_at,s.revoked_at
                     FROM user_sessions s JOIN global_identities i ON i.id=s.global_identity_id
                     WHERE s.token_hash=:token_hash"""
-                        + lock_sql
                     ),
                     {"token_hash": token_hash},
                 )
@@ -112,6 +119,7 @@ def create_auth_router(
             or row["revoked_at"] is not None
             or row["expires_at"] <= now
             or row["identity_status"] != "active"
+            or row["session_security_version"] != row["identity_security_version"]
         ):
             if row is not None and row["revoked_at"] is None:
                 await session.execute(
@@ -121,6 +129,44 @@ def create_auth_router(
                     {"now": now, "id": row["session_id"]},
                 )
             raise HTTPException(status_code=401, detail="session_required")
+        if lock:
+            locked_identity = (
+                (
+                    await session.execute(
+                        text(
+                            """SELECT status,security_version FROM global_identities
+                        WHERE id=:identity_id FOR UPDATE"""
+                        ),
+                        {"identity_id": row["identity_id"]},
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            locked_session = (
+                (
+                    await session.execute(
+                        text(
+                            """SELECT revoked_at,expires_at,security_version FROM user_sessions
+                        WHERE id=:session_id FOR UPDATE"""
+                        ),
+                        {"session_id": row["session_id"]},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if (
+                locked_identity["status"] != "active"
+                or locked_identity["security_version"]
+                != row["session_security_version"]
+                or locked_session is None
+                or locked_session["revoked_at"] is not None
+                or locked_session["expires_at"] <= now
+                or locked_session["security_version"]
+                != locked_identity["security_version"]
+            ):
+                raise HTTPException(status_code=401, detail="session_required")
         await session.execute(
             text(
                 "UPDATE user_sessions SET last_seen_at=:now,updated_at=:now WHERE id=:id"
@@ -132,6 +178,7 @@ def create_auth_router(
             identity_id=row["identity_id"],
             email=row["email"],
             token_hash=token_hash,
+            security_version=row["session_security_version"],
             expires_at=row["expires_at"],
             mfa_verified_at=row["mfa_verified_at"],
         )
@@ -140,9 +187,29 @@ def create_auth_router(
         session: AsyncSession,
         *,
         identity_id: UUID,
+        security_version: int,
         now: datetime,
         mfa_verified_at: datetime | None = None,
     ) -> tuple[str, UUID, datetime]:
+        locked_identity = (
+            (
+                await session.execute(
+                    text(
+                        """SELECT status,security_version FROM global_identities
+                    WHERE id=:identity_id FOR UPDATE"""
+                    ),
+                    {"identity_id": identity_id},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if (
+            locked_identity is None
+            or locked_identity["status"] != "active"
+            or locked_identity["security_version"] != security_version
+        ):
+            raise HTTPException(status_code=401, detail="session_required")
         token = issue_opaque_token()
         token_hash = digest_secret(token)
         session_id = uuid4()
@@ -151,13 +218,15 @@ def create_auth_router(
         await session.execute(
             text(
                 """INSERT INTO user_sessions
-                (id,global_identity_id,token_hash,mfa_verified_at,expires_at,last_seen_at,
+                (id,global_identity_id,security_version,token_hash,mfa_verified_at,expires_at,last_seen_at,
                  created_at,updated_at)
-                VALUES (:id,:identity_id,:token_hash,:mfa_verified_at,:expires_at,:now,:now,:now)"""
+                VALUES (:id,:identity_id,:security_version,:token_hash,:mfa_verified_at,
+                        :expires_at,:now,:now,:now)"""
             ),
             {
                 "id": session_id,
                 "identity_id": identity_id,
+                "security_version": security_version,
                 "token_hash": token_hash,
                 "mfa_verified_at": mfa_verified_at,
                 "expires_at": expires_at,
@@ -176,9 +245,42 @@ def create_auth_router(
             {"now": now, "id": principal.session_id},
         )
         token, _, expires_at = await issue_session(
-            session, identity_id=principal.identity_id, now=now, mfa_verified_at=now
+            session,
+            identity_id=principal.identity_id,
+            security_version=principal.security_version,
+            now=now,
+            mfa_verified_at=now,
         )
         return token, expires_at
+
+    async def revoke_valid_presented_session(
+        request: Request, session: AsyncSession, now: datetime
+    ) -> None:
+        presented = request.cookies.get("pe_session")
+        if not presented:
+            return
+        token_hash = digest_secret(presented)
+        await bind_session_token_hash(session, token_hash)
+        session_id = await session.scalar(
+            text(
+                """SELECT session.id FROM user_sessions session
+                JOIN global_identities identity
+                  ON identity.id=session.global_identity_id
+                WHERE session.token_hash=:token_hash AND session.revoked_at IS NULL
+                  AND session.expires_at > :now AND identity.status='active'
+                  AND session.security_version=identity.security_version
+                FOR UPDATE OF session"""
+            ),
+            {"token_hash": token_hash, "now": now},
+        )
+        if session_id is not None:
+            await session.execute(
+                text(
+                    """UPDATE user_sessions SET revoked_at=:now,updated_at=:now
+                    WHERE id=:session_id"""
+                ),
+                {"now": now, "session_id": session_id},
+            )
 
     @router.post("/login")
     async def login(
@@ -195,8 +297,8 @@ def create_auth_router(
             (
                 await session.execute(
                     text(
-                        """SELECT id,password_hash,status FROM global_identities
-                    WHERE email_normalized=:email"""
+                        """SELECT id,password_hash,status,security_version
+                    FROM global_identities WHERE email_normalized=:email FOR UPDATE"""
                     ),
                     {"email": normalized_email},
                 )
@@ -208,8 +310,12 @@ def create_auth_router(
         valid = passwords.verify(encoded, body.password)
         if row is None or row["status"] != "active" or not valid:
             raise HTTPException(status_code=401, detail="invalid_credentials")
+        await revoke_valid_presented_session(request, session, now)
         token, _, expires_at = await issue_session(
-            session, identity_id=row["id"], now=now
+            session,
+            identity_id=row["id"],
+            security_version=row["security_version"],
+            now=now,
         )
         response = JSONResponse(
             {"identity_id": str(row["id"]), "expires_at": expires_at.isoformat()}
@@ -266,45 +372,50 @@ def create_auth_router(
     async def request_password_reset(
         body: ResetRequestBody,
         request: Request,
-        session: AsyncSession = Depends(database_session),
     ) -> dict[str, str]:
+        response_started = reset_response_floor.start()
         now = clock()
         normalized_email = body.email.strip().lower()
         client_host = request.client.host if request.client else "unknown"
         token = issue_opaque_token()
+        passwords.perform_dummy_work()
         if rate_limiter.allow(f"reset:{client_host}:{normalized_email}", now):
-            identity_id = await session.scalar(
-                text(
-                    """SELECT id FROM global_identities
-                    WHERE email_normalized=:email AND status='active'"""
-                ),
-                {"email": normalized_email},
-            )
-            if identity_id is not None:
-                await session.execute(
+            async with session_factory() as session, session.begin():
+                await verify_database_role(session, APPLICATION_DATABASE_ROLE)
+                await bind_transaction_context(session, organization_id=None)
+                identity_id = await session.scalar(
                     text(
-                        """UPDATE password_reset_tokens SET used_at=:now
-                        WHERE global_identity_id=:identity_id AND used_at IS NULL"""
+                        """SELECT id FROM global_identities
+                        WHERE email_normalized=:email AND status='active'"""
                     ),
-                    {"now": now, "identity_id": identity_id},
+                    {"email": normalized_email},
                 )
-                await session.execute(
-                    text(
-                        """INSERT INTO password_reset_tokens
-                        (id,global_identity_id,token_hash,expires_at,created_at)
-                        VALUES (:id,:identity_id,:token_hash,:expires_at,:now)"""
-                    ),
-                    {
-                        "id": uuid4(),
-                        "identity_id": identity_id,
-                        "token_hash": digest_secret(token),
-                        "expires_at": now + RESET_LIFETIME,
-                        "now": now,
-                    },
-                )
+                if identity_id is not None:
+                    await session.execute(
+                        text(
+                            """UPDATE password_reset_tokens SET used_at=:now
+                            WHERE global_identity_id=:identity_id AND used_at IS NULL"""
+                        ),
+                        {"now": now, "identity_id": identity_id},
+                    )
+                    await session.execute(
+                        text(
+                            """INSERT INTO password_reset_tokens
+                            (id,global_identity_id,token_hash,expires_at,created_at)
+                            VALUES (:id,:identity_id,:token_hash,:expires_at,:now)"""
+                        ),
+                        {
+                            "id": uuid4(),
+                            "identity_id": identity_id,
+                            "token_hash": digest_secret(token),
+                            "expires_at": now + RESET_LIFETIME,
+                            "now": now,
+                        },
+                    )
         response = {"status": "accepted"}
         if expose_development_tokens:
             response["reset_token"] = token
+        await reset_response_floor.wait(response_started)
         return response
 
     @router.post("/password-reset/confirm", status_code=204)
@@ -343,12 +454,9 @@ def create_auth_router(
             raise HTTPException(status_code=403, detail="mfa_required")
         await session.execute(
             text(
-                "DELETE FROM mfa_recovery_codes WHERE global_identity_id=:identity_id"
+                """DELETE FROM mfa_credentials
+                WHERE global_identity_id=:identity_id AND status='pending'"""
             ),
-            {"identity_id": principal.identity_id},
-        )
-        await session.execute(
-            text("DELETE FROM mfa_credentials WHERE global_identity_id=:identity_id"),
             {"identity_id": principal.identity_id},
         )
         secret = totp.issue_secret()
@@ -405,6 +513,11 @@ def create_auth_router(
         session: AsyncSession = Depends(database_session),
     ) -> JSONResponse:
         principal = await authenticate(request, session, lock=True)
+        client_host = request.client.host if request.client else "unknown"
+        if not rate_limiter.allow(
+            f"mfa-confirm:{principal.identity_id}:{client_host}", clock()
+        ):
+            raise HTTPException(status_code=429, detail="rate_limited")
         row = (
             (
                 await session.execute(
@@ -433,6 +546,13 @@ def create_auth_router(
             raise HTTPException(status_code=401, detail="invalid_mfa_challenge")
         await session.execute(
             text(
+                """UPDATE mfa_credentials SET status='revoked'
+                WHERE global_identity_id=:identity_id AND status='active'"""
+            ),
+            {"identity_id": principal.identity_id},
+        )
+        await session.execute(
+            text(
                 """UPDATE mfa_credentials SET status='active',confirmed_at=:now,last_used_at=:now
                 WHERE id=:credential_id"""
             ),
@@ -459,6 +579,11 @@ def create_auth_router(
         session: AsyncSession = Depends(database_session),
     ) -> JSONResponse:
         principal = await authenticate(request, session, lock=True)
+        client_host = request.client.host if request.client else "unknown"
+        if not rate_limiter.allow(
+            f"mfa-challenge:{principal.identity_id}:{client_host}", clock()
+        ):
+            raise HTTPException(status_code=429, detail="rate_limited")
         credential = (
             (
                 await session.execute(
@@ -532,14 +657,16 @@ def create_auth_router(
 
 
 def create_privileged_auth_router(
-    session_factory: async_sessionmaker[AsyncSession],
+    application_session_factory: async_sessionmaker[AsyncSession],
+    platform_session_factory: async_sessionmaker[AsyncSession],
     *,
-    guard: PrivilegedPrincipalGuard,
+    application_guard: PrivilegedPrincipalGuard,
+    platform_guard: PlatformPrincipalGuard,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1")
 
     async def database_session() -> AsyncIterator[AsyncSession]:
-        async with session_factory() as session, session.begin():
+        async with application_session_factory() as session, session.begin():
             await verify_database_role(session, APPLICATION_DATABASE_ROLE)
             await bind_transaction_context(session, organization_id=None)
             yield session
@@ -554,14 +681,17 @@ def create_privileged_auth_router(
         request: Request,
         session: AsyncSession = Depends(database_session),
     ) -> Response:
-        await guard.organization_administrator(
+        await application_guard.organization_administrator(
             request,
             session,
             organization_id,
             lower_level_target=target_identity,
         )
         reset = await session.scalar(
-            text("SELECT reset_identity_mfa_as_administrator(:target,:organization)"),
+            text(
+                """SELECT reset_identity_mfa_as_organization_administrator(
+                :target,:organization)"""
+            ),
             {"target": target_identity, "organization": organization_id},
         )
         if not reset:
@@ -572,15 +702,28 @@ def create_privileged_auth_router(
     async def platform_mfa_reset(
         target_identity: UUID,
         request: Request,
-        session: AsyncSession = Depends(database_session),
     ) -> Response:
-        await guard.platform_administrator(request, session)
-        reset = await session.scalar(
-            text("SELECT reset_identity_mfa_as_administrator(:target,NULL)"),
-            {"target": target_identity},
-        )
-        if not reset:
-            raise HTTPException(status_code=403, detail="forbidden")
+        async with application_session_factory() as auth_session, auth_session.begin():
+            await verify_database_role(auth_session, APPLICATION_DATABASE_ROLE)
+            await bind_transaction_context(auth_session, organization_id=None)
+            principal = await application_guard.recent_mfa(request, auth_session)
+        async with platform_transaction(
+            platform_session_factory, actor_identity_id=principal.identity_id
+        ) as platform_session:
+            await platform_guard.platform_administrator(principal, platform_session)
+            reset = await platform_session.scalar(
+                text(
+                    """SELECT reset_identity_mfa_as_platform_administrator(
+                    :actor,:security_version,:target)"""
+                ),
+                {
+                    "actor": principal.identity_id,
+                    "security_version": principal.security_version,
+                    "target": target_identity,
+                },
+            )
+            if not reset:
+                raise HTTPException(status_code=403, detail="forbidden")
         return Response(status_code=204)
 
     return router

@@ -6,7 +6,11 @@ Revises:
 
 import sqlalchemy as sa
 from alembic import op
-from helpers.tenancy import add_platform_policy, enable_force_rls, enable_force_session_token_rls
+from helpers.tenancy import (
+    add_platform_policy,
+    enable_force_rls,
+    enable_force_session_token_rls,
+)
 
 
 revision = "0001_identity_tenancy"
@@ -54,7 +58,9 @@ def upgrade() -> None:
         END $$"""
     )
     for role in RUNTIME_ROLES:
-        op.execute(f"GRANT CONNECT ON DATABASE {op.get_bind().dialect.identifier_preparer.quote(op.get_bind().engine.url.database)} TO {role}")
+        op.execute(
+            f"GRANT CONNECT ON DATABASE {op.get_bind().dialect.identifier_preparer.quote(op.get_bind().engine.url.database)} TO {role}"
+        )
         op.execute(f"GRANT USAGE ON SCHEMA public TO {role}")
 
     op.create_table(
@@ -77,7 +83,9 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True)),
         _uuid("created_by"),
         *_timestamps(),
-        sa.ForeignKeyConstraint(["created_by"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["created_by"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
         sa.CheckConstraint("status IN ('active','suspended','expired')"),
     )
     op.create_table(
@@ -88,8 +96,12 @@ def upgrade() -> None:
         sa.Column("role", sa.Text(), nullable=False),
         sa.Column("status", sa.Text(), nullable=False),
         *_timestamps(),
-        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["organizations.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
         sa.UniqueConstraint("organization_id", "id"),
         sa.UniqueConstraint("organization_id", "global_identity_id"),
         sa.CheckConstraint("role IN ('organization_admin','patent_agent','reviewer')"),
@@ -104,7 +116,9 @@ def upgrade() -> None:
         sa.Column("current_period_end", sa.DateTime(timezone=True), nullable=False),
         sa.Column("status", sa.Text(), nullable=False),
         *_timestamps(),
-        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["organizations.id"], ondelete="RESTRICT"
+        ),
         sa.CheckConstraint("monthly_case_allowance >= 0"),
         sa.CheckConstraint("current_period_end > current_period_start"),
         sa.CheckConstraint("status IN ('active','suspended','expired')"),
@@ -113,13 +127,16 @@ def upgrade() -> None:
         "user_sessions",
         _uuid("id", primary_key=True),
         _uuid("global_identity_id"),
+        sa.Column("security_version", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("token_hash", sa.Text(), nullable=False, unique=True),
         sa.Column("mfa_verified_at", sa.DateTime(timezone=True)),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
         *_timestamps(),
-        sa.ForeignKeyConstraint(["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
     )
     op.create_table(
         "platform_operator_grants",
@@ -130,8 +147,12 @@ def upgrade() -> None:
         _uuid("granted_by", nullable=True),
         sa.Column("granted_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
-        sa.ForeignKeyConstraint(["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["granted_by"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["granted_by"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
         sa.UniqueConstraint("global_identity_id", "role"),
         sa.CheckConstraint("role = 'platform_admin'"),
         sa.CheckConstraint("status IN ('active','revoked')"),
@@ -149,8 +170,12 @@ def upgrade() -> None:
         sa.Column("accepted_at", sa.DateTime(timezone=True)),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
         *_timestamps(),
-        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["invited_by"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["organizations.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["invited_by"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
         sa.UniqueConstraint("organization_id", "id"),
         sa.CheckConstraint("role IN ('organization_admin','patent_agent','reviewer')"),
         sa.CheckConstraint("status IN ('pending','accepted','revoked','expired')"),
@@ -163,7 +188,9 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
     )
     op.create_table(
         "mfa_credentials",
@@ -176,7 +203,9 @@ def upgrade() -> None:
         sa.Column("confirmed_at", sa.DateTime(timezone=True)),
         sa.Column("last_used_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["global_identity_id"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
         sa.UniqueConstraint("global_identity_id", "id"),
         sa.CheckConstraint("credential_type = 'totp'"),
         sa.CheckConstraint("status IN ('pending','active','revoked')"),
@@ -197,6 +226,20 @@ def upgrade() -> None:
         ),
         sa.UniqueConstraint("mfa_credential_id", "code_hash"),
     )
+    op.create_index(
+        "uq_mfa_credentials_one_active_per_identity",
+        "mfa_credentials",
+        ["global_identity_id"],
+        unique=True,
+        postgresql_where=sa.text("status = 'active'"),
+    )
+    op.create_index(
+        "uq_mfa_credentials_one_pending_per_identity",
+        "mfa_credentials",
+        ["global_identity_id"],
+        unique=True,
+        postgresql_where=sa.text("status = 'pending'"),
+    )
     op.create_table(
         "audit_events",
         _uuid("id", primary_key=True),
@@ -209,8 +252,12 @@ def upgrade() -> None:
         sa.Column("request_correlation_id", sa.Text(), nullable=False),
         sa.Column("safe_summary", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["actor_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["organizations.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["actor_identity_id"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
         sa.UniqueConstraint("organization_id", "id"),
         sa.CheckConstraint("result IN ('allowed','denied','failed')"),
     )
@@ -225,14 +272,23 @@ def upgrade() -> None:
         sa.Column("request_correlation_id", sa.Text(), nullable=False),
         sa.Column("safe_summary", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["actor_identity_id"], ["global_identities.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["actor_identity_id"], ["global_identities.id"], ondelete="RESTRICT"
+        ),
         sa.CheckConstraint("result IN ('allowed','denied','failed')"),
     )
 
     for table in TENANT_TABLES:
-        enable_force_rls(table, organization_column="id" if table == "organizations" else "organization_id")
+        enable_force_rls(
+            table,
+            organization_column="id" if table == "organizations" else "organization_id",
+        )
     enable_force_session_token_rls("user_sessions")
-    for table in ("organizations", "organization_plan_quotas", "organization_invitations"):
+    for table in (
+        "organizations",
+        "organization_plan_quotas",
+        "organization_invitations",
+    ):
         add_platform_policy(table)
 
     op.execute(
@@ -250,15 +306,24 @@ def upgrade() -> None:
             "FOR EACH ROW EXECUTE FUNCTION deny_organization_id_change()"
         )
 
-    op.execute("GRANT SELECT, INSERT, UPDATE ON global_identities TO patent_evidence_app")
-    op.execute("GRANT INSERT, UPDATE (used_at) ON password_reset_tokens TO patent_evidence_app")
+    op.execute(
+        "GRANT SELECT, INSERT, UPDATE ON global_identities TO patent_evidence_app"
+    )
+    op.execute(
+        "GRANT INSERT, UPDATE (used_at) ON password_reset_tokens TO patent_evidence_app"
+    )
     op.execute(
         "GRANT SELECT (global_identity_id,used_at) ON password_reset_tokens TO patent_evidence_app"
     )
-    op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON mfa_credentials TO patent_evidence_app")
-    op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON mfa_recovery_codes TO patent_evidence_app")
-    op.execute("GRANT SELECT ON platform_operator_grants TO patent_evidence_app")
-    op.execute("GRANT SELECT ON organizations, organization_plan_quotas TO patent_evidence_app")
+    op.execute(
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON mfa_credentials TO patent_evidence_app"
+    )
+    op.execute(
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON mfa_recovery_codes TO patent_evidence_app"
+    )
+    op.execute(
+        "GRANT SELECT ON organizations, organization_plan_quotas TO patent_evidence_app"
+    )
     op.execute(
         "GRANT SELECT, INSERT, UPDATE, DELETE ON organization_memberships, user_sessions, organization_invitations TO patent_evidence_app"
     )
@@ -273,9 +338,15 @@ def upgrade() -> None:
         ON mfa_credentials TO patent_evidence_platform"""
     )
     op.execute("GRANT SELECT ON platform_operator_grants TO patent_evidence_platform")
-    op.execute("GRANT SELECT, INSERT, UPDATE ON organizations, organization_plan_quotas TO patent_evidence_platform")
-    op.execute("GRANT SELECT, INSERT, UPDATE ON organization_invitations TO patent_evidence_platform")
-    op.execute("GRANT SELECT, INSERT ON platform_audit_events TO patent_evidence_platform")
+    op.execute(
+        "GRANT SELECT, INSERT, UPDATE ON organizations, organization_plan_quotas TO patent_evidence_platform"
+    )
+    op.execute(
+        "GRANT SELECT, INSERT, UPDATE ON organization_invitations TO patent_evidence_platform"
+    )
+    op.execute(
+        "GRANT SELECT, INSERT ON platform_audit_events TO patent_evidence_platform"
+    )
 
     op.execute(
         """CREATE FUNCTION revoke_current_identity_sessions(requested_identity uuid)
@@ -288,10 +359,16 @@ def upgrade() -> None:
         DECLARE authenticated_identity uuid;
         DECLARE correlation text;
         BEGIN
-          SELECT global_identity_id INTO authenticated_identity
-          FROM public.user_sessions
-          WHERE token_hash = nullif(current_setting('app.current_session_token_hash', true), '')
-            AND revoked_at IS NULL AND expires_at > now();
+          SELECT session.global_identity_id INTO authenticated_identity
+          FROM public.user_sessions session
+          JOIN public.global_identities identity
+            ON identity.id=session.global_identity_id
+          WHERE session.token_hash = nullif(
+              current_setting('app.current_session_token_hash', true), ''
+            )
+            AND session.revoked_at IS NULL AND session.expires_at > now()
+            AND session.security_version=identity.security_version
+            AND identity.status='active';
           IF authenticated_identity IS NULL OR authenticated_identity IS DISTINCT FROM requested_identity THEN
             RAISE EXCEPTION 'current session identity mismatch';
           END IF;
@@ -348,7 +425,7 @@ def upgrade() -> None:
         $$"""
     )
     op.execute(
-        """CREATE FUNCTION reset_identity_mfa_as_administrator(
+        """CREATE FUNCTION reset_identity_mfa_as_organization_administrator(
           target_identity uuid, requested_organization uuid
         ) RETURNS boolean
         LANGUAGE plpgsql
@@ -360,34 +437,33 @@ def upgrade() -> None:
         DECLARE correlation text;
         DECLARE authorized boolean := false;
         BEGIN
-          SELECT id,global_identity_id INTO actor_session,actor_identity
-          FROM public.user_sessions
-          WHERE token_hash = nullif(current_setting('app.current_session_token_hash', true), '')
-            AND revoked_at IS NULL AND expires_at > now()
-            AND mfa_verified_at >= now() - interval '10 minutes';
+          SELECT session.id,session.global_identity_id INTO actor_session,actor_identity
+          FROM public.user_sessions session
+          JOIN public.global_identities identity
+            ON identity.id=session.global_identity_id
+          WHERE session.token_hash = nullif(
+              current_setting('app.current_session_token_hash', true), ''
+            )
+            AND session.revoked_at IS NULL AND session.expires_at > now()
+            AND session.mfa_verified_at >= now() - interval '10 minutes'
+            AND session.security_version=identity.security_version
+            AND identity.status='active';
           IF actor_identity IS NULL OR actor_identity = target_identity THEN
             RETURN false;
           END IF;
-          IF requested_organization IS NULL THEN
-            SELECT EXISTS(
-              SELECT 1 FROM public.platform_operator_grants
-              WHERE global_identity_id=actor_identity AND role='platform_admin' AND status='active'
-            ) INTO authorized;
-          ELSE
-            SELECT EXISTS(
-              SELECT 1 FROM public.organizations organization
-              JOIN public.organization_memberships actor
-                ON actor.organization_id=organization.id
-              JOIN public.organization_memberships target
-                ON target.organization_id=organization.id
-              WHERE organization.id=requested_organization
-                AND organization.status='active'
-                AND actor.global_identity_id=actor_identity
-                AND actor.role='organization_admin' AND actor.status='active'
-                AND target.global_identity_id=target_identity
-                AND target.role <> 'organization_admin' AND target.status='active'
-            ) INTO authorized;
-          END IF;
+          SELECT EXISTS(
+            SELECT 1 FROM public.organizations organization
+            JOIN public.organization_memberships actor
+              ON actor.organization_id=organization.id
+            JOIN public.organization_memberships target
+              ON target.organization_id=organization.id
+            WHERE organization.id=requested_organization
+              AND organization.status='active'
+              AND actor.global_identity_id=actor_identity
+              AND actor.role='organization_admin' AND actor.status='active'
+              AND target.global_identity_id=target_identity
+              AND target.role <> 'organization_admin' AND target.status='active'
+          ) INTO authorized;
           IF NOT authorized THEN
             RETURN false;
           END IF;
@@ -396,19 +472,57 @@ def upgrade() -> None:
           UPDATE public.user_sessions SET revoked_at=now(),updated_at=now()
           WHERE global_identity_id=target_identity AND revoked_at IS NULL;
           correlation := coalesce(nullif(current_setting('app.current_request_correlation_id', true), ''), 'missing');
-          IF requested_organization IS NULL THEN
-            INSERT INTO public.platform_audit_events
-              (id,actor_identity_id,action,target_type,target_id,result,
-               request_correlation_id,safe_summary,created_at)
-            VALUES (gen_random_uuid(),actor_identity,'identity.mfa_reset','global_identity',
-                    target_identity,'allowed',correlation,'Reset identity MFA',now());
-          ELSE
-            INSERT INTO public.audit_events
-              (id,organization_id,actor_identity_id,action,target_type,target_id,result,
-               request_correlation_id,safe_summary,created_at)
-            VALUES (gen_random_uuid(),requested_organization,actor_identity,'identity.mfa_reset',
-                    'global_identity',target_identity,'allowed',correlation,'Reset member MFA',now());
+          INSERT INTO public.audit_events
+            (id,organization_id,actor_identity_id,action,target_type,target_id,result,
+             request_correlation_id,safe_summary,created_at)
+          VALUES (gen_random_uuid(),requested_organization,actor_identity,'identity.mfa_reset',
+                  'global_identity',target_identity,'allowed',correlation,'Reset member MFA',now());
+          RETURN true;
+        END;
+        $$"""
+    )
+    op.execute(
+        """CREATE FUNCTION reset_identity_mfa_as_platform_administrator(
+          actor_identity uuid, actor_security_version integer, target_identity uuid
+        ) RETURNS boolean
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path = pg_catalog, public
+        AS $$
+        DECLARE authorized boolean := false;
+        DECLARE correlation text;
+        DECLARE context_actor uuid;
+        BEGIN
+          context_actor := nullif(
+            current_setting('app.current_actor_identity_id', true), ''
+          )::uuid;
+          IF actor_identity IS NULL OR actor_identity = target_identity
+             OR context_actor IS DISTINCT FROM actor_identity THEN
+            RETURN false;
           END IF;
+          SELECT EXISTS(
+            SELECT 1 FROM public.global_identities identity
+            JOIN public.platform_operator_grants grant_record
+              ON grant_record.global_identity_id=identity.id
+            WHERE identity.id=actor_identity AND identity.status='active'
+              AND identity.security_version=actor_security_version
+              AND grant_record.role='platform_admin' AND grant_record.status='active'
+          ) INTO authorized;
+          IF NOT authorized THEN
+            RETURN false;
+          END IF;
+          DELETE FROM public.mfa_recovery_codes WHERE global_identity_id=target_identity;
+          DELETE FROM public.mfa_credentials WHERE global_identity_id=target_identity;
+          UPDATE public.user_sessions SET revoked_at=now(),updated_at=now()
+          WHERE global_identity_id=target_identity AND revoked_at IS NULL;
+          correlation := coalesce(nullif(
+            current_setting('app.current_request_correlation_id', true), ''
+          ), 'missing');
+          INSERT INTO public.platform_audit_events
+            (id,actor_identity_id,action,target_type,target_id,result,
+             request_correlation_id,safe_summary,created_at)
+          VALUES (gen_random_uuid(),actor_identity,'identity.mfa_reset','global_identity',
+                  target_identity,'allowed',correlation,'Reset identity MFA',now());
           RETURN true;
         END;
         $$"""
@@ -416,10 +530,16 @@ def upgrade() -> None:
     for function in (
         "revoke_current_identity_sessions(uuid)",
         "complete_password_reset(text,text)",
-        "reset_identity_mfa_as_administrator(uuid,uuid)",
+        "reset_identity_mfa_as_organization_administrator(uuid,uuid)",
     ):
         op.execute(f"REVOKE ALL ON FUNCTION {function} FROM PUBLIC")
         op.execute(f"GRANT EXECUTE ON FUNCTION {function} TO patent_evidence_app")
+    op.execute(
+        "REVOKE ALL ON FUNCTION reset_identity_mfa_as_platform_administrator(uuid,integer,uuid) FROM PUBLIC"
+    )
+    op.execute(
+        "GRANT EXECUTE ON FUNCTION reset_identity_mfa_as_platform_administrator(uuid,integer,uuid) TO patent_evidence_platform"
+    )
 
     op.execute("GRANT SELECT ON organizations TO patent_evidence_worker")
     op.execute(
@@ -433,7 +553,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP FUNCTION IF EXISTS reset_identity_mfa_as_administrator(uuid,uuid)")
+    op.execute(
+        "DROP FUNCTION IF EXISTS reset_identity_mfa_as_platform_administrator(uuid,integer,uuid)"
+    )
+    op.execute(
+        "DROP FUNCTION IF EXISTS reset_identity_mfa_as_organization_administrator(uuid,uuid)"
+    )
     op.execute("DROP FUNCTION IF EXISTS complete_password_reset(text,text)")
     op.execute("DROP FUNCTION IF EXISTS revoke_current_identity_sessions(uuid)")
     for table in reversed(TENANT_TABLES[1:]):

@@ -12,4 +12,16 @@ a recently MFA-verified organization administrator for a lower-level member at
 The `pe_session` cookie is opaque and identity-only. Organization and role
 authority are never stored in it or in `user_sessions`; privileged guards
 re-read the current platform grant or URL-scoped organization membership on
-every request.
+every request. Sessions also capture the identity security version and become
+invalid immediately when a password reset advances that version.
+
+Platform endpoints authenticate the opaque session in a short application-role
+transaction, then close it before rechecking platform authority and performing
+the mutation in a separately verified platform-role transaction. The platform
+role has no session-table access. Organization administration remains in an
+application-role, URL-tenant-bound transaction.
+
+TOTP replacement keeps the confirmed factor active until the pending factor is
+successfully confirmed. The database permits at most one active and one pending
+factor per identity; confirmation atomically retires the old factor, promotes
+the pending factor, and rotates the session.

@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import hashlib
 import hmac
 import os
@@ -37,6 +38,18 @@ class MutableClock:
         return self.value
 
 
+class ScriptedResponseTimer:
+    def __init__(self) -> None:
+        self._values = iter((0.0, 0.05, 1.0, 1.05))
+        self.sleep_calls: list[float] = []
+
+    def monotonic(self) -> float:
+        return next(self._values)
+
+    async def sleep(self, delay: float) -> None:
+        self.sleep_calls.append(delay)
+
+
 def _url(variable: str, role: str) -> str:
     value = os.environ.get(variable)
     if not value:
@@ -45,11 +58,21 @@ def _url(variable: str, role: str) -> str:
     return value
 
 
-def _settings(*, production: bool = False) -> Settings:
+def _settings(
+    *, production: bool = False, platform_uses_application_role: bool = False
+) -> Settings:
     application_url = _url("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app")
+    platform_url = (
+        application_url
+        if platform_uses_application_role
+        else _url("PE_TEST_PLATFORM_DATABASE_URL", "patent_evidence_platform")
+    )
     return Settings(
         environment="production" if production else "development",
         database_url=application_url.replace(
+            "postgresql://", "postgresql+asyncpg://", 1
+        ),
+        platform_database_url=platform_url.replace(
             "postgresql://", "postgresql+asyncpg://", 1
         ),
         mfa_encryption_key=MFA_KEY,
@@ -214,6 +237,29 @@ async def test_login_cookie_session_expiration_and_logout() -> None:
 
 
 @pytest.mark.asyncio
+async def test_successful_password_login_rotates_presented_session() -> None:
+    app = create_app(settings=_settings())
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        first = await _login(client)
+        first_token = first.cookies["pe_session"]
+        second = await _login(client)
+        second_token = second.cookies["pe_session"]
+        assert second_token != first_token
+
+        client.cookies.clear()
+        client.cookies.set("pe_session", first_token)
+        rotated = await client.get("/api/v1/auth/session")
+        client.cookies.clear()
+        client.cookies.set("pe_session", second_token)
+        current = await client.get("/api/v1/auth/session")
+
+    assert rotated.status_code == 401
+    assert current.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_production_cookie_is_secure() -> None:
     app = create_app(settings=_settings(production=True))
     async with AsyncClient(
@@ -237,6 +283,27 @@ async def test_session_rejects_an_identity_suspended_after_login() -> None:
         with psycopg.connect(migration_url, autocommit=True) as connection:
             connection.execute(
                 "UPDATE global_identities SET status='suspended' WHERE id=%s",
+                (IDENTITY,),
+            )
+        current = await client.get("/api/v1/auth/session")
+
+    assert current.status_code == 401
+    assert current.json() == {"detail": "session_required"}
+
+
+@pytest.mark.asyncio
+async def test_session_rejects_stale_identity_security_version() -> None:
+    app = create_app(settings=_settings())
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await _login(client)
+        migration_url = _url(
+            "PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration"
+        )
+        with psycopg.connect(migration_url, autocommit=True) as connection:
+            connection.execute(
+                "UPDATE global_identities SET security_version=security_version+1 WHERE id=%s",
                 (IDENTITY,),
             )
         current = await client.get("/api/v1/auth/session")
@@ -298,6 +365,30 @@ async def test_password_reset_is_generic_one_time_and_revokes_sessions() -> None
 
 
 @pytest.mark.asyncio
+async def test_reset_request_applies_same_deterministic_response_floor() -> None:
+    timer = ScriptedResponseTimer()
+    app = create_app(
+        settings=_settings(),
+        response_monotonic=timer.monotonic,
+        response_sleeper=timer.sleep,
+        reset_response_floor_seconds=0.2,
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        known = await client.post(
+            "/api/v1/auth/password-reset/request", json={"email": "user@example.test"}
+        )
+        unknown = await client.post(
+            "/api/v1/auth/password-reset/request",
+            json={"email": "unknown@example.test"},
+        )
+
+    assert known.status_code == unknown.status_code == 202
+    assert timer.sleep_calls == pytest.approx([0.15, 0.15])
+
+
+@pytest.mark.asyncio
 async def test_password_reset_expires_and_password_policy_is_enforced() -> None:
     clock = MutableClock()
     clock.value -= timedelta(hours=1)
@@ -326,6 +417,59 @@ async def test_password_reset_expires_and_password_policy_is_enforced() -> None:
     assert expired.json() == {"detail": "invalid_or_expired_reset_token"}
     assert weak.status_code == 422
     assert weak.json() == {"detail": "password_policy_failed"}
+
+
+async def _wait_for_blocked_database_operations(
+    migration_url: str, minimum: int
+) -> None:
+    for _ in range(200):
+        with psycopg.connect(migration_url) as observer:
+            blocked = observer.execute(
+                "SELECT count(*) FROM pg_locks WHERE NOT granted"
+            ).fetchone()[0]
+        if blocked >= minimum:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError(f"expected at least {minimum} blocked database operations")
+
+
+@pytest.mark.asyncio
+async def test_concurrent_reset_and_old_password_login_cannot_leave_a_session() -> None:
+    app = create_app(settings=_settings())
+    migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    async with (
+        AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as reset_client,
+        AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as login_client,
+    ):
+        request = await reset_client.post(
+            "/api/v1/auth/password-reset/request", json={"email": "user@example.test"}
+        )
+        reset_token = request.json()["reset_token"]
+        with psycopg.connect(migration_url) as blocker:
+            blocker.execute("LOCK TABLE user_sessions IN ACCESS EXCLUSIVE MODE")
+            reset_task = asyncio.create_task(
+                reset_client.post(
+                    "/api/v1/auth/password-reset/confirm",
+                    json={"token": reset_token, "new_password": NEW_PASSWORD},
+                )
+            )
+            await _wait_for_blocked_database_operations(migration_url, 1)
+            login_task = asyncio.create_task(_login(login_client))
+            await _wait_for_blocked_database_operations(migration_url, 2)
+            blocker.commit()
+        reset_response, login_response = await asyncio.gather(reset_task, login_task)
+
+        assert reset_response.status_code == 204
+        assert login_response.status_code in {200, 401}
+        if login_response.status_code == 200:
+            login_client.cookies.clear()
+            login_client.cookies.set("pe_session", login_response.cookies["pe_session"])
+            surviving = await login_client.get("/api/v1/auth/session")
+            assert surviving.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -404,6 +548,158 @@ async def test_recovery_code_regeneration_invalidates_previous_batch() -> None:
 
     assert old_code.status_code == 401
     assert new_code.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_active_totp_remains_valid_until_replacement_is_confirmed() -> None:
+    clock = MutableClock()
+    app = create_app(settings=_settings(), clock=clock)
+    async with (
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as owner,
+        AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as challenger,
+    ):
+        await _login(owner)
+        first_enrollment, _ = await _confirm_totp(owner, clock)
+        old_secret = first_enrollment.json()["secret"]
+
+        replacement = await owner.post("/api/v1/auth/mfa/totp/enroll")
+        assert replacement.status_code == 201
+
+        await _login(challenger)
+        old_during_pending = await challenger.post(
+            "/api/v1/auth/mfa/challenge", json={"code": _totp(old_secret, clock())}
+        )
+        assert old_during_pending.status_code == 200
+
+        replacement_confirmed = await owner.post(
+            "/api/v1/auth/mfa/totp/confirm",
+            json={
+                "credential_id": replacement.json()["credential_id"],
+                "code": _totp(replacement.json()["secret"], clock()),
+            },
+        )
+        assert replacement_confirmed.status_code == 200
+
+        await _login(challenger)
+        old_after_confirmation = await challenger.post(
+            "/api/v1/auth/mfa/challenge", json={"code": _totp(old_secret, clock())}
+        )
+        new_after_confirmation = await challenger.post(
+            "/api/v1/auth/mfa/challenge",
+            json={"code": _totp(replacement.json()["secret"], clock())},
+        )
+
+    assert old_after_confirmation.status_code == 401
+    assert new_after_confirmation.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_concurrent_totp_enrollment_leaves_one_active_and_one_pending() -> None:
+    clock = MutableClock()
+    app = create_app(settings=_settings(), clock=clock)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as owner:
+        await _login(owner)
+        _, confirmation = await _confirm_totp(owner, clock)
+        mfa_token = confirmation.cookies["pe_session"]
+        async with (
+            AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as first,
+            AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as second,
+        ):
+            first.cookies.set("pe_session", mfa_token)
+            second.cookies.set("pe_session", mfa_token)
+            enrollments = await asyncio.gather(
+                first.post("/api/v1/auth/mfa/totp/enroll"),
+                second.post("/api/v1/auth/mfa/totp/enroll"),
+            )
+
+    assert [response.status_code for response in enrollments] == [201, 201]
+    migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    with psycopg.connect(migration_url) as connection:
+        counts = dict(
+            connection.execute(
+                """SELECT status,count(*) FROM mfa_credentials
+                WHERE global_identity_id=%s AND status IN ('active','pending')
+                GROUP BY status""",
+                (IDENTITY,),
+            ).fetchall()
+        )
+    assert counts == {"active": 1, "pending": 1}
+
+
+@pytest.mark.asyncio
+async def test_totp_confirmation_challenge_and_recovery_attempts_are_limited() -> None:
+    clock = MutableClock()
+    app = create_app(settings=_settings(), clock=clock)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        await _login(client)
+        enrollment = await client.post("/api/v1/auth/mfa/totp/enroll")
+        invalid_code = "000000"
+        confirmations = [
+            await client.post(
+                "/api/v1/auth/mfa/totp/confirm",
+                json={
+                    "credential_id": enrollment.json()["credential_id"],
+                    "code": invalid_code,
+                },
+            )
+            for _ in range(5)
+        ]
+        assert [response.status_code for response in confirmations] == [
+            401,
+            401,
+            401,
+            401,
+            429,
+        ]
+
+        clock.value += timedelta(minutes=2)
+        confirmed = await client.post(
+            "/api/v1/auth/mfa/totp/confirm",
+            json={
+                "credential_id": enrollment.json()["credential_id"],
+                "code": _totp(enrollment.json()["secret"], clock()),
+            },
+        )
+        assert confirmed.status_code == 200
+
+        await _login(client)
+        challenges = [
+            await client.post("/api/v1/auth/mfa/challenge", json={"code": invalid_code})
+            for _ in range(5)
+        ]
+        assert [response.status_code for response in challenges] == [
+            401,
+            401,
+            401,
+            401,
+            429,
+        ]
+
+        clock.value += timedelta(minutes=2)
+        recovery_attempts = [
+            await client.post(
+                "/api/v1/auth/mfa/challenge",
+                json={"recovery_code": "invalid-recovery-code"},
+            )
+            for _ in range(5)
+        ]
+    assert [response.status_code for response in recovery_attempts] == [
+        401,
+        401,
+        401,
+        401,
+        429,
+    ]
 
 
 @pytest.mark.asyncio
@@ -575,3 +871,22 @@ async def test_organization_and_platform_mfa_reset_require_recent_mfa() -> None:
         ]
     assert summaries == ["Reset member MFA", "Reset identity MFA"]
     assert all("pe_session" not in summary.lower() for summary in summaries)
+
+
+@pytest.mark.asyncio
+async def test_platform_mfa_reset_requires_verified_platform_database_role() -> None:
+    clock = MutableClock()
+    app = create_app(
+        settings=_settings(platform_uses_application_role=True), clock=clock
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as client:
+        await _login(client, "platform@example.test")
+        await _confirm_totp(client, clock)
+        response = await client.post(
+            f"/api/v1/platform/identities/{IDENTITY}/mfa/reset"
+        )
+
+    assert response.status_code == 500

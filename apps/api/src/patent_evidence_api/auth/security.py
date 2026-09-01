@@ -1,8 +1,11 @@
 import base64
+import asyncio
 import hashlib
 import hmac
 import secrets
 import struct
+import time
+from collections.abc import Awaitable, Callable
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Protocol
@@ -15,6 +18,7 @@ from cryptography.fernet import Fernet, InvalidToken
 SESSION_LIFETIME = timedelta(hours=12)
 MFA_RECENCY = timedelta(minutes=10)
 RESET_LIFETIME = timedelta(minutes=30)
+RESET_RESPONSE_FLOOR_SECONDS = 0.2
 
 
 def digest_secret(value: str) -> str:
@@ -46,6 +50,38 @@ class PasswordSecurity:
         except (InvalidHashError, VerificationError):
             valid = False
         return bool(encoded) and valid
+
+    def perform_dummy_work(self) -> None:
+        """Run the same password KDF class for both reset-request identity branches."""
+        try:
+            self._hasher.verify(self._dummy_hash, "not a real account password 42")
+        except VerificationError:
+            pass
+
+
+class MinimumResponseTime:
+    """Apply a deterministic minimum duration without exposing wall-clock tests."""
+
+    def __init__(
+        self,
+        *,
+        seconds: float = RESET_RESPONSE_FLOOR_SECONDS,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> None:
+        if seconds < 0:
+            raise ValueError("minimum response time must not be negative")
+        self._seconds = seconds
+        self._monotonic = monotonic
+        self._sleeper = sleeper
+
+    def start(self) -> float:
+        return self._monotonic()
+
+    async def wait(self, started_at: float) -> None:
+        remaining = self._seconds - (self._monotonic() - started_at)
+        if remaining > 0:
+            await self._sleeper(remaining)
 
 
 class TotpSecurity:
