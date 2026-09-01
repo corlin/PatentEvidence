@@ -64,7 +64,7 @@ class PlatformAccess:
         async with application_transaction(
             self._application_session_factory
         ) as session:
-            return await self._session_authority.require_recent_mfa(request, session)
+            return await self._session_authority.resolve(request, session)
 
     async def _record(
         self,
@@ -100,6 +100,7 @@ class PlatformAccess:
         self, request: Request
     ) -> AsyncIterator[tuple[AsyncSession, Principal]]:
         principal = await self._principal(request)
+        self._session_authority.require_recent_mfa(principal)
         async with platform_transaction(
             self._platform_session_factory, actor_identity_id=principal.identity_id
         ) as session:
@@ -108,7 +109,13 @@ class PlatformAccess:
 
     @asynccontextmanager
     async def mutation(
-        self, request: Request, *, action: str, target_type: str
+        self,
+        request: Request,
+        *,
+        action: str,
+        target_type: str,
+        target_id: UUID | None = None,
+        success_audit: bool = True,
     ) -> AsyncIterator[PlatformMutation]:
         correlation = self._correlation_id(request)
         try:
@@ -120,6 +127,20 @@ class PlatformAccess:
                 target_type=target_type,
                 result="denied",
                 correlation_id=correlation,
+                target_id=target_id,
+                safe_summary="privileged platform mutation rejected",
+            )
+            raise
+        try:
+            self._session_authority.require_recent_mfa(principal)
+        except HTTPException:
+            await self._record(
+                actor=principal.identity_id,
+                action=action,
+                target_type=target_type,
+                result="denied",
+                correlation_id=correlation,
+                target_id=target_id,
                 safe_summary="privileged platform mutation rejected",
             )
             raise
@@ -136,20 +157,22 @@ class PlatformAccess:
                     principal=principal,
                     correlation_id=correlation,
                     target_type=target_type,
+                    target_id=target_id,
                 )
                 yield operation
-                await self._audit_writer.append(
-                    session,
-                    PlatformAuditEvent(
-                        actor_identity_id=principal.identity_id,
-                        action=action,
-                        target_type=target_type,
-                        target_id=operation.target_id,
-                        result="allowed",
-                        request_correlation_id=correlation,
-                        safe_summary=operation.safe_summary,
-                    ),
-                )
+                if success_audit:
+                    await self._audit_writer.append(
+                        session,
+                        PlatformAuditEvent(
+                            actor_identity_id=principal.identity_id,
+                            action=action,
+                            target_type=target_type,
+                            target_id=operation.target_id,
+                            result="allowed",
+                            request_correlation_id=correlation,
+                            safe_summary=operation.safe_summary,
+                        ),
+                    )
         except HTTPException:
             await self._record(
                 actor=principal.identity_id,
@@ -157,7 +180,7 @@ class PlatformAccess:
                 target_type=target_type,
                 result="denied",
                 correlation_id=correlation,
-                target_id=operation.target_id if operation else None,
+                target_id=operation.target_id if operation else target_id,
                 safe_summary="privileged platform mutation rejected",
             )
             raise
@@ -168,7 +191,7 @@ class PlatformAccess:
                 target_type=target_type,
                 result="failed",
                 correlation_id=correlation,
-                target_id=operation.target_id if operation else None,
+                target_id=operation.target_id if operation else target_id,
                 safe_summary="privileged platform mutation failed",
             )
             raise

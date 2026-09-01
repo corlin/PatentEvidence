@@ -80,14 +80,11 @@ class OrganizationLifecycle:
         }
 
 
-class OrganizationProvisioning:
-    """Open and operate organizations behind one platform transaction seam."""
+class OrganizationProvisioner:
+    """Open an organization and its initial authority records atomically."""
 
-    def __init__(
-        self, clock: Callable[[], datetime], lifecycle: OrganizationLifecycle
-    ) -> None:
+    def __init__(self, clock: Callable[[], datetime]) -> None:
         self._clock = clock
-        self._lifecycle = lifecycle
 
     def validate_opening(self, opening: OrganizationOpening) -> None:
         if opening.current_period_end <= opening.current_period_start:
@@ -255,6 +252,16 @@ class OrganizationProvisioning:
             },
         )
         return 201, response, organization_id
+
+
+class OrganizationDirectory:
+    """Read and change organization lifecycle and quota projections."""
+
+    def __init__(
+        self, clock: Callable[[], datetime], lifecycle: OrganizationLifecycle
+    ) -> None:
+        self._clock = clock
+        self._lifecycle = lifecycle
 
     async def detail(
         self, session: AsyncSession, organization_id: UUID

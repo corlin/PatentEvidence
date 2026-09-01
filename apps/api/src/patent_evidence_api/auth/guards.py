@@ -27,7 +27,8 @@ class PrivilegedPrincipalGuard:
         *,
         lower_level_target: UUID,
     ) -> Principal:
-        principal = await self._session_authority.require_recent_mfa(request, session)
+        principal = await self._session_authority.resolve(request, session)
+        self._session_authority.require_recent_mfa(principal)
         await bind_transaction_context(
             session,
             organization_id=organization_id,

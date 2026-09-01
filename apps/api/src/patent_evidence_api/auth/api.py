@@ -680,7 +680,15 @@ def create_privileged_auth_router(
         target_identity: UUID,
         request: Request,
     ) -> Response:
-        async with platform_access.authorized(request) as (platform_session, principal):
+        async with platform_access.mutation(
+            request,
+            action="identity.mfa_reset",
+            target_type="global_identity",
+            target_id=target_identity,
+            success_audit=False,
+        ) as operation:
+            platform_session = operation.session
+            principal = operation.principal
             reset = await platform_session.scalar(
                 text(
                     """SELECT reset_identity_mfa_as_platform_administrator(

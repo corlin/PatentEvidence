@@ -13,7 +13,8 @@ from argon2 import PasswordHasher
 from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
 from patent_evidence_api.main import create_app
-from test_support import api_settings, login_with_totp, postgres_url
+from patent_evidence_api.platform.audit import PlatformAuditWriter
+from test_support import api_settings, login_with_totp, postgres_url, totp_code
 
 PLATFORM = UUID("40000000-0000-4000-8000-000000000001")
 NON_PLATFORM = UUID("40000000-0000-4000-8000-000000000002")
@@ -100,6 +101,16 @@ async def test_platform_creation_is_atomic_and_idempotent() -> None:
         )
         assert unauthenticated.status_code == 401
         await _login_with_mfa(client, clock, "platform@example.test")
+        missing_key = await client.post("/api/v1/platform/organizations", json=payload)
+        assert missing_key.status_code == 422
+        assert missing_key.json() == {"detail": "invalid_idempotency_key"}
+        invalid_body = await client.post(
+            "/api/v1/platform/organizations",
+            json={**payload, "slug": "Invalid Slug"},
+            headers={"Idempotency-Key": "invalid-body-1"},
+        )
+        assert invalid_body.status_code == 422
+        assert invalid_body.json() == {"detail": "invalid_platform_mutation_request"}
         created = await client.post(
             "/api/v1/platform/organizations",
             json=payload,
@@ -236,6 +247,12 @@ async def test_platform_creation_is_atomic_and_idempotent() -> None:
         assert connection.execute(
             "SELECT count(*) FROM organizations WHERE slug='concurrent-open'"
         ).fetchone() == (1,)
+        assert connection.execute(
+            """SELECT count(*) FROM platform_audit_events
+            WHERE action='platform.organization.create' AND result='denied'
+              AND actor_identity_id=%s""",
+            (PLATFORM,),
+        ).fetchone() == (6,)
         summaries = connection.execute(
             "SELECT safe_summary FROM platform_audit_events ORDER BY created_at"
         ).fetchall()
@@ -329,12 +346,36 @@ async def test_platform_lifecycle_and_non_platform_rejection_are_audited() -> No
         assert cleared.json()["organization"]["status"] == "active"
         assert cleared.json()["quota"]["status"] == "suspended"
 
+        missing_id = UUID("40000000-0000-4000-8000-000000000099")
+        missing = await client.post(
+            f"/api/v1/platform/organizations/{missing_id}/suspend"
+        )
+        assert missing.status_code == 404
+
         await client.post("/api/v1/auth/logout")
         await _login_with_mfa(client, clock, "user@example.test")
         denied = await client.post(
             f"/api/v1/platform/organizations/{organization_id}/suspend"
         )
         assert denied.status_code == 403
+        assert (await client.get("/api/v1/platform/organizations")).status_code == 403
+        assert (
+            await client.get(f"/api/v1/platform/organizations/{organization_id}")
+        ).status_code == 403
+        denied_create = await client.post(
+            "/api/v1/platform/organizations",
+            json={
+                "slug": "denied-create",
+                "display_name": "Denied Create",
+                "admin_email": "denied@example.test",
+                "plan_key": "manual",
+                "monthly_case_allowance": 1,
+                "current_period_start": clock().isoformat(),
+                "current_period_end": (clock() + timedelta(days=30)).isoformat(),
+            },
+            headers={"Idempotency-Key": "denied-create-1"},
+        )
+        assert denied_create.status_code == 403
 
     migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
     with psycopg.connect(migration_url) as connection:
@@ -346,6 +387,104 @@ async def test_platform_lifecycle_and_non_platform_rejection_are_audited() -> No
         assert ("platform.organization.reactivate", "allowed") in rows
         assert ("platform.organization.set_expiry", "allowed") in rows
         assert ("platform.organization.suspend", "denied") in rows
+        assert connection.execute(
+            """SELECT count(*) FROM platform_audit_events
+            WHERE action='platform.organization.suspend' AND result='denied'
+              AND target_id=%s""",
+            (missing_id,),
+        ).fetchone() == (1,)
+
+
+@pytest.mark.asyncio
+async def test_platform_creation_rolls_back_every_business_record_on_audit_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = Clock()
+    original_append = PlatformAuditWriter.append
+
+    async def fail_success_audit(self, session, event):
+        if event.action == "platform.organization.create" and event.result == "allowed":
+            raise RuntimeError("injected audit failure")
+        await original_append(self, session, event)
+
+    monkeypatch.setattr(PlatformAuditWriter, "append", fail_success_audit)
+    app = create_app(settings=_settings(), clock=clock)
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="https://test",
+    ) as client:
+        await _login_with_mfa(client, clock, "platform@example.test")
+        response = await client.post(
+            "/api/v1/platform/organizations",
+            json={
+                "slug": "must-rollback",
+                "display_name": "Must Roll Back",
+                "admin_email": "rollback@example.test",
+                "plan_key": "manual",
+                "monthly_case_allowance": 1,
+                "current_period_start": clock().isoformat(),
+                "current_period_end": (clock() + timedelta(days=30)).isoformat(),
+            },
+            headers={"Idempotency-Key": "rollback-open-1"},
+        )
+    assert response.status_code == 500
+
+    migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    with psycopg.connect(migration_url) as connection:
+        counts = connection.execute(
+            """SELECT
+            (SELECT count(*) FROM organizations WHERE slug='must-rollback'),
+            (SELECT count(*) FROM organization_invitations i JOIN organizations o
+               ON o.id=i.organization_id WHERE o.slug='must-rollback'),
+            (SELECT count(*) FROM organization_provisioning_records r JOIN organizations o
+               ON o.id=r.organization_id WHERE o.slug='must-rollback'),
+            (SELECT count(*) FROM organization_provisioning_requests
+               WHERE idempotency_key='rollback-open-1')"""
+        ).fetchone()
+        assert counts == (0, 0, 0, 0)
+        assert connection.execute(
+            """SELECT count(*) FROM platform_audit_events
+            WHERE action='platform.organization.create' AND result='failed'
+              AND actor_identity_id=%s""",
+            (PLATFORM,),
+        ).fetchone() == (1,)
+
+
+@pytest.mark.parametrize("minutes_after_login,expected_status", [(0, 200), (2, 403)])
+@pytest.mark.asyncio
+async def test_bootstrap_mfa_handoff_deadline_is_enforced(
+    minutes_after_login: int, expected_status: int
+) -> None:
+    clock = Clock()
+    migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    with psycopg.connect(migration_url, autocommit=True) as connection:
+        connection.execute(
+            """UPDATE platform_operator_grants
+            SET bootstrap_mfa_enrollment_expires_at=%s WHERE global_identity_id=%s""",
+            (clock() + timedelta(minutes=1), PLATFORM),
+        )
+    app = create_app(settings=_settings(), clock=clock)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="https://test"
+    ) as client:
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "platform@example.test", "password": PASSWORD},
+        )
+        assert login.status_code == 200
+        enrollment = await client.post("/api/v1/auth/mfa/totp/enroll")
+        assert enrollment.status_code == 201
+        clock.value += timedelta(minutes=minutes_after_login)
+        confirmation = await client.post(
+            "/api/v1/auth/mfa/totp/confirm",
+            json={
+                "credential_id": enrollment.json()["credential_id"],
+                "code": totp_code(enrollment.json()["secret"], clock()),
+            },
+        )
+        assert confirmation.status_code == 200
+        response = await client.get("/api/v1/platform/organizations")
+    assert response.status_code == expected_status
 
 
 def test_bootstrap_cli_creates_only_the_first_admin_without_printing_secrets() -> None:
@@ -396,6 +535,68 @@ def test_bootstrap_cli_creates_only_the_first_admin_without_printing_secrets() -
             ("allowed", "first platform administrator created"),
             ("denied", "platform administrator bootstrap rejected"),
         ]
+
+
+def test_bootstrap_database_failure_rolls_back_and_records_failed_audit() -> None:
+    migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    with psycopg.connect(migration_url, autocommit=True) as connection:
+        connection.execute(
+            "TRUNCATE platform_audit_events,mfa_recovery_codes,mfa_credentials,"
+            "platform_operator_grants,user_sessions,global_identities CASCADE"
+        )
+        connection.execute(
+            """CREATE OR REPLACE FUNCTION reject_platform_grant_for_test()
+            RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'injected grant failure'; END $$"""
+        )
+        connection.execute(
+            """CREATE TRIGGER reject_platform_grant_for_test
+            BEFORE INSERT ON platform_operator_grants
+            FOR EACH ROW EXECUTE FUNCTION reject_platform_grant_for_test()"""
+        )
+    secret = "Bootstrap failure horse battery staple 84"
+    environment = {
+        **os.environ,
+        "PATENT_EVIDENCE_MIGRATION_DATABASE_URL": migration_url,
+        "PATENT_EVIDENCE_BOOTSTRAP_PASSWORD": secret,
+    }
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "bootstrap-platform-admin.py"),
+                "failed-admin@example.test",
+                "Failed Admin",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+    finally:
+        with psycopg.connect(migration_url, autocommit=True) as connection:
+            connection.execute(
+                "DROP TRIGGER IF EXISTS reject_platform_grant_for_test "
+                "ON platform_operator_grants"
+            )
+            connection.execute(
+                "DROP FUNCTION IF EXISTS reject_platform_grant_for_test()"
+            )
+
+    assert result.returncode == 1
+    assert "platform administrator bootstrap failed" in result.stderr
+    assert secret not in result.stdout + result.stderr
+    with psycopg.connect(migration_url) as connection:
+        assert connection.execute(
+            "SELECT count(*) FROM global_identities"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            "SELECT count(*) FROM platform_operator_grants"
+        ).fetchone() == (0,)
+        assert connection.execute(
+            """SELECT result,safe_summary FROM platform_audit_events
+            WHERE action='platform.admin.bootstrap'"""
+        ).fetchall() == [("failed", "platform administrator bootstrap failed")]
 
 
 def test_application_role_cannot_read_platform_provisioning_records() -> None:

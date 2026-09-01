@@ -8,14 +8,14 @@ import os
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "api" / "src"))
 
 from patent_evidence_api.auth.security import PasswordSecurity
 from patent_evidence_api.core.settings import Settings
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 PASSWORD_ENVIRONMENT_VARIABLE = "PATENT_EVIDENCE_BOOTSTRAP_PASSWORD"
 MFA_HANDOFF_LIFETIME = timedelta(minutes=30)
@@ -26,6 +26,36 @@ class SafeArgumentParser(argparse.ArgumentParser):
         del message
         self.print_usage(sys.stderr)
         self.exit(2, "bootstrap-platform-admin.py: invalid command arguments\n")
+
+
+async def append_bootstrap_audit(
+    connection: AsyncConnection,
+    *,
+    actor: UUID | None,
+    target: UUID | None,
+    result: str,
+    correlation: str,
+    summary: str,
+    now: datetime,
+) -> None:
+    await connection.execute(
+        text(
+            """INSERT INTO platform_audit_events
+            (id,actor_identity_id,action,target_type,target_id,result,
+             request_correlation_id,safe_summary,created_at)
+            VALUES (:id,:actor,'platform.admin.bootstrap','global_identity',:target,
+                    :result,:correlation,:summary,:now)"""
+        ),
+        {
+            "id": uuid4(),
+            "actor": actor,
+            "target": target,
+            "result": result,
+            "correlation": correlation,
+            "summary": summary,
+            "now": now,
+        },
+    )
 
 
 def parser() -> argparse.ArgumentParser:
@@ -106,26 +136,32 @@ async def bootstrap(email: str, display_name: str, password: str) -> datetime:
                         "deadline": deadline,
                     },
                 )
-            await connection.execute(
-                text(
-                    """INSERT INTO platform_audit_events
-                    (id,actor_identity_id,action,target_type,target_id,result,
-                     request_correlation_id,safe_summary,created_at)
-                    VALUES (:id,:actor,'platform.admin.bootstrap','global_identity',:target,
-                            :result,:correlation,:summary,:now)"""
-                ),
-                {
-                    "id": uuid4(),
-                    "actor": identity_id if failure is None else None,
-                    "target": identity_id if failure is None else None,
-                    "result": "allowed" if failure is None else "denied",
-                    "correlation": correlation,
-                    "summary": "first platform administrator created"
-                    if failure is None
-                    else "platform administrator bootstrap rejected",
-                    "now": now,
-                },
+            await append_bootstrap_audit(
+                connection,
+                actor=identity_id if failure is None else None,
+                target=identity_id if failure is None else None,
+                result="allowed" if failure is None else "denied",
+                correlation=correlation,
+                summary="first platform administrator created"
+                if failure is None
+                else "platform administrator bootstrap rejected",
+                now=now,
             )
+    except Exception as exc:
+        try:
+            async with engine.begin() as audit_connection:
+                await append_bootstrap_audit(
+                    audit_connection,
+                    actor=None,
+                    target=None,
+                    result="failed",
+                    correlation=correlation,
+                    summary="platform administrator bootstrap failed",
+                    now=datetime.now(UTC),
+                )
+        except Exception:
+            pass
+        raise RuntimeError("platform administrator bootstrap failed") from exc
     finally:
         await engine.dispose()
     if failure is not None:

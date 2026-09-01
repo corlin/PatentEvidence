@@ -1337,12 +1337,24 @@ async def test_organization_and_platform_mfa_reset_require_recent_mfa() -> None:
     with psycopg.connect(migration_url) as connection:
         summaries = [
             row[0]
-            for row in connection.execute(
-                "SELECT safe_summary FROM audit_events UNION ALL "
-                "SELECT safe_summary FROM platform_audit_events"
-            )
+            for row in connection.execute("SELECT safe_summary FROM audit_events")
         ]
-    assert summaries == ["Reset member MFA", "Reset identity MFA"]
+        platform_rows = connection.execute(
+            """SELECT result,safe_summary,actor_identity_id,target_id
+            FROM platform_audit_events
+            WHERE action='identity.mfa_reset' ORDER BY created_at"""
+        ).fetchall()
+    assert summaries == ["Reset member MFA"]
+    assert (
+        platform_rows.count(
+            ("denied", "privileged platform mutation rejected", PLATFORM, IDENTITY)
+        )
+        == 2
+    )
+    assert (
+        platform_rows.count(("allowed", "Reset identity MFA", PLATFORM, IDENTITY)) == 1
+    )
+    summaries.extend(row[1] for row in platform_rows)
     assert all("pe_session" not in summary.lower() for summary in summaries)
 
 

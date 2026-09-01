@@ -35,8 +35,9 @@ from patent_evidence_api.platform.access import PlatformAccess
 from patent_evidence_api.platform.api import create_platform_router
 from patent_evidence_api.platform.audit import PlatformAuditWriter
 from patent_evidence_api.platform.organizations import (
+    OrganizationDirectory,
     OrganizationLifecycle,
-    OrganizationProvisioning,
+    OrganizationProvisioner,
 )
 
 
@@ -122,7 +123,8 @@ def create_app(
     application.include_router(
         create_platform_router(
             platform_access,
-            OrganizationProvisioning(resolved_clock, OrganizationLifecycle()),
+            OrganizationProvisioner(resolved_clock),
+            OrganizationDirectory(resolved_clock, OrganizationLifecycle()),
         )
     )
 

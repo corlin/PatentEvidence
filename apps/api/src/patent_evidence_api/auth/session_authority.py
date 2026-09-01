@@ -130,10 +130,7 @@ class SessionAuthority:
             mfa_verified_at=row["mfa_verified_at"],
         )
 
-    async def require_recent_mfa(
-        self, request: Request, session: AsyncSession
-    ) -> Principal:
-        principal = await self.resolve(request, session)
+    def require_recent_mfa(self, principal: Principal) -> Principal:
         if not principal.has_recent_mfa(self._clock()):
             raise HTTPException(status_code=403, detail="mfa_required")
         return principal
