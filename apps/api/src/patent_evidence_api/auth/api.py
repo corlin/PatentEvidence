@@ -677,16 +677,22 @@ def create_privileged_auth_router(
 
     @router.post("/platform/identities/{target_identity}/mfa/reset", status_code=204)
     async def platform_mfa_reset(
-        target_identity: UUID,
+        target_identity: str,
         request: Request,
     ) -> Response:
+        try:
+            target = UUID(target_identity)
+        except ValueError:
+            target = None
         async with platform_access.mutation(
             request,
             action="identity.mfa_reset",
             target_type="global_identity",
-            target_id=target_identity,
+            target_id=target,
             success_audit=False,
         ) as operation:
+            if target is None:
+                raise HTTPException(status_code=422, detail="invalid_identity_id")
             platform_session = operation.session
             principal = operation.principal
             reset = await platform_session.scalar(
@@ -697,7 +703,7 @@ def create_privileged_auth_router(
                 {
                     "actor": principal.identity_id,
                     "security_version": principal.security_version,
-                    "target": target_identity,
+                    "target": target,
                 },
             )
             if not reset:

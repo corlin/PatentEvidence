@@ -1312,6 +1312,9 @@ async def test_organization_and_platform_mfa_reset_require_recent_mfa() -> None:
             f"/api/v1/platform/identities/{IDENTITY}/mfa/reset"
         )
         await _confirm_totp(client, clock)
+        invalid_platform_target = await client.post(
+            "/api/v1/platform/identities/not-a-uuid/mfa/reset"
+        )
         clock.value += timedelta(minutes=11)
         stale_platform = await client.post(
             f"/api/v1/platform/identities/{IDENTITY}/mfa/reset"
@@ -1330,6 +1333,8 @@ async def test_organization_and_platform_mfa_reset_require_recent_mfa() -> None:
     assert suspended_org.status_code == 403
     assert stale_platform.status_code == 403
     assert stale_platform.json() == {"detail": "mfa_required"}
+    assert invalid_platform_target.status_code == 422
+    assert invalid_platform_target.json() == {"detail": "invalid_identity_id"}
     assert reset_org.status_code == reset_platform.status_code == 204
     assert member_revoked.status_code == 401
 
@@ -1350,6 +1355,12 @@ async def test_organization_and_platform_mfa_reset_require_recent_mfa() -> None:
             ("denied", "privileged platform mutation rejected", PLATFORM, IDENTITY)
         )
         == 2
+    )
+    assert (
+        platform_rows.count(
+            ("denied", "privileged platform mutation rejected", PLATFORM, None)
+        )
+        == 1
     )
     assert (
         platform_rows.count(("allowed", "Reset identity MFA", PLATFORM, IDENTITY)) == 1

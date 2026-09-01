@@ -506,6 +506,16 @@ def test_bootstrap_cli_creates_only_the_first_admin_without_printing_secrets() -
         "first-admin@example.test",
         "First Admin",
     ]
+    weak_environment = {
+        **environment,
+        "PATENT_EVIDENCE_BOOTSTRAP_PASSWORD": "short",
+    }
+    weak = subprocess.run(
+        command, check=False, capture_output=True, text=True, env=weak_environment
+    )
+    assert weak.returncode == 1
+    assert "password_policy_failed" in weak.stderr
+    assert "short" not in weak.stdout + weak.stderr
     first = subprocess.run(
         command, check=False, capture_output=True, text=True, env=environment
     )
@@ -532,6 +542,7 @@ def test_bootstrap_cli_creates_only_the_first_admin_without_printing_secrets() -
             WHERE action='platform.admin.bootstrap' ORDER BY created_at"""
         ).fetchall()
         assert audit_rows == [
+            ("denied", "platform administrator bootstrap rejected"),
             ("allowed", "first platform administrator created"),
             ("denied", "platform administrator bootstrap rejected"),
         ]

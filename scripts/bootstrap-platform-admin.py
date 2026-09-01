@@ -74,14 +74,34 @@ async def bootstrap(email: str, display_name: str, password: str) -> datetime:
     database_url = settings.migration_database_url.replace(
         "postgresql+psycopg://", "postgresql+asyncpg://", 1
     ).replace("postgresql://", "postgresql+asyncpg://", 1)
-    password_hash = PasswordSecurity().hash(password)
     identity_id = uuid4()
     now = datetime.now(UTC)
     deadline = now + MFA_HANDOFF_LIFETIME
     failure: str | None = None
     correlation = f"bootstrap-cli:{uuid4()}"
     engine = create_async_engine(database_url, pool_pre_ping=True)
+    passwords = PasswordSecurity()
     try:
+        passwords.validate(password)
+    except ValueError as exc:
+        try:
+            async with engine.begin() as audit_connection:
+                await append_bootstrap_audit(
+                    audit_connection,
+                    actor=None,
+                    target=None,
+                    result="denied",
+                    correlation=correlation,
+                    summary="platform administrator bootstrap rejected",
+                    now=now,
+                )
+        except Exception:
+            pass
+        finally:
+            await engine.dispose()
+        raise RuntimeError("password_policy_failed") from exc
+    try:
+        password_hash = passwords.hash(password)
         async with engine.begin() as connection:
             await connection.execute(
                 text("LOCK TABLE platform_operator_grants IN EXCLUSIVE MODE")
@@ -175,7 +195,6 @@ def main() -> int:
     if password is None:
         password = getpass.getpass("Initial password: ")
     try:
-        PasswordSecurity().validate(password)
         deadline = asyncio.run(
             bootstrap(arguments.email, arguments.display_name, password)
         )
