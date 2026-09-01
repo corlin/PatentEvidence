@@ -44,4 +44,5 @@ uv sync --frozen --no-install-project
 .venv/bin/alembic -c apps/api/alembic.ini upgrade head
 .venv/bin/pytest \
   apps/api/tests/integration/test_database_roles_and_rls.py \
-  apps/api/tests/integration/test_database_context.py
+  apps/api/tests/integration/test_database_context.py \
+  apps/api/tests/integration/test_authentication_api.py

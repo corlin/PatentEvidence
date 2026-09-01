@@ -6,6 +6,8 @@ services:
     environment:
       PATENT_EVIDENCE_DATABASE_URL: postgresql+asyncpg://patent_evidence_app:${PATENT_EVIDENCE_APP_DB_PASSWORD:-app-change-me-local-only}@postgres:5432/${POSTGRES_DB:-patent_evidence}
       PATENT_EVIDENCE_PLATFORM_DATABASE_URL: postgresql+asyncpg://patent_evidence_platform:${PATENT_EVIDENCE_PLATFORM_DB_PASSWORD:-platform-change-me-local-only}@postgres:5432/${POSTGRES_DB:-patent_evidence}
+      PATENT_EVIDENCE_MFA_ENCRYPTION_KEY: ${PATENT_EVIDENCE_MFA_ENCRYPTION_KEY:-pIfjx_eVKj7GkCcljbw2n9XWLy4NbWzGiDsPicJeC5U=}
+      PATENT_EVIDENCE_EXPOSE_DEVELOPMENT_TOKENS: ${PATENT_EVIDENCE_EXPOSE_DEVELOPMENT_TOKENS:-true}
       OBJECT_STORAGE_ENDPOINT: http://minio:9000
     ports:
       - "${API_PORT:-8000}:8000"

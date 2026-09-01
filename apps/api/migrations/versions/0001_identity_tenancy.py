@@ -251,7 +251,10 @@ def upgrade() -> None:
         )
 
     op.execute("GRANT SELECT, INSERT, UPDATE ON global_identities TO patent_evidence_app")
-    op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON password_reset_tokens TO patent_evidence_app")
+    op.execute("GRANT INSERT, UPDATE (used_at) ON password_reset_tokens TO patent_evidence_app")
+    op.execute(
+        "GRANT SELECT (global_identity_id,used_at) ON password_reset_tokens TO patent_evidence_app"
+    )
     op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON mfa_credentials TO patent_evidence_app")
     op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON mfa_recovery_codes TO patent_evidence_app")
     op.execute("GRANT SELECT ON platform_operator_grants TO patent_evidence_app")
@@ -274,6 +277,150 @@ def upgrade() -> None:
     op.execute("GRANT SELECT, INSERT, UPDATE ON organization_invitations TO patent_evidence_platform")
     op.execute("GRANT SELECT, INSERT ON platform_audit_events TO patent_evidence_platform")
 
+    op.execute(
+        """CREATE FUNCTION revoke_current_identity_sessions(requested_identity uuid)
+        RETURNS integer
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path = pg_catalog, public
+        AS $$
+        DECLARE affected integer;
+        DECLARE authenticated_identity uuid;
+        DECLARE correlation text;
+        BEGIN
+          SELECT global_identity_id INTO authenticated_identity
+          FROM public.user_sessions
+          WHERE token_hash = nullif(current_setting('app.current_session_token_hash', true), '')
+            AND revoked_at IS NULL AND expires_at > now();
+          IF authenticated_identity IS NULL OR authenticated_identity IS DISTINCT FROM requested_identity THEN
+            RAISE EXCEPTION 'current session identity mismatch';
+          END IF;
+          UPDATE public.user_sessions SET revoked_at=now(),updated_at=now()
+          WHERE global_identity_id=requested_identity AND revoked_at IS NULL;
+          GET DIAGNOSTICS affected = ROW_COUNT;
+          correlation := coalesce(nullif(
+            current_setting('app.current_request_correlation_id', true), ''
+          ), 'missing');
+          INSERT INTO public.platform_audit_events
+            (id,actor_identity_id,action,target_type,target_id,result,
+             request_correlation_id,safe_summary,created_at)
+          VALUES (gen_random_uuid(),authenticated_identity,'identity.sessions_revoke',
+                  'global_identity',requested_identity,'allowed',correlation,
+                  'Revoked identity sessions',now());
+          RETURN affected;
+        END;
+        $$"""
+    )
+    op.execute(
+        """CREATE FUNCTION complete_password_reset(requested_token_hash text, new_password_hash text)
+        RETURNS uuid
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path = pg_catalog, public
+        AS $$
+        DECLARE reset_identity uuid;
+        BEGIN
+          SELECT global_identity_id INTO reset_identity
+          FROM public.password_reset_tokens
+          WHERE token_hash=requested_token_hash AND used_at IS NULL AND expires_at > now()
+          FOR UPDATE;
+          IF reset_identity IS NULL THEN
+            RETURN NULL;
+          END IF;
+          UPDATE public.password_reset_tokens SET used_at=now()
+          WHERE token_hash=requested_token_hash;
+          UPDATE public.global_identities
+          SET password_hash=new_password_hash,security_version=security_version+1,updated_at=now()
+          WHERE id=reset_identity AND status='active';
+          IF NOT FOUND THEN
+            RETURN NULL;
+          END IF;
+          UPDATE public.user_sessions SET revoked_at=now(),updated_at=now()
+          WHERE global_identity_id=reset_identity AND revoked_at IS NULL;
+          INSERT INTO public.platform_audit_events
+            (id,actor_identity_id,action,target_type,target_id,result,
+             request_correlation_id,safe_summary,created_at)
+          VALUES (gen_random_uuid(),reset_identity,'identity.password_reset',
+                  'global_identity',reset_identity,'allowed','missing',
+                  'Completed password reset',now());
+          RETURN reset_identity;
+        END;
+        $$"""
+    )
+    op.execute(
+        """CREATE FUNCTION reset_identity_mfa_as_administrator(
+          target_identity uuid, requested_organization uuid
+        ) RETURNS boolean
+        LANGUAGE plpgsql
+        SECURITY DEFINER
+        SET search_path = pg_catalog, public
+        AS $$
+        DECLARE actor_identity uuid;
+        DECLARE actor_session uuid;
+        DECLARE correlation text;
+        DECLARE authorized boolean := false;
+        BEGIN
+          SELECT id,global_identity_id INTO actor_session,actor_identity
+          FROM public.user_sessions
+          WHERE token_hash = nullif(current_setting('app.current_session_token_hash', true), '')
+            AND revoked_at IS NULL AND expires_at > now()
+            AND mfa_verified_at >= now() - interval '10 minutes';
+          IF actor_identity IS NULL OR actor_identity = target_identity THEN
+            RETURN false;
+          END IF;
+          IF requested_organization IS NULL THEN
+            SELECT EXISTS(
+              SELECT 1 FROM public.platform_operator_grants
+              WHERE global_identity_id=actor_identity AND role='platform_admin' AND status='active'
+            ) INTO authorized;
+          ELSE
+            SELECT EXISTS(
+              SELECT 1 FROM public.organizations organization
+              JOIN public.organization_memberships actor
+                ON actor.organization_id=organization.id
+              JOIN public.organization_memberships target
+                ON target.organization_id=organization.id
+              WHERE organization.id=requested_organization
+                AND organization.status='active'
+                AND actor.global_identity_id=actor_identity
+                AND actor.role='organization_admin' AND actor.status='active'
+                AND target.global_identity_id=target_identity
+                AND target.role <> 'organization_admin' AND target.status='active'
+            ) INTO authorized;
+          END IF;
+          IF NOT authorized THEN
+            RETURN false;
+          END IF;
+          DELETE FROM public.mfa_recovery_codes WHERE global_identity_id=target_identity;
+          DELETE FROM public.mfa_credentials WHERE global_identity_id=target_identity;
+          UPDATE public.user_sessions SET revoked_at=now(),updated_at=now()
+          WHERE global_identity_id=target_identity AND revoked_at IS NULL;
+          correlation := coalesce(nullif(current_setting('app.current_request_correlation_id', true), ''), 'missing');
+          IF requested_organization IS NULL THEN
+            INSERT INTO public.platform_audit_events
+              (id,actor_identity_id,action,target_type,target_id,result,
+               request_correlation_id,safe_summary,created_at)
+            VALUES (gen_random_uuid(),actor_identity,'identity.mfa_reset','global_identity',
+                    target_identity,'allowed',correlation,'Reset identity MFA',now());
+          ELSE
+            INSERT INTO public.audit_events
+              (id,organization_id,actor_identity_id,action,target_type,target_id,result,
+               request_correlation_id,safe_summary,created_at)
+            VALUES (gen_random_uuid(),requested_organization,actor_identity,'identity.mfa_reset',
+                    'global_identity',target_identity,'allowed',correlation,'Reset member MFA',now());
+          END IF;
+          RETURN true;
+        END;
+        $$"""
+    )
+    for function in (
+        "revoke_current_identity_sessions(uuid)",
+        "complete_password_reset(text,text)",
+        "reset_identity_mfa_as_administrator(uuid,uuid)",
+    ):
+        op.execute(f"REVOKE ALL ON FUNCTION {function} FROM PUBLIC")
+        op.execute(f"GRANT EXECUTE ON FUNCTION {function} TO patent_evidence_app")
+
     op.execute("GRANT SELECT ON organizations TO patent_evidence_worker")
     op.execute(
         """GRANT SELECT (id,email_normalized,display_name,status,security_version,created_at,updated_at)
@@ -286,6 +433,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DROP FUNCTION IF EXISTS reset_identity_mfa_as_administrator(uuid,uuid)")
+    op.execute("DROP FUNCTION IF EXISTS complete_password_reset(text,text)")
+    op.execute("DROP FUNCTION IF EXISTS revoke_current_identity_sessions(uuid)")
     for table in reversed(TENANT_TABLES[1:]):
         op.execute(f"DROP TRIGGER IF EXISTS {table}_organization_immutable ON {table}")
     op.execute("DROP FUNCTION IF EXISTS deny_organization_id_change")

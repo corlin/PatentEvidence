@@ -211,6 +211,12 @@ def test_worker_role_cannot_read_password_hashes() -> None:
             worker.execute("SELECT password_hash FROM global_identities")
 
 
+def test_application_role_cannot_read_password_reset_token_hashes() -> None:
+    with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            app.execute("SELECT token_hash FROM password_reset_tokens")
+
+
 def test_session_token_hash_rls_allows_only_matching_session_and_platform_identity() -> None:
     with _runtime_connection("PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app") as app:
         app.execute(

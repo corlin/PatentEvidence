@@ -4,6 +4,16 @@ Use Python 3.12 or later and current Node LTS. The checked-in `.env.example`
 contains explicit development-only Compose defaults; copy it to `.env` only
 locally and never promote those values to production.
 
+The checked-in MFA encryption key is also development-only. Every
+non-development deployment must set `PATENT_EVIDENCE_MFA_ENCRYPTION_KEY` to a
+separately generated Fernet key; startup rejects the checked-in development
+key outside development.
+
+Local Compose exposes password-reset tokens in the otherwise generic reset
+response so the confirm flow is reproducible without an email adapter. The
+setting is rejected outside development and must never be enabled in a shared
+deployment.
+
 ```sh
 uv sync --no-install-project --python /opt/homebrew/bin/python3.12
 pnpm install
