@@ -14,9 +14,11 @@ from patent_evidence_api.auth.guards import (
     PrivilegedPrincipalGuard,
 )
 from patent_evidence_api.auth.security import (
+    AsyncPasswordSecurity,
     DeterministicRateLimiter,
     MinimumResponseTime,
     PasswordSecurity,
+    PasswordWorkRunner,
     RateLimiter,
     TotpSecurity,
 )
@@ -36,6 +38,7 @@ def create_app(
     response_monotonic: Callable[[], float] = time.monotonic,
     response_sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
     reset_response_floor_seconds: float = 0.2,
+    password_work_runner: PasswordWorkRunner | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
     resolved_clock = clock or (lambda: datetime.now(UTC))
@@ -53,7 +56,10 @@ def create_app(
         create_auth_router(
             session_factory,
             clock=resolved_clock,
-            passwords=PasswordSecurity(),
+            passwords=AsyncPasswordSecurity(
+                PasswordSecurity(),
+                runner=password_work_runner or asyncio.to_thread,
+            ),
             totp=TotpSecurity(resolved_settings.mfa_encryption_key.get_secret_value()),
             rate_limiter=rate_limiter or DeterministicRateLimiter(),
             secure_cookies=resolved_settings.environment != "development",

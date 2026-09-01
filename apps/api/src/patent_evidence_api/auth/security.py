@@ -59,6 +59,36 @@ class PasswordSecurity:
             pass
 
 
+class PasswordWorkRunner(Protocol):
+    async def __call__(
+        self, function: Callable[..., object], *args: object
+    ) -> object: ...
+
+
+class AsyncPasswordSecurity:
+    """Offload synchronous password KDF operations from async request handlers."""
+
+    def __init__(
+        self,
+        passwords: PasswordSecurity,
+        runner: PasswordWorkRunner = asyncio.to_thread,
+    ) -> None:
+        self._passwords = passwords
+        self._runner = runner
+
+    async def hash(self, password: str) -> str:
+        encoded = await self._runner(self._passwords.hash, password)
+        if not isinstance(encoded, str):
+            raise TypeError("password hash runner returned an invalid result")
+        return encoded
+
+    async def verify(self, encoded: str | None, password: str) -> bool:
+        return bool(await self._runner(self._passwords.verify, encoded, password))
+
+    async def perform_dummy_work(self) -> None:
+        await self._runner(self._passwords.perform_dummy_work)
+
+
 class MinimumResponseTime:
     """Apply a deterministic minimum duration without exposing wall-clock tests."""
 

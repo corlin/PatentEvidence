@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import os
 import struct
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -16,6 +16,7 @@ from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
 
 from patent_evidence_api.core.settings import Settings
+from patent_evidence_api.auth.security import DeterministicRateLimiter
 from patent_evidence_api.main import create_app
 
 
@@ -48,6 +49,40 @@ class ScriptedResponseTimer:
 
     async def sleep(self, delay: float) -> None:
         self.sleep_calls.append(delay)
+
+
+class RecordingPasswordWorkRunner:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def __call__(self, function: Callable[..., object], *args: object) -> object:
+        self.calls.append(function.__name__)
+        return function(*args)
+
+
+class GatedPasswordWorkRunner:
+    def __init__(self) -> None:
+        self.verification_started = asyncio.Event()
+        self.release_verification = asyncio.Event()
+
+    async def __call__(self, function: Callable[..., object], *args: object) -> object:
+        if function.__name__ == "verify":
+            self.verification_started.set()
+            await self.release_verification.wait()
+        return function(*args)
+
+
+class CapturingRateLimiter:
+    def __init__(self, *, reject_email: bool = False) -> None:
+        self.keys: list[str] = []
+        self._reject_email = reject_email
+        self._delegate = DeterministicRateLimiter()
+
+    def allow(self, key: str, now: datetime) -> bool:
+        self.keys.append(key)
+        if self._reject_email and key.startswith("reset-email:"):
+            return False
+        return self._delegate.allow(key, now)
 
 
 def _url(variable: str, role: str) -> str:
@@ -386,6 +421,168 @@ async def test_reset_request_applies_same_deterministic_response_floor() -> None
 
     assert known.status_code == unknown.status_code == 202
     assert timer.sleep_calls == pytest.approx([0.15, 0.15])
+
+
+@pytest.mark.asyncio
+async def test_async_routes_delegate_every_password_kdf_to_the_worker_seam() -> None:
+    password_work = RecordingPasswordWorkRunner()
+    app = create_app(
+        settings=_settings(),
+        password_work_runner=password_work,
+        reset_response_floor_seconds=0,
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        unknown_login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "unknown@example.test", "password": "wrong"},
+        )
+        login = await _login(client)
+        reset = await client.post(
+            "/api/v1/auth/password-reset/request", json={"email": "user@example.test"}
+        )
+        confirmed = await client.post(
+            "/api/v1/auth/password-reset/confirm",
+            json={"token": reset.json()["reset_token"], "new_password": NEW_PASSWORD},
+        )
+
+    assert unknown_login.status_code == 401
+    assert login.status_code == 200
+    assert confirmed.status_code == 204
+    assert password_work.calls == ["verify", "verify", "perform_dummy_work", "hash"]
+
+
+def _update_identity_with_short_lock_timeout(statement: str, value: object) -> bool:
+    migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    try:
+        with psycopg.connect(migration_url, autocommit=True) as connection:
+            connection.execute("SET lock_timeout = '250ms'")
+            connection.execute(statement, (value, IDENTITY))
+    except psycopg.errors.LockNotAvailable:
+        return False
+    return True
+
+
+@pytest.mark.asyncio
+async def test_login_does_not_hold_the_identity_lock_during_password_verification() -> (
+    None
+):
+    password_work = GatedPasswordWorkRunner()
+    app = create_app(settings=_settings(), password_work_runner=password_work)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        login_task = asyncio.create_task(_login(client))
+        await asyncio.wait_for(password_work.verification_started.wait(), timeout=2)
+        try:
+            row_was_unlocked = await asyncio.to_thread(
+                _update_identity_with_short_lock_timeout,
+                "UPDATE global_identities SET display_name=%s WHERE id=%s",
+                "Changed while verifying",
+            )
+        finally:
+            password_work.release_verification.set()
+        login = await login_task
+
+    assert row_was_unlocked is True
+    assert login.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_login_fails_closed_when_password_snapshot_changes_before_lock() -> None:
+    password_work = GatedPasswordWorkRunner()
+    replacement_hash = PasswordHasher().hash(NEW_PASSWORD)
+    app = create_app(settings=_settings(), password_work_runner=password_work)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        login_task = asyncio.create_task(_login(client))
+        await asyncio.wait_for(password_work.verification_started.wait(), timeout=2)
+        try:
+            snapshot_changed = await asyncio.to_thread(
+                _update_identity_with_short_lock_timeout,
+                "UPDATE global_identities SET password_hash=%s WHERE id=%s",
+                replacement_hash,
+            )
+        finally:
+            password_work.release_verification.set()
+        login = await login_task
+
+    assert snapshot_changed is True
+    assert login.status_code == 401
+    assert login.json() == {"detail": "invalid_credentials"}
+    migration_url = _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    with psycopg.connect(migration_url) as connection:
+        assert connection.execute("SELECT count(*) FROM user_sessions").fetchone() == (
+            0,
+        )
+
+
+@pytest.mark.asyncio
+async def test_reset_ip_limit_cannot_be_bypassed_with_varying_emails() -> None:
+    password_work = RecordingPasswordWorkRunner()
+    limiter = CapturingRateLimiter()
+    app = create_app(
+        settings=_settings(),
+        password_work_runner=password_work,
+        rate_limiter=limiter,
+        reset_response_floor_seconds=0,
+    )
+    emails = [
+        "one@example.test",
+        "two@example.test",
+        "three@example.test",
+        "four@example.test",
+        "user@example.test",
+        "unknown@example.test",
+    ]
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        responses = [
+            await client.post(
+                "/api/v1/auth/password-reset/request", json={"email": email}
+            )
+            for email in emails
+        ]
+
+    assert all(response.status_code == 202 for response in responses)
+    assert all(
+        set(response.json()) == {"status", "reset_token"} for response in responses
+    )
+    assert password_work.calls == ["perform_dummy_work"] * 4
+    assert len([key for key in limiter.keys if key.startswith("reset-ip:")]) == 6
+    assert len([key for key in limiter.keys if key.startswith("reset-email:")]) == 6
+    assert not any(email in key for email in emails for key in limiter.keys)
+
+
+@pytest.mark.asyncio
+async def test_reset_email_limit_is_private_and_precedes_password_work() -> None:
+    password_work = RecordingPasswordWorkRunner()
+    limiter = CapturingRateLimiter(reject_email=True)
+    app = create_app(
+        settings=_settings(),
+        password_work_runner=password_work,
+        rate_limiter=limiter,
+        reset_response_floor_seconds=0,
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        known = await client.post(
+            "/api/v1/auth/password-reset/request", json={"email": "user@example.test"}
+        )
+        unknown = await client.post(
+            "/api/v1/auth/password-reset/request",
+            json={"email": "unknown@example.test"},
+        )
+
+    assert known.status_code == unknown.status_code == 202
+    assert set(known.json()) == set(unknown.json()) == {"status", "reset_token"}
+    assert password_work.calls == []
+    assert len([key for key in limiter.keys if key.startswith("reset-email:")]) == 2
+    assert not any("@example.test" in key for key in limiter.keys)
 
 
 @pytest.mark.asyncio

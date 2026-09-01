@@ -25,3 +25,9 @@ TOTP replacement keeps the confirmed factor active until the pending factor is
 successfully confirmed. The database permits at most one active and one pending
 factor per identity; confirmation atomically retires the old factor, promotes
 the pending factor, and rotates the session.
+
+Password KDF work is dispatched to worker threads. Login verifies an unlocked
+identity snapshot, then locks and rechecks its password hash, security version,
+and status before rotating or issuing a session; concurrent identity changes
+therefore fail with the generic credential error without holding a row lock
+during Argon2 verification.

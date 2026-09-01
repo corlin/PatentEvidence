@@ -14,11 +14,19 @@ response so the confirm flow is reproducible without an email adapter. The
 setting is rejected outside development and must never be enabled in a shared
 deployment.
 
-Password-reset requests always perform dummy Argon2 work and apply a 200 ms
-minimum response-time floor to both known and unknown identities. The floor is
-injected in HTTP tests so the boundary is verified without flaky wall-clock
-assertions. It is a minimum, not a promise of identical network latency; use
-normal edge-level rate limiting and monitoring in production as well.
+Password-reset requests within the rate limits perform dummy Argon2 work for
+both known and unknown identities. Every request applies a 200 ms minimum
+response-time floor. The floor is injected in HTTP tests so the boundary is
+verified without flaky wall-clock assertions. It is a minimum, not a promise of
+identical network latency; use normal edge-level rate limiting and monitoring in
+production as well.
+
+Reset throttling checks both the socket-peer IP and a SHA-256-derived email key
+before scheduling Argon2 work. Requests rejected by either process-local limit
+still receive the same generic response and minimum floor, while avoiding KDF
+resource consumption. Login verification, reset dummy work, and new-password
+hashing all run through the API's worker-thread seam rather than on the async
+event loop.
 
 ```sh
 uv sync --no-install-project --python /opt/homebrew/bin/python3.12

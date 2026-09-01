@@ -10,10 +10,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from patent_evidence_api.auth.security import (
+    AsyncPasswordSecurity,
     MinimumResponseTime,
     RESET_LIFETIME,
     SESSION_LIFETIME,
-    PasswordSecurity,
     RateLimiter,
     TotpSecurity,
     digest_secret,
@@ -61,7 +61,7 @@ def create_auth_router(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     clock: Callable[[], datetime],
-    passwords: PasswordSecurity,
+    passwords: AsyncPasswordSecurity,
     totp: TotpSecurity,
     rate_limiter: RateLimiter,
     secure_cookies: bool,
@@ -298,7 +298,7 @@ def create_auth_router(
                 await session.execute(
                     text(
                         """SELECT id,password_hash,status,security_version
-                    FROM global_identities WHERE email_normalized=:email FOR UPDATE"""
+                    FROM global_identities WHERE email_normalized=:email"""
                     ),
                     {"email": normalized_email},
                 )
@@ -307,8 +307,28 @@ def create_auth_router(
             .one_or_none()
         )
         encoded = row["password_hash"] if row else None
-        valid = passwords.verify(encoded, body.password)
+        valid = await passwords.verify(encoded, body.password)
         if row is None or row["status"] != "active" or not valid:
+            raise HTTPException(status_code=401, detail="invalid_credentials")
+        locked_row = (
+            (
+                await session.execute(
+                    text(
+                        """SELECT password_hash,status,security_version
+                    FROM global_identities WHERE id=:identity_id FOR UPDATE"""
+                    ),
+                    {"identity_id": row["id"]},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if (
+            locked_row is None
+            or locked_row["password_hash"] != row["password_hash"]
+            or locked_row["security_version"] != row["security_version"]
+            or locked_row["status"] != row["status"]
+        ):
             raise HTTPException(status_code=401, detail="invalid_credentials")
         await revoke_valid_presented_session(request, session, now)
         token, _, expires_at = await issue_session(
@@ -378,8 +398,12 @@ def create_auth_router(
         normalized_email = body.email.strip().lower()
         client_host = request.client.host if request.client else "unknown"
         token = issue_opaque_token()
-        passwords.perform_dummy_work()
-        if rate_limiter.allow(f"reset:{client_host}:{normalized_email}", now):
+        ip_allowed = rate_limiter.allow(f"reset-ip:{client_host}", now)
+        email_allowed = rate_limiter.allow(
+            f"reset-email:{digest_secret(normalized_email)}", now
+        )
+        if ip_allowed and email_allowed:
+            await passwords.perform_dummy_work()
             async with session_factory() as session, session.begin():
                 await verify_database_role(session, APPLICATION_DATABASE_ROLE)
                 await bind_transaction_context(session, organization_id=None)
@@ -423,7 +447,7 @@ def create_auth_router(
         body: ResetConfirmBody, session: AsyncSession = Depends(database_session)
     ) -> Response:
         try:
-            new_hash = passwords.hash(body.new_password)
+            new_hash = await passwords.hash(body.new_password)
         except ValueError as exc:
             raise HTTPException(
                 status_code=422, detail="password_policy_failed"
