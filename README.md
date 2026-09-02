@@ -7,6 +7,14 @@ business features.
 ## P0 surfaces
 
 - API process health: `GET /health` returns a dependency-free process status.
+- Identity security: password login/reset, opaque 12-hour sessions, TOTP and
+  one-time recovery codes under `/api/v1/auth`.
+- Platform operations: MFA-gated organization provisioning, quota and lifecycle
+  management under `/api/v1/platform/organizations`.
+- Organization administration: 72-hour single-use invitations, fixed-role
+  membership lifecycle, tenant-safe administration and last-admin protection
+  under `/api/v1/organizations`; token inspection/acceptance under
+  `/api/v1/invitations`.
 - Worker process health: `python -m patent_evidence_worker.main health`.
 - Web surface: a Vite/React page identifying PatentEvidence and P0 status.
 - Provenance: seven immutable source records are checked by
@@ -23,6 +31,7 @@ business features.
 
    ```sh
    .venv/bin/pytest
+   ./scripts/test-postgres.sh
    pnpm test:web
    pnpm build:web
    .venv/bin/python scripts/verify-source-lock.py
@@ -30,7 +39,10 @@ business features.
    docker compose config
    ```
 
-5. Start the development stack with `docker compose up --build`.
+5. Start the development stack with `docker compose up --build`. The one-shot
+   `migrate` service must complete before the API and worker start. `GET
+   /health` remains a process-liveness check and intentionally does not query
+   PostgreSQL.
 
 See `docs/operations/local-development.md` for process commands and
 `docs/architecture/p0-scaffold.md` for boundaries.
