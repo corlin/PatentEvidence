@@ -30,13 +30,13 @@ from patent_evidence_api.core.database import (
     create_engine,
     create_platform_session_factory,
 )
+from patent_evidence_api.core.organization_lifecycle import OrganizationLifecycle
 from patent_evidence_api.core.settings import Settings, get_settings
 from patent_evidence_api.platform.access import PlatformAccess
 from patent_evidence_api.platform.api import create_platform_router
 from patent_evidence_api.platform.audit import PlatformAuditWriter
 from patent_evidence_api.platform.organizations import (
     OrganizationDirectory,
-    OrganizationLifecycle,
     OrganizationProvisioner,
 )
 from patent_evidence_api.organization.access import OrganizationAccess

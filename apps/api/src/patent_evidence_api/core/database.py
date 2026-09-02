@@ -24,6 +24,16 @@ PLATFORM_DATABASE_ROLE = "patent_evidence_platform"
 WORKER_DATABASE_ROLE = "patent_evidence_worker"
 
 
+async def lock_organization_authority(
+    session: AsyncSession, organization_id: UUID
+) -> None:
+    """Serialize lifecycle and administrative authority decisions per tenant."""
+    await session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        {"key": f"organization-admin-invariant:{organization_id}"},
+    )
+
+
 def create_engine(database_url: str) -> AsyncEngine:
     return create_async_engine(database_url, pool_pre_ping=True)
 

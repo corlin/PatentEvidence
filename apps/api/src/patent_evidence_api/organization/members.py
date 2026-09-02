@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from patent_evidence_api.core.database import lock_organization_authority
 from patent_evidence_api.organization.invitations import OrganizationRole
 
 
@@ -64,10 +65,7 @@ class MemberService:
         actor_identity_id: UUID,
         membership_id: UUID,
     ) -> dict[str, Any]:
-        await session.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
-            {"key": f"organization-admin-invariant:{organization_id}"},
-        )
+        await lock_organization_authority(session, organization_id)
         actor_authorized = await session.scalar(
             text(
                 """SELECT EXISTS(SELECT 1 FROM organization_memberships

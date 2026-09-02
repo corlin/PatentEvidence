@@ -11,6 +11,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from patent_evidence_api.auth.security import digest_secret, issue_opaque_token
+from patent_evidence_api.core.database import lock_organization_authority
+from patent_evidence_api.core.organization_lifecycle import OrganizationLifecycle
 
 INVITATION_LIFETIME = timedelta(hours=72)
 
@@ -39,45 +41,6 @@ class OrganizationOpening:
         }
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode()).hexdigest()
-
-
-class OrganizationLifecycle:
-    """Apply one lifecycle rule to reads, authorization, and mutations."""
-
-    @staticmethod
-    def effective_status(
-        persisted_status: str, expires_at: datetime | None, now: datetime
-    ) -> str:
-        if expires_at is not None and expires_at <= now:
-            return "expired"
-        return persisted_status
-
-    def organization_view(self, row: dict[str, Any], now: datetime) -> dict[str, Any]:
-        return {
-            "id": str(row["id"]),
-            "slug": row["slug"],
-            "display_name": row["display_name"],
-            "status": self.effective_status(row["status"], row["expires_at"], now),
-            "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
-            "created_at": row["created_at"].isoformat(),
-        }
-
-    def quota_view(self, row: dict[str, Any], now: datetime) -> dict[str, Any]:
-        organization_status = self.effective_status(
-            row["status"], row["expires_at"], now
-        )
-        effective_status = (
-            organization_status
-            if organization_status in {"suspended", "expired"}
-            else row["quota_status"]
-        )
-        return {
-            "plan_key": row["plan_key"],
-            "monthly_case_allowance": row["monthly_case_allowance"],
-            "current_period_start": row["current_period_start"].isoformat(),
-            "current_period_end": row["current_period_end"].isoformat(),
-            "status": effective_status,
-        }
 
 
 class OrganizationProvisioner:
@@ -319,6 +282,7 @@ class OrganizationDirectory:
     async def set_status(
         self, session: AsyncSession, organization_id: UUID, status: str
     ) -> dict[str, Any]:
+        await lock_organization_authority(session, organization_id)
         now = self._clock()
         if status == "active" and await session.scalar(
             text(
@@ -345,6 +309,7 @@ class OrganizationDirectory:
     async def set_expiry(
         self, session: AsyncSession, organization_id: UUID, expires_at: datetime | None
     ) -> dict[str, Any]:
+        await lock_organization_authority(session, organization_id)
         changed = await session.scalar(
             text(
                 """UPDATE organizations SET expires_at=:expires,updated_at=:now

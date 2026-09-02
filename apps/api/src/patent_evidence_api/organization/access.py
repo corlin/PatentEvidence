@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from patent_evidence_api.auth.session_authority import Principal, SessionAuthority
 from patent_evidence_api.core.database import (
     application_transaction,
+    lock_organization_authority,
     tenant_transaction,
 )
+from patent_evidence_api.core.organization_lifecycle import OrganizationLifecycle
 from patent_evidence_api.organization.audit import (
     AuditResult,
     OrganizationAuditEvent,
@@ -65,19 +67,36 @@ class OrganizationAccess:
             return await self._session_authority.resolve(request, session)
 
     async def _authorize(
-        self, session: AsyncSession, principal: Principal, organization_id: UUID
+        self,
+        session: AsyncSession,
+        principal: Principal,
+        organization_id: UUID,
+        *,
+        lock_authority: bool = False,
     ) -> None:
-        row = (
+        organization = (
             (
                 await session.execute(
                     text(
                         """SELECT organization.status AS organization_status,
-                        organization.expires_at,membership.role,membership.status
+                        organization.expires_at
                         FROM organizations organization
-                        LEFT JOIN organization_memberships membership
-                          ON membership.organization_id=organization.id
-                         AND membership.global_identity_id=:actor
                         WHERE organization.id=:organization"""
+                    ),
+                    {"organization": organization_id},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        membership = (
+            (
+                await session.execute(
+                    text(
+                        """SELECT role,status FROM organization_memberships
+                        WHERE organization_id=:organization
+                          AND global_identity_id=:actor"""
+                        + (" FOR SHARE" if lock_authority else "")
                     ),
                     {"organization": organization_id, "actor": principal.identity_id},
                 )
@@ -85,13 +104,17 @@ class OrganizationAccess:
             .mappings()
             .one_or_none()
         )
-        if row is None or row["role"] is None:
+        if organization is None or membership is None:
             raise HTTPException(status_code=404, detail="organization_not_found")
         if (
-            row["organization_status"] != "active"
-            or (row["expires_at"] is not None and row["expires_at"] <= self._clock())
-            or row["role"] != "organization_admin"
-            or row["status"] != "active"
+            OrganizationLifecycle.effective_status(
+                organization["organization_status"],
+                organization["expires_at"],
+                self._clock(),
+            )
+            != "active"
+            or membership["role"] != "organization_admin"
+            or membership["status"] != "active"
         ):
             raise HTTPException(status_code=403, detail="forbidden")
 
@@ -194,7 +217,10 @@ class OrganizationAccess:
                 actor_identity_id=principal.identity_id,
                 request_correlation_id=correlation,
             ) as session:
-                await self._authorize(session, principal, organization_id)
+                await lock_organization_authority(session, organization_id)
+                await self._authorize(
+                    session, principal, organization_id, lock_authority=True
+                )
                 operation = OrganizationMutation(
                     session=session,
                     principal=principal,

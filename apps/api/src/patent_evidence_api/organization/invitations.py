@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from patent_evidence_api.auth.security import digest_secret, issue_opaque_token
 from patent_evidence_api.core.database import (
     invitation_token_transaction,
+    lock_organization_authority,
     tenant_transaction,
 )
+from patent_evidence_api.core.organization_lifecycle import OrganizationLifecycle
 from patent_evidence_api.organization.audit import (
     AuditResult,
     OrganizationAuditEvent,
@@ -123,11 +125,11 @@ class InvitationAcceptance:
                     target_id=preview["id"],
                     result=result,
                     request_correlation_id=correlation_id,
-                    safe_summary=(
-                        "Accepted organization invitation"
-                        if result == "allowed"
-                        else "Organization invitation acceptance rejected"
-                    ),
+                    safe_summary={
+                        "allowed": "Accepted organization invitation",
+                        "denied": "Organization invitation acceptance rejected",
+                        "failed": "Organization invitation acceptance failed",
+                    }[result],
                 ),
             )
 
@@ -168,6 +170,7 @@ class InvitationAcceptance:
             actor_identity_id=preview["identity_id"],
             request_correlation_id=correlation_id,
         ) as session:
+            await lock_organization_authority(session, preview["organization_id"])
             invitation = (
                 (
                     await session.execute(
@@ -193,15 +196,26 @@ class InvitationAcceptance:
                 raise HTTPException(status_code=409, detail="invitation_not_pending")
             if invitation["expires_at"] <= now:
                 raise HTTPException(status_code=410, detail="invitation_expired")
-            organization_available = await session.scalar(
-                text(
-                    """SELECT EXISTS(SELECT 1 FROM organizations
-                    WHERE id=:organization AND status='active'
-                      AND (expires_at IS NULL OR expires_at > :now))"""
-                ),
-                {"organization": preview["organization_id"], "now": now},
+            organization = (
+                (
+                    await session.execute(
+                        text(
+                            """SELECT status,expires_at FROM organizations
+                            WHERE id=:organization"""
+                        ),
+                        {"organization": preview["organization_id"]},
+                    )
+                )
+                .mappings()
+                .one_or_none()
             )
-            if not organization_available:
+            if (
+                organization is None
+                or OrganizationLifecycle.effective_status(
+                    organization["status"], organization["expires_at"], now
+                )
+                != "active"
+            ):
                 raise HTTPException(status_code=409, detail="organization_unavailable")
             await session.execute(
                 text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
@@ -351,6 +365,23 @@ class InvitationService:
             text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
             {"key": f"organization-invitation:{organization_id}:{normalized_email}"},
         )
+        return await self._create_locked(
+            session,
+            organization_id=organization_id,
+            actor_identity_id=actor_identity_id,
+            normalized_email=normalized_email,
+            role=role,
+        )
+
+    async def _create_locked(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        actor_identity_id: UUID,
+        normalized_email: str,
+        role: OrganizationRole,
+    ) -> tuple[dict[str, Any], str]:
         await session.execute(
             text(
                 """UPDATE organization_invitations
@@ -513,6 +544,31 @@ class InvitationService:
         invitation_id: UUID,
         actor_identity_id: UUID,
     ) -> tuple[dict[str, Any], str]:
+        snapshot = (
+            (
+                await session.execute(
+                    text(
+                        """SELECT email_normalized
+                        FROM organization_invitations
+                        WHERE organization_id=:organization AND id=:invitation"""
+                    ),
+                    {"organization": organization_id, "invitation": invitation_id},
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="invitation_not_found")
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {
+                "key": (
+                    f"organization-invitation:{organization_id}:"
+                    f"{snapshot['email_normalized']}"
+                )
+            },
+        )
         row = (
             (
                 await session.execute(
@@ -552,10 +608,10 @@ class InvitationService:
                 "invitation": invitation_id,
             },
         )
-        return await self.create(
+        return await self._create_locked(
             session,
             organization_id=organization_id,
             actor_identity_id=actor_identity_id,
-            email=row["email_normalized"],
+            normalized_email=row["email_normalized"],
             role=row["role"],
         )

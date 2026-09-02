@@ -25,8 +25,13 @@ class InvitationCreateBody(BaseModel):
 
 
 class InvitationAcceptBody(BaseModel):
+    token: str
     display_name: str | None = None
     password: str | None = None
+
+
+class InvitationInspectBody(BaseModel):
+    token: str
 
 
 class MemberRoleBody(BaseModel):
@@ -56,20 +61,27 @@ def create_organization_router(
         except ValueError:
             return None
 
+    def organization_uuid(value: str) -> UUID:
+        parsed = target_uuid(value)
+        if parsed is None:
+            # A malformed locator does not identify an organization whose
+            # tenant-scoped audit stream could safely receive an event.
+            raise HTTPException(status_code=404, detail="organization_not_found")
+        return parsed
+
     @router.post("/{organization_id}/invitations", status_code=201)
-    async def create_invitation(
-        organization_id: UUID, request: Request
-    ) -> JSONResponse:
+    async def create_invitation(organization_id: str, request: Request) -> JSONResponse:
+        organization = organization_uuid(organization_id)
         async with access.mutation(
             request,
-            organization_id,
+            organization,
             action="organization.invitation.create",
             target_type="organization_invitation",
         ) as operation:
             body = await request_model(request, InvitationCreateBody)
             invitation, token = await invitations.create(
                 operation.session,
-                organization_id=organization_id,
+                organization_id=organization,
                 actor_identity_id=operation.principal.identity_id,
                 email=body.email,
                 role=body.role,
@@ -85,31 +97,31 @@ def create_organization_router(
 
     @router.get("/{organization_id}/invitations/{invitation_id}")
     async def get_invitation(
-        organization_id: UUID, invitation_id: UUID, request: Request
+        organization_id: str, invitation_id: UUID, request: Request
     ) -> dict[str, Any]:
-        async with access.authorized(request, organization_id) as (session, _):
-            detail = await invitations.detail(session, organization_id, invitation_id)
+        organization = organization_uuid(organization_id)
+        async with access.authorized(request, organization) as (session, _):
+            detail = await invitations.detail(session, organization, invitation_id)
             if detail is None:
                 raise HTTPException(status_code=404, detail="invitation_not_found")
             return detail
 
     @router.post("/{organization_id}/invitations/{invitation_id}/revoke")
     async def revoke_invitation(
-        organization_id: UUID, invitation_id: str, request: Request
+        organization_id: str, invitation_id: str, request: Request
     ) -> dict[str, Any]:
+        organization = organization_uuid(organization_id)
         target = target_uuid(invitation_id)
         async with access.mutation(
             request,
-            organization_id,
+            organization,
             action="organization.invitation.revoke",
             target_type="organization_invitation",
             target_id=target,
         ) as operation:
             if target is None:
                 raise HTTPException(status_code=422, detail="invalid_invitation_id")
-            detail = await invitations.revoke(
-                operation.session, organization_id, target
-            )
+            detail = await invitations.revoke(operation.session, organization, target)
             operation.describe(
                 target_id=target,
                 safe_summary="Revoked organization invitation",
@@ -120,12 +132,13 @@ def create_organization_router(
         "/{organization_id}/invitations/{invitation_id}/resend", status_code=201
     )
     async def resend_invitation(
-        organization_id: UUID, invitation_id: str, request: Request
+        organization_id: str, invitation_id: str, request: Request
     ) -> JSONResponse:
+        organization = organization_uuid(organization_id)
         target = target_uuid(invitation_id)
         async with access.mutation(
             request,
-            organization_id,
+            organization,
             action="organization.invitation.resend",
             target_type="organization_invitation",
             target_id=target,
@@ -134,7 +147,7 @@ def create_organization_router(
                 raise HTTPException(status_code=422, detail="invalid_invitation_id")
             invitation, token = await invitations.resend(
                 operation.session,
-                organization_id=organization_id,
+                organization_id=organization,
                 invitation_id=target,
                 actor_identity_id=operation.principal.identity_id,
             )
@@ -148,20 +161,22 @@ def create_organization_router(
         )
 
     @router.get("/{organization_id}/members")
-    async def list_members(organization_id: UUID, request: Request) -> dict[str, Any]:
-        async with access.authorized(request, organization_id) as (session, _):
-            return {"items": await members.list(session, organization_id)}
+    async def list_members(organization_id: str, request: Request) -> dict[str, Any]:
+        organization = organization_uuid(organization_id)
+        async with access.authorized(request, organization) as (session, _):
+            return {"items": await members.list(session, organization)}
 
     @router.put("/{organization_id}/members/{membership_id}/role")
     async def change_member_role(
-        organization_id: UUID,
+        organization_id: str,
         membership_id: str,
         request: Request,
     ) -> dict[str, Any]:
+        organization = organization_uuid(organization_id)
         target = target_uuid(membership_id)
         async with access.mutation(
             request,
-            organization_id,
+            organization,
             action="organization.member.role_change",
             target_type="organization_membership",
             target_id=target,
@@ -171,7 +186,7 @@ def create_organization_router(
             body = await request_model(request, MemberRoleBody)
             member = await members.set_role(
                 operation.session,
-                organization_id=organization_id,
+                organization_id=organization,
                 actor_identity_id=operation.principal.identity_id,
                 membership_id=target,
                 role=body.role,
@@ -183,16 +198,17 @@ def create_organization_router(
             return member
 
     async def change_member_status(
-        organization_id: UUID,
+        organization_id: str,
         membership_id: str,
         request: Request,
         *,
         transition: str,
     ) -> dict[str, Any]:
+        organization = organization_uuid(organization_id)
         target = target_uuid(membership_id)
         async with access.mutation(
             request,
-            organization_id,
+            organization,
             action=f"organization.member.{transition}",
             target_type="organization_membership",
             target_id=target,
@@ -201,7 +217,7 @@ def create_organization_router(
                 raise HTTPException(status_code=422, detail="invalid_membership_id")
             member = await members.set_status(
                 operation.session,
-                organization_id=organization_id,
+                organization_id=organization,
                 actor_identity_id=operation.principal.identity_id,
                 membership_id=target,
                 transition=transition,
@@ -214,7 +230,7 @@ def create_organization_router(
 
     @router.post("/{organization_id}/members/{membership_id}/suspend")
     async def suspend_member(
-        organization_id: UUID, membership_id: str, request: Request
+        organization_id: str, membership_id: str, request: Request
     ) -> dict[str, Any]:
         return await change_member_status(
             organization_id,
@@ -225,7 +241,7 @@ def create_organization_router(
 
     @router.post("/{organization_id}/members/{membership_id}/reactivate")
     async def reactivate_member(
-        organization_id: UUID, membership_id: str, request: Request
+        organization_id: str, membership_id: str, request: Request
     ) -> dict[str, Any]:
         return await change_member_status(
             organization_id,
@@ -236,7 +252,7 @@ def create_organization_router(
 
     @router.post("/{organization_id}/members/{membership_id}/remove")
     async def remove_member(
-        organization_id: UUID, membership_id: str, request: Request
+        organization_id: str, membership_id: str, request: Request
     ) -> dict[str, Any]:
         return await change_member_status(
             organization_id,
@@ -253,9 +269,9 @@ def create_invitation_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/invitations")
 
-    @router.get("/{token}")
-    async def inspect_invitation(token: str) -> dict[str, Any]:
-        preview = await acceptance.inspect(token)
+    @router.post("/inspect")
+    async def inspect_invitation(body: InvitationInspectBody) -> dict[str, Any]:
+        preview = await acceptance.inspect(body.token)
         if preview is None:
             raise HTTPException(status_code=404, detail="invitation_not_found")
         return {
@@ -271,23 +287,20 @@ def create_invitation_router(
             "existing_identity": preview["identity_id"] is not None,
         }
 
-    @router.post("/{token}/accept", status_code=201)
-    async def accept_invitation(token: str, request: Request) -> JSONResponse:
-        preview = await acceptance.inspect(token)
+    @router.post("/accept", status_code=201)
+    async def accept_invitation(request: Request) -> JSONResponse:
+        try:
+            body = InvitationAcceptBody.model_validate(await request.json())
+        except (ValueError, ValidationError) as exc:
+            raise HTTPException(
+                status_code=422, detail="invalid_invitation_acceptance_request"
+            ) from exc
+        preview = await acceptance.inspect(body.token)
         if preview is None:
             raise HTTPException(status_code=404, detail="invitation_not_found")
         correlation = request.headers.get("X-Request-ID", "")
         if not correlation or len(correlation) > 128 or not correlation.isprintable():
             correlation = str(uuid4())
-        try:
-            body = InvitationAcceptBody.model_validate(await request.json())
-        except (ValueError, ValidationError) as exc:
-            await acceptance.record(
-                preview, result="denied", correlation_id=correlation
-            )
-            raise HTTPException(
-                status_code=422, detail="invalid_invitation_acceptance_request"
-            ) from exc
         new_password_hash: str | None = None
         if preview["identity_id"] is None:
             if not body.display_name or body.password is None:
