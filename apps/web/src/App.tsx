@@ -76,82 +76,110 @@ const AppRoutes: React.FC = () => {
     return <PlatformOrganizationsView />
   }
 
-  const repMatch = matchPath('/organizations/:orgId/cases/:caseId/reports', pathname)
+  const defaultOrgId = activeOrgId || '90000000-0000-4000-8000-000000000001'
+
+  // Reports
+  const repMatch = matchPath('/organizations/:orgId/cases/:caseId/reports', pathname).matched
+    ? matchPath('/organizations/:orgId/cases/:caseId/reports', pathname)
+    : matchPath('/cases/:caseId/reports', pathname)
   if (repMatch.matched) {
     return (
       <ReportsWorkbenchView
-        orgId={repMatch.params.orgId}
+        orgId={repMatch.params.orgId || defaultOrgId}
         caseId={repMatch.params.caseId}
       />
     )
   }
 
-  const dlvMatch = matchPath('/organizations/:orgId/cases/:caseId/delivery', pathname)
+  // Delivery
+  const dlvMatch = matchPath('/organizations/:orgId/cases/:caseId/delivery', pathname).matched
+    ? matchPath('/organizations/:orgId/cases/:caseId/delivery', pathname)
+    : matchPath('/cases/:caseId/delivery', pathname)
   if (dlvMatch.matched) {
     return (
       <DeliveryWorkbenchView
-        orgId={dlvMatch.params.orgId}
+        orgId={dlvMatch.params.orgId || defaultOrgId}
         caseId={dlvMatch.params.caseId}
       />
     )
   }
 
-  const revMatch = matchPath('/organizations/:orgId/cases/:caseId/review', pathname)
+  // Review
+  const revMatch = matchPath('/organizations/:orgId/cases/:caseId/review', pathname).matched
+    ? matchPath('/organizations/:orgId/cases/:caseId/review', pathname)
+    : matchPath('/cases/:caseId/review', pathname)
   if (revMatch.matched) {
     return (
       <ReviewWorkbenchView
-        orgId={revMatch.params.orgId}
+        orgId={revMatch.params.orgId || defaultOrgId}
         caseId={revMatch.params.caseId}
       />
     )
   }
 
+  // Comparison
   const compMatch =
     matchPath('/organizations/:orgId/cases/:caseId/comparisons', pathname).matched
       ? matchPath('/organizations/:orgId/cases/:caseId/comparisons', pathname)
-      : matchPath('/organizations/:orgId/cases/:caseId/comparison', pathname)
+      : matchPath('/organizations/:orgId/cases/:caseId/comparison', pathname).matched
+      ? matchPath('/organizations/:orgId/cases/:caseId/comparison', pathname)
+      : matchPath('/cases/:caseId/comparisons', pathname).matched
+      ? matchPath('/cases/:caseId/comparisons', pathname)
+      : matchPath('/cases/:caseId/comparison', pathname)
   if (compMatch.matched) {
     return (
       <ComparisonWorkbenchView
-        orgId={compMatch.params.orgId}
+        orgId={compMatch.params.orgId || defaultOrgId}
         caseId={compMatch.params.caseId}
       />
     )
   }
 
-  const searchMatch = matchPath('/organizations/:orgId/cases/:caseId/search', pathname)
+  // Search
+  const searchMatch = matchPath('/organizations/:orgId/cases/:caseId/search', pathname).matched
+    ? matchPath('/organizations/:orgId/cases/:caseId/search', pathname)
+    : matchPath('/cases/:caseId/search', pathname)
   if (searchMatch.matched) {
     return (
       <SearchWorkbenchView
-        orgId={searchMatch.params.orgId}
+        orgId={searchMatch.params.orgId || defaultOrgId}
         caseId={searchMatch.params.caseId}
       />
     )
   }
 
-  const featuresMatch = matchPath('/organizations/:orgId/cases/:caseId/features', pathname)
+  // Features
+  const featuresMatch = matchPath('/organizations/:orgId/cases/:caseId/features', pathname).matched
+    ? matchPath('/organizations/:orgId/cases/:caseId/features', pathname)
+    : matchPath('/cases/:caseId/features', pathname)
   if (featuresMatch.matched) {
     return (
       <FeaturesWorkbenchView
-        orgId={featuresMatch.params.orgId}
+        orgId={featuresMatch.params.orgId || defaultOrgId}
         caseId={featuresMatch.params.caseId}
       />
     )
   }
 
-  const caseDetailMatch = matchPath('/organizations/:orgId/cases/:caseId', pathname)
+  // Case Detail
+  const caseDetailMatch = matchPath('/organizations/:orgId/cases/:caseId', pathname).matched
+    ? matchPath('/organizations/:orgId/cases/:caseId', pathname)
+    : matchPath('/cases/:caseId', pathname)
   if (caseDetailMatch.matched) {
     return (
       <CaseDetailView
-        orgId={caseDetailMatch.params.orgId}
+        orgId={caseDetailMatch.params.orgId || defaultOrgId}
         caseId={caseDetailMatch.params.caseId}
       />
     )
   }
 
-  const casesListMatch = matchPath('/organizations/:orgId/cases', pathname)
+  // Cases List
+  const casesListMatch = matchPath('/organizations/:orgId/cases', pathname).matched
+    ? matchPath('/organizations/:orgId/cases', pathname)
+    : matchPath('/cases', pathname)
   if (casesListMatch.matched) {
-    return <CasesListView orgId={casesListMatch.params.orgId} />
+    return <CasesListView orgId={casesListMatch.params.orgId || defaultOrgId} />
   }
 
   const orgMembersMatch = matchPath('/organizations/:id/members', pathname)
