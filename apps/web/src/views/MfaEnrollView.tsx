@@ -1,0 +1,194 @@
+import React, { useEffect, useState } from 'react'
+import { apiClient, ApiError } from '../services/apiClient'
+import { useSession } from '../context/SessionContext'
+import { Alert } from '../components/Alert'
+import { useNavigate } from '../router/Router'
+
+export const MfaEnrollView: React.FC = () => {
+  const { session, refreshSession } = useSession()
+  const navigate = useNavigate()
+
+  const [credentialId, setCredentialId] = useState<string | null>(null)
+  const [secret, setSecret] = useState<string | null>(null)
+  const [code, setCode] = useState('')
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let unmounted = false
+    async function startEnroll() {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await apiClient.enrollTotp()
+        if (!unmounted) {
+          setCredentialId(res.credential_id)
+          setSecret(res.secret)
+        }
+      } catch (err: any) {
+        if (!unmounted) {
+          if (err instanceof ApiError && err.status === 403) {
+            setError('重新配置 MFA 需要近期身份授权。请先在登录界面完成一次验证。')
+          } else {
+            setError(err.detail || '初始化 MFA 设置失败。')
+          }
+        }
+      } finally {
+        if (!unmounted) setLoading(false)
+      }
+    }
+
+    startEnroll()
+    return () => {
+      unmounted = true
+    }
+  }, [])
+
+  const handleConfirm = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!credentialId || !code.trim()) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const res = await apiClient.confirmTotp(credentialId, code.trim())
+      if (res.recovery_codes && res.recovery_codes.length > 0) {
+        setRecoveryCodes(res.recovery_codes)
+      } else {
+        // Fetch recovery codes if not in confirm response
+        const rec = await apiClient.getRecoveryCodes()
+        setRecoveryCodes(rec.recovery_codes)
+      }
+      await refreshSession()
+    } catch (err: any) {
+      if (err instanceof ApiError) {
+        setError(err.status === 401 ? '验证码无效，请确认手机时间与验证器已同步。' : err.detail)
+      } else {
+        setError('验证失败，请重试。')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCopyCodes = () => {
+    if (recoveryCodes) {
+      navigator.clipboard.writeText(recoveryCodes.join('\n'))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  if (recoveryCodes) {
+    return (
+      <div className="auth-card-container">
+        <div className="card auth-card max-w-lg">
+          <div className="card-header text-center">
+            <span className="badge badge-success mb-xs">配置成功</span>
+            <h1 className="card-title text-xl">保存您的一次性恢复码</h1>
+            <p className="card-subtitle text-sm text-secondary">
+              当您无法使用身份验证器时，恢复码是找回账号的唯一凭证。请将其保存在安全的地方。
+            </p>
+          </div>
+
+          <div className="recovery-codes-box">
+            <div className="grid-2-cols gap-xs font-mono text-sm">
+              {recoveryCodes.map((c, i) => (
+                <div key={i} className="recovery-code-item">
+                  <span className="text-secondary text-xs mr-xs">{i + 1}.</span>
+                  <strong>{c}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-stack gap-sm mt-md">
+            <button type="button" className="btn btn-secondary btn-block" onClick={handleCopyCodes}>
+              {copied ? '✓ 已复制到剪贴板' : '复制全部恢复码'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              onClick={() => navigate('/')}
+            >
+              我已妥善保存，进入工作台
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="auth-card-container">
+      <div className="card auth-card max-w-lg">
+        <div className="card-header text-center">
+          <h1 className="card-title text-xl">配置两步验证 (TOTP)</h1>
+          <p className="card-subtitle text-sm text-secondary">
+            为您的 PatentEvidence 账号启用两步验证以保障机构数据安全
+          </p>
+        </div>
+
+        {error && <Alert type="error" message={error} />}
+
+        {secret ? (
+          <div className="form-stack">
+            <div className="mfa-secret-block">
+              <label className="form-label text-xs text-secondary">验证器密钥（Base32 密钥）：</label>
+              <div className="secret-display font-mono text-center font-bold tracking-wider">
+                {secret}
+              </div>
+              <p className="text-xs text-secondary mt-xs text-center">
+                在 Google Authenticator、1Password 或其他 TOTP 应用中选择“手动输入密钥”
+              </p>
+            </div>
+
+            <form onSubmit={handleConfirm} className="form-stack mt-sm">
+              <div className="form-group">
+                <label htmlFor="totp-confirm-code" className="form-label">
+                  输入验证器生成的 6 位动态验证码确认：
+                </label>
+                <input
+                  id="totp-confirm-code"
+                  type="text"
+                  className="input-text text-center font-mono text-lg tracking-widest"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="000000"
+                  maxLength={6}
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => navigate('/')}
+                  disabled={loading}
+                >
+                  暂不绑定
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={loading || code.trim().length !== 6}
+                >
+                  {loading ? '正在验证...' : '确认并启用'}
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="text-center py-md">
+            <span className="text-secondary">{loading ? '正在生成密钥...' : '暂无密钥'}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

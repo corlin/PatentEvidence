@@ -36,6 +36,7 @@ business features.
    pnpm build:web
    .venv/bin/python scripts/verify-source-lock.py
    .venv/bin/python scripts/verify-scaffold.py
+   .venv/bin/python scripts/verify-p0-02.py
    docker compose config
    ```
 
