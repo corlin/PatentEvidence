@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { apiClient, ApiError } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
-import { Alert } from '../components/Alert'
-import { Header } from '../components/Header'
+import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
-import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper'
 import type {
   CaseDrawing,
   ClaimFeatureComparison,
@@ -155,79 +153,59 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
   const isConfirmed = matrixData?.matrix.status === 'confirmed'
 
   return (
-    <div className="layout-container">
-      <Header />
-
-      <main className="main-content">
-        {/* Breadcrumb */}
-        <div className="breadcrumb text-xs text-secondary mb-xs">
-          <Link to={`/organizations/${orgId}/cases`}>案件列表</Link> &gt;{' '}
-          <Link to={`/organizations/${orgId}/cases/${caseId}`}>案件详情</Link> &gt; 权利要求特征比对
-        </div>
-
-        {/* Page Header */}
-        <div className="page-header flex-between mb-md">
-          <div>
-            <div className="flex-row gap-sm mb-xs">
-              <span className="badge badge-neutral font-mono">Claim Chart</span>
-              <StatusBadge status={matrixData?.matrix.status || 'draft'} />
-            </div>
-            <h1 className="page-title text-2xl font-bold">权利要求特征深度比对表 (Claim Chart)</h1>
-            <p className="text-secondary text-sm">
-              逐特征 (F1~Fn) 与对比文献 (D1~Dm) 建立三态比对映射、引文锚定与法律论证
-            </p>
-          </div>
-
-          <div className="actions flex-row gap-sm">
-            <Link
-              to={`/organizations/${orgId}/cases/${caseId}/search`}
-              className="btn btn-secondary btn-sm"
-            >
-              &larr; 检索与候选池
-            </Link>
-            {!isConfirmed ? (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleGenerateMatrix}
-                  disabled={actionLoading}
-                >
-                  🔄 重新智能比对
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-success btn-sm font-bold"
-                  onClick={handleConfirmMatrix}
-                  disabled={actionLoading}
-                >
-                  ✓ 锁定确认比对表
-                </button>
-              </>
-            ) : (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/review`}
-                className="btn btn-primary btn-sm"
+    <WorkbenchLayout
+      currentStep="comparisons"
+      caseStatus={isConfirmed ? 'assessment_ready' : 'evidence_ready'}
+      orgId={orgId}
+      caseId={caseId}
+      title="权利要求特征深度比对表 (Claim Chart)"
+      description="逐特征 (F1~Fn) 与对比文献 (D1~Dm) 建立三态比对映射、引文锚定与法律论证"
+      breadcrumbCurrent="权利要求特征比对"
+      error={error}
+      success={success}
+      onErrorClose={() => setError(null)}
+      onSuccessClose={() => setSuccess(null)}
+      headerActions={
+        <>
+          <Link
+            to={`/organizations/${orgId}/cases/${caseId}/search`}
+            className="btn btn-secondary btn-sm"
+          >
+            &larr; 检索与候选池
+          </Link>
+          {!isConfirmed ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleGenerateMatrix}
+                disabled={actionLoading}
               >
-                ⚖️ 提交复核审批 &rarr;
-              </Link>
-            )}
-            <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
-              返回案件主页
+                🔄 重新智能比对
+              </button>
+              <button
+                type="button"
+                className="btn btn-success btn-sm font-bold"
+                onClick={handleConfirmMatrix}
+                disabled={actionLoading}
+              >
+                ✓ 锁定确认比对表
+              </button>
+            </>
+          ) : (
+            <Link
+              to={`/organizations/${orgId}/cases/${caseId}/review`}
+              className="btn btn-primary btn-sm"
+            >
+              ⚖️ 提交复核审批 &rarr;
             </Link>
-          </div>
-        </div>
-
-        {/* Workflow Lifecycle Stepper */}
-        <CaseWorkflowStepper
-          orgId={orgId}
-          caseId={caseId}
-          currentStep="comparisons"
-          caseStatus={isConfirmed ? 'assessment_ready' : 'evidence_ready'}
-        />
-
-        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+          )}
+          <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
+            返回案件主页
+          </Link>
+        </>
+      }
+    >
 
         {matrixData ? (
           <div className="flex-stack gap-md">
@@ -631,7 +609,6 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
             </div>
           </Modal>
         )}
-      </main>
-    </div>
+    </WorkbenchLayout>
   )
 }

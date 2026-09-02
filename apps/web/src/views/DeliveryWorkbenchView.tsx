@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { apiClient, ApiError } from '../services/apiClient'
-import { Alert } from '../components/Alert'
-import { Header } from '../components/Header'
+import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { StatusBadge } from '../components/StatusBadge'
 import { MarkdownViewer } from '../components/MarkdownViewer'
-import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper'
 import type { DeliveryRecord, EvidenceSnapshotDetail, CaseDetail } from '../types/api'
 import { Link } from '../router/Router'
 
@@ -92,65 +90,37 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
   const isDelivered = currentCase?.status === 'delivered' || !!deliveryRecord
 
   return (
-    <div className="layout-container">
-      <Header />
-
-      <main className="main-content">
-        {/* Navigation Breadcrumb */}
-        <div className="breadcrumb text-xs text-secondary mb-xs">
-          <Link to={`/organizations/${orgId}/cases`}>案件列表</Link> &gt;{' '}
-          <Link to={`/organizations/${orgId}/cases/${caseId}`}>
-            {currentCase?.case_number || '案件详情'}
-          </Link>{' '}
-          &gt;{' '}
-          <Link to={`/organizations/${orgId}/cases/${caseId}/review`}>独立复核</Link> &gt;{' '}
-          📦 交付网关
-        </div>
-
-        {/* Page Header */}
-        <div className="page-header flex-between mb-md">
-          <div>
-            <div className="flex-row gap-sm mb-xs">
-              <span className="badge badge-neutral font-mono">{currentCase?.case_number}</span>
-              <span className="badge badge-neutral">{currentCase?.target_jurisdiction || 'CN'}</span>
-              <StatusBadge status={currentCase?.status || 'draft'} />
-            </div>
-            <h1 className="page-title text-2xl font-bold">
-              {isDelivered ? '🏛️ 已交付合规证书 (Delivery Certificate)' : '📦 案件交付与归档准备'}
-            </h1>
-            <p className="text-secondary text-sm">
-              案件：<strong>{currentCase?.title}</strong> ({currentCase?.case_number})
-            </p>
-          </div>
-
-          <div className="actions flex-row gap-sm">
-            <button
-              type="button"
-              onClick={handleDownloadReport}
-              disabled={!reportDetail?.report}
-              className="btn btn-primary btn-sm"
-            >
-              📥 导出 Markdown 报告
-            </button>
-            <Link
-              to={`/organizations/${orgId}/cases/${caseId}/review`}
-              className="btn btn-secondary btn-sm"
-            >
-              &larr; 返回复核工作台
-            </Link>
-          </div>
-        </div>
-
-        {/* Workflow Lifecycle Stepper */}
-        <CaseWorkflowStepper
-          orgId={orgId}
-          caseId={caseId}
-          currentStep="delivery"
-          caseStatus={currentCase?.status}
-        />
-
-        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+    <WorkbenchLayout
+      currentStep="delivery"
+      caseStatus={currentCase?.status}
+      orgId={orgId}
+      caseId={caseId}
+      title={isDelivered ? '🏛️ 已交付合规证书 (Delivery Certificate)' : '📦 案件交付与归档准备'}
+      description={`案件：${currentCase?.title || ''} (${currentCase?.case_number || ''})`}
+      breadcrumbCurrent="交付网关"
+      error={error}
+      success={success}
+      onErrorClose={() => setError(null)}
+      onSuccessClose={() => setSuccess(null)}
+      headerActions={
+        <>
+          <button
+            type="button"
+            onClick={handleDownloadReport}
+            disabled={!reportDetail?.report}
+            className="btn btn-primary btn-sm"
+          >
+            📥 导出 Markdown 报告
+          </button>
+          <Link
+            to={`/organizations/${orgId}/cases/${caseId}/review`}
+            className="btn btn-secondary btn-sm"
+          >
+            &larr; 返回复核工作台
+          </Link>
+        </>
+      }
+    >
 
         {/* Certificate / Snapshot Info Card */}
         <div className={`card p-md mb-md ${isDelivered ? 'border-l-4 border-green-500 bg-green-50' : ''}`}>
@@ -263,7 +233,6 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </WorkbenchLayout>
   )
 }

@@ -5,7 +5,7 @@ import { Alert } from '../components/Alert'
 import { Header } from '../components/Header'
 import { StatusBadge } from '../components/StatusBadge'
 import { DrawingsGallery } from '../components/DrawingsGallery'
-import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper'
+import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import type { CaseDetail, ParagraphBlock } from '../types/api'
 import { Link } from '../router/Router'
 
@@ -143,80 +143,63 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
   }
 
   return (
-    <div className="layout-container">
-      <Header />
-
-      <main className="main-content">
-        <div className="breadcrumb text-xs text-secondary mb-xs">
-          <Link to={`/organizations/${orgId}/cases`}>案件列表</Link> &gt; {caseData.case_number}
-        </div>
-
-        {/* Case Title Bar */}
-        <div className="page-header flex-between mb-md">
-          <div>
-            <div className="flex-row gap-sm mb-xs">
-              <span className="badge badge-neutral font-mono">{caseData.case_number}</span>
-              <span className="badge badge-neutral">{caseData.target_jurisdiction}</span>
-              <StatusBadge status={caseData.status} />
-            </div>
-            <h1 className="page-title text-2xl font-bold">{caseData.title}</h1>
-            <p className="text-secondary text-sm">技术领域：{caseData.technical_field}</p>
-          </div>
-
-          <div className="actions flex-row gap-sm">
-            {caseData.status === 'draft' || caseData.status === 'document_ready' ? (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/features`}
-                className="btn btn-primary btn-sm font-bold"
-              >
-                ⚡ 进入技术特征建模 &rarr;
-              </Link>
-            ) : caseData.status === 'evidence_ready' ? (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/search`}
-                className="btn btn-primary btn-sm font-bold"
-              >
-                🔍 前往检索与候选初筛 &rarr;
-              </Link>
-            ) : caseData.status === 'assessment_ready' ? (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
-                className="btn btn-primary btn-sm font-bold"
-              >
-                📊 进入 Claim Chart 深度比对 &rarr;
-              </Link>
-            ) : caseData.status === 'in_review' || caseData.status === 'changes_requested' ? (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/review`}
-                className="btn btn-primary btn-sm font-bold"
-              >
-                ⚖️ 独立复核审批 &rarr;
-              </Link>
-            ) : (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/delivery`}
-                className="btn btn-primary btn-sm font-bold"
-              >
-                📦 客户交付与证书网关 &rarr;
-              </Link>
-            )}
-
-            <Link to={`/organizations/${orgId}/cases`} className="btn btn-secondary btn-sm">
-              &larr; 返回案件列表
+    <WorkbenchLayout
+      currentStep="intake"
+      caseStatus={caseData.status}
+      orgId={orgId}
+      caseId={caseId}
+      title={caseData.title}
+      description={`技术领域：${caseData.technical_field}`}
+      breadcrumbCurrent={caseData.case_number}
+      error={error}
+      success={success}
+      onErrorClose={() => setError(null)}
+      onSuccessClose={() => setSuccess(null)}
+      headerActions={
+        <>
+          {caseData.status === 'draft' || caseData.status === 'document_ready' ? (
+            <Link
+              to={`/organizations/${orgId}/cases/${caseId}/features`}
+              className="btn btn-primary btn-sm font-bold"
+            >
+              ⚡ 进入技术特征建模 &rarr;
             </Link>
-          </div>
-        </div>
+          ) : caseData.status === 'evidence_ready' ? (
+            <Link
+              to={`/organizations/${orgId}/cases/${caseId}/search`}
+              className="btn btn-primary btn-sm font-bold"
+            >
+              🔍 前往检索与候选初筛 &rarr;
+            </Link>
+          ) : caseData.status === 'assessment_ready' ? (
+            <Link
+              to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
+              className="btn btn-primary btn-sm font-bold"
+            >
+              📊 进入 Claim Chart 深度比对 &rarr;
+            </Link>
+          ) : caseData.status === 'in_review' || caseData.status === 'changes_requested' ? (
+            <Link
+              to={`/organizations/${orgId}/cases/${caseId}/review`}
+              className="btn btn-primary btn-sm font-bold"
+            >
+              ⚖️ 独立复核审批 &rarr;
+            </Link>
+          ) : (
+            <Link
+              to={`/organizations/${orgId}/cases/${caseId}/delivery`}
+              className="btn btn-primary btn-sm font-bold"
+            >
+              📦 客户交付与证书网关 &rarr;
+            </Link>
+          )}
 
-        {/* Lifecycle Workflow Stepper */}
-        <CaseWorkflowStepper
-          orgId={orgId}
-          caseId={caseId}
-          currentStep="intake"
-          caseStatus={caseData.status}
-        />
-
-        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+          <Link to={`/organizations/${orgId}/cases`} className="btn btn-secondary btn-sm">
+            &larr; 返回案件列表
+          </Link>
+        </>
+      }
+    >
 
         {/* Upload & Parsing Section */}
         <div className="grid-2-cols gap-md mb-md">
@@ -337,7 +320,6 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
 
         {/* Patent Drawings Gallery */}
         <DrawingsGallery orgId={orgId} caseId={caseId} />
-      </main>
-    </div>
+    </WorkbenchLayout>
   )
 }

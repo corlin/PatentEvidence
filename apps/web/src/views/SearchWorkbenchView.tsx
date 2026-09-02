@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { apiClient, ApiError } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
-import { Alert } from '../components/Alert'
-import { Header } from '../components/Header'
+import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
-import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper'
 import type {
   HandoffPackage,
   SearchCandidate,
@@ -220,55 +218,40 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
   }
 
   return (
-    <div className="layout-container">
-      <Header />
-
-      <main className="main-content">
-        <div className="breadcrumb text-xs text-secondary mb-xs">
-          <Link to={`/organizations/${orgId}/cases`}>案件列表</Link> &gt;{' '}
-          <Link to={`/organizations/${orgId}/cases/${caseId}`}>案件详情</Link> &gt; 专利检索与候选池
-        </div>
-
-        {/* Page Header */}
-        <div className="page-header flex-between mb-md">
-          <div>
-            <h1 className="page-title text-2xl font-bold">专利检索规划与候选证据初筛</h1>
-            <p className="text-secondary text-sm">
-              基于确认技术特征制定检索策略、导出 CNIPR 人工交接规范包并执行多路去重初筛
-            </p>
-          </div>
-
-          <div className="actions flex-row gap-sm">
-            {candidates.some((c) => c.triage_status === 'included') && (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
-                className="btn btn-primary btn-sm font-bold"
-              >
-                📊 前往 Claim Chart 比对 &rarr;
-              </Link>
-            )}
+    <WorkbenchLayout
+      currentStep="search"
+      caseStatus={candidates.some((c) => c.triage_status === 'included') ? 'assessment_ready' : 'evidence_ready'}
+      orgId={orgId}
+      caseId={caseId}
+      title="专利检索规划与候选证据初筛"
+      description="基于确认技术特征制定检索策略、导出 CNIPR 人工交接规范包并执行多路去重初筛"
+      breadcrumbCurrent="专利检索与候选池"
+      error={error}
+      success={success}
+      onErrorClose={() => setError(null)}
+      onSuccessClose={() => setSuccess(null)}
+      headerActions={
+        <>
+          {candidates.some((c) => c.triage_status === 'included') && (
             <Link
-              to={`/organizations/${orgId}/cases/${caseId}/features`}
-              className="btn btn-secondary btn-sm"
+              to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
+              className="btn btn-primary btn-sm font-bold"
             >
-              &larr; 查看技术特征
+              📊 前往 Claim Chart 比对 &rarr;
             </Link>
-            <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
-              返回案件详情
-            </Link>
-          </div>
-        </div>
-
-        {/* Workflow Lifecycle Stepper */}
-        <CaseWorkflowStepper
-          orgId={orgId}
-          caseId={caseId}
-          currentStep="search"
-          caseStatus={candidates.some((c) => c.triage_status === 'included') ? 'assessment_ready' : 'evidence_ready'}
-        />
-
-        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+          )}
+          <Link
+            to={`/organizations/${orgId}/cases/${caseId}/features`}
+            className="btn btn-secondary btn-sm"
+          >
+            &larr; 查看技术特征
+          </Link>
+          <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
+            返回案件详情
+          </Link>
+        </>
+      }
+    >
 
         {/* Tab Navigation */}
         <div className="flex-row gap-md border-b mb-md">
@@ -608,7 +591,6 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
             )}
           </div>
         )}
-      </main>
 
       {/* CNIPR Handoff Package Modal */}
       <Modal
@@ -751,6 +733,6 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
           </div>
         </form>
       </Modal>
-    </div>
+    </WorkbenchLayout>
   )
 }

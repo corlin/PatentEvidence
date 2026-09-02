@@ -20,6 +20,17 @@ import { ReviewWorkbenchView } from './views/ReviewWorkbenchView'
 import { DeliveryWorkbenchView } from './views/DeliveryWorkbenchView'
 import { NotFoundView } from './views/NotFoundView'
 
+function matchAny(
+  patterns: string[],
+  pathname: string
+): { matched: boolean; params: Record<string, string> } {
+  for (const p of patterns) {
+    const res = matchPath(p, pathname)
+    if (res.matched) return res
+  }
+  return { matched: false, params: {} }
+}
+
 const AppRoutes: React.FC = () => {
   const { pathname } = useRouter()
   const { session, loading, activeOrgId } = useSession()
@@ -78,113 +89,71 @@ const AppRoutes: React.FC = () => {
 
   const defaultOrgId = activeOrgId || '90000000-0000-4000-8000-000000000001'
 
-  // Reports
-  const repMatch = matchPath('/organizations/:orgId/cases/:caseId/reports', pathname).matched
-    ? matchPath('/organizations/:orgId/cases/:caseId/reports', pathname)
-    : matchPath('/cases/:caseId/reports', pathname)
-  if (repMatch.matched) {
-    return (
-      <ReportsWorkbenchView
-        orgId={repMatch.params.orgId || defaultOrgId}
-        caseId={repMatch.params.caseId}
-      />
-    )
-  }
+  const WORKBENCH_ROUTES = [
+    {
+      patterns: ['/organizations/:orgId/cases/:caseId/reports', '/cases/:caseId/reports'],
+      render: (p: Record<string, string>) => (
+        <ReportsWorkbenchView orgId={p.orgId || defaultOrgId} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: ['/organizations/:orgId/cases/:caseId/delivery', '/cases/:caseId/delivery'],
+      render: (p: Record<string, string>) => (
+        <DeliveryWorkbenchView orgId={p.orgId || defaultOrgId} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: ['/organizations/:orgId/cases/:caseId/review', '/cases/:caseId/review'],
+      render: (p: Record<string, string>) => (
+        <ReviewWorkbenchView orgId={p.orgId || defaultOrgId} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: [
+        '/organizations/:orgId/cases/:caseId/comparisons',
+        '/organizations/:orgId/cases/:caseId/comparison',
+        '/cases/:caseId/comparisons',
+        '/cases/:caseId/comparison',
+      ],
+      render: (p: Record<string, string>) => (
+        <ComparisonWorkbenchView orgId={p.orgId || defaultOrgId} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: ['/organizations/:orgId/cases/:caseId/search', '/cases/:caseId/search'],
+      render: (p: Record<string, string>) => (
+        <SearchWorkbenchView orgId={p.orgId || defaultOrgId} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: ['/organizations/:orgId/cases/:caseId/features', '/cases/:caseId/features'],
+      render: (p: Record<string, string>) => (
+        <FeaturesWorkbenchView orgId={p.orgId || defaultOrgId} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: ['/organizations/:orgId/cases/:caseId', '/cases/:caseId'],
+      render: (p: Record<string, string>) => (
+        <CaseDetailView orgId={p.orgId || defaultOrgId} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: ['/organizations/:orgId/cases', '/cases'],
+      render: (p: Record<string, string>) => (
+        <CasesListView orgId={p.orgId || defaultOrgId} />
+      ),
+    },
+    {
+      patterns: ['/organizations/:id/members'],
+      render: (p: Record<string, string>) => <OrganizationMembersView orgId={p.id} />,
+    },
+  ]
 
-  // Delivery
-  const dlvMatch = matchPath('/organizations/:orgId/cases/:caseId/delivery', pathname).matched
-    ? matchPath('/organizations/:orgId/cases/:caseId/delivery', pathname)
-    : matchPath('/cases/:caseId/delivery', pathname)
-  if (dlvMatch.matched) {
-    return (
-      <DeliveryWorkbenchView
-        orgId={dlvMatch.params.orgId || defaultOrgId}
-        caseId={dlvMatch.params.caseId}
-      />
-    )
-  }
-
-  // Review
-  const revMatch = matchPath('/organizations/:orgId/cases/:caseId/review', pathname).matched
-    ? matchPath('/organizations/:orgId/cases/:caseId/review', pathname)
-    : matchPath('/cases/:caseId/review', pathname)
-  if (revMatch.matched) {
-    return (
-      <ReviewWorkbenchView
-        orgId={revMatch.params.orgId || defaultOrgId}
-        caseId={revMatch.params.caseId}
-      />
-    )
-  }
-
-  // Comparison
-  const compMatch =
-    matchPath('/organizations/:orgId/cases/:caseId/comparisons', pathname).matched
-      ? matchPath('/organizations/:orgId/cases/:caseId/comparisons', pathname)
-      : matchPath('/organizations/:orgId/cases/:caseId/comparison', pathname).matched
-      ? matchPath('/organizations/:orgId/cases/:caseId/comparison', pathname)
-      : matchPath('/cases/:caseId/comparisons', pathname).matched
-      ? matchPath('/cases/:caseId/comparisons', pathname)
-      : matchPath('/cases/:caseId/comparison', pathname)
-  if (compMatch.matched) {
-    return (
-      <ComparisonWorkbenchView
-        orgId={compMatch.params.orgId || defaultOrgId}
-        caseId={compMatch.params.caseId}
-      />
-    )
-  }
-
-  // Search
-  const searchMatch = matchPath('/organizations/:orgId/cases/:caseId/search', pathname).matched
-    ? matchPath('/organizations/:orgId/cases/:caseId/search', pathname)
-    : matchPath('/cases/:caseId/search', pathname)
-  if (searchMatch.matched) {
-    return (
-      <SearchWorkbenchView
-        orgId={searchMatch.params.orgId || defaultOrgId}
-        caseId={searchMatch.params.caseId}
-      />
-    )
-  }
-
-  // Features
-  const featuresMatch = matchPath('/organizations/:orgId/cases/:caseId/features', pathname).matched
-    ? matchPath('/organizations/:orgId/cases/:caseId/features', pathname)
-    : matchPath('/cases/:caseId/features', pathname)
-  if (featuresMatch.matched) {
-    return (
-      <FeaturesWorkbenchView
-        orgId={featuresMatch.params.orgId || defaultOrgId}
-        caseId={featuresMatch.params.caseId}
-      />
-    )
-  }
-
-  // Case Detail
-  const caseDetailMatch = matchPath('/organizations/:orgId/cases/:caseId', pathname).matched
-    ? matchPath('/organizations/:orgId/cases/:caseId', pathname)
-    : matchPath('/cases/:caseId', pathname)
-  if (caseDetailMatch.matched) {
-    return (
-      <CaseDetailView
-        orgId={caseDetailMatch.params.orgId || defaultOrgId}
-        caseId={caseDetailMatch.params.caseId}
-      />
-    )
-  }
-
-  // Cases List
-  const casesListMatch = matchPath('/organizations/:orgId/cases', pathname).matched
-    ? matchPath('/organizations/:orgId/cases', pathname)
-    : matchPath('/cases', pathname)
-  if (casesListMatch.matched) {
-    return <CasesListView orgId={casesListMatch.params.orgId || defaultOrgId} />
-  }
-
-  const orgMembersMatch = matchPath('/organizations/:id/members', pathname)
-  if (orgMembersMatch.matched) {
-    return <OrganizationMembersView orgId={orgMembersMatch.params.id} />
+  for (const route of WORKBENCH_ROUTES) {
+    const match = matchAny(route.patterns, pathname)
+    if (match.matched) {
+      return route.render(match.params)
+    }
   }
 
   // 3. Fallback

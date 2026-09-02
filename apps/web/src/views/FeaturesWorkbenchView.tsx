@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { apiClient, ApiError } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
-import { Alert } from '../components/Alert'
-import { Header } from '../components/Header'
+import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
-import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper'
 import type { ClaimFeature, FeatureSetDetail, FeatureType } from '../types/api'
 import { Link, useNavigate } from '../router/Router'
 
@@ -238,49 +236,34 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
   const isDraft = featureSet?.version.status === 'draft'
 
   return (
-    <div className="layout-container">
-      <Header />
-
-      <main className="main-content">
-        <div className="breadcrumb text-xs text-secondary mb-xs">
-          <Link to={`/organizations/${orgId}/cases`}>案件列表</Link> &gt;{' '}
-          <Link to={`/organizations/${orgId}/cases/${caseId}`}>案件详情</Link> &gt; 技术特征建模
-        </div>
-
-        {/* Page Header */}
-        <div className="page-header flex-between mb-md">
-          <div>
-            <h1 className="page-title text-2xl font-bold">技术特征提取与版本确认</h1>
-            <p className="text-secondary text-sm">
-              对交底书进行权利要求级特征拆解、原文段落引文锚定与基准版本锁定
-            </p>
-          </div>
-
-          <div className="actions flex-row gap-sm">
-            {featureSet?.version.status === 'confirmed' && (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/search`}
-                className="btn btn-primary btn-sm font-bold"
-              >
-                🔍 前往检索工作台 &rarr;
-              </Link>
-            )}
-            <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
-              &larr; 返回案件主页
+    <WorkbenchLayout
+      currentStep="features"
+      caseStatus={featureSet?.version.status === 'confirmed' ? 'evidence_ready' : 'document_ready'}
+      orgId={orgId}
+      caseId={caseId}
+      title="技术特征提取与版本确认"
+      description="对交底书进行权利要求级特征拆解、原文段落引文锚定与基准版本锁定"
+      breadcrumbCurrent="技术特征建模"
+      error={error}
+      success={success}
+      onErrorClose={() => setError(null)}
+      onSuccessClose={() => setSuccess(null)}
+      headerActions={
+        <>
+          {featureSet?.version.status === 'confirmed' && (
+            <Link
+              to={`/organizations/${orgId}/cases/${caseId}/search`}
+              className="btn btn-primary btn-sm font-bold"
+            >
+              🔍 前往检索工作台 &rarr;
             </Link>
-          </div>
-        </div>
-
-        {/* Workflow Lifecycle Stepper */}
-        <CaseWorkflowStepper
-          orgId={orgId}
-          caseId={caseId}
-          currentStep="features"
-          caseStatus={featureSet?.version.status === 'confirmed' ? 'evidence_ready' : 'document_ready'}
-        />
-
-        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+          )}
+          <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
+            &larr; 返回案件主页
+          </Link>
+        </>
+      }
+    >
 
         {/* Version Status Card */}
         {featureSet ? (
@@ -493,7 +476,6 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
             </div>
           </div>
         )}
-      </main>
 
       {/* Add Feature Modal */}
       <Modal isOpen={isAddModalOpen} title="新增自定义技术特征" onClose={() => setIsAddModalOpen(false)}>
@@ -677,6 +659,6 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
           </div>
         </form>
       </Modal>
-    </div>
+    </WorkbenchLayout>
   )
 }

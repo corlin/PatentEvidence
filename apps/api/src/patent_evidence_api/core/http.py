@@ -17,6 +17,11 @@ def parse_uuid_or_404(value: str, *, detail: str = "not_found") -> UUID:
         raise HTTPException(status_code=404, detail=detail) from exc
 
 
+def parse_uuids_or_404(*values: str, detail: str = "not_found") -> tuple[UUID, ...]:
+    """Safely parse multiple UUID strings or raise HTTP 404."""
+    return tuple(parse_uuid_or_404(v, detail=detail) for v in values)
+
+
 async def parse_json_body(
     request: Request,
     model: type[RequestModel],

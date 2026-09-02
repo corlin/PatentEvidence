@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { apiClient, ApiError } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
-import { Alert } from '../components/Alert'
-import { Header } from '../components/Header'
+import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { MarkdownViewer } from '../components/MarkdownViewer'
-import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper'
 import type {
   ComparisonMatrixDetail,
   EvidenceSnapshotDetail,
@@ -158,78 +156,52 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
     currentCase?.status === 'delivered'
 
   return (
-    <div className="layout-container">
-      <Header />
+    <WorkbenchLayout
+      currentStep="review"
+      caseStatus={currentCase?.status}
+      orgId={orgId}
+      caseId={caseId}
+      title={currentCase?.title || '专利案件复核'}
+      description={`技术领域：${currentCase?.technical_field || '未指定'}`}
+      breadcrumbCurrent="独立复核与三审流转"
+      error={error}
+      success={success}
+      onErrorClose={() => setError(null)}
+      onSuccessClose={() => setSuccess(null)}
+      headerActions={
+        <>
+          <Link
+            to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
+            className="btn btn-secondary btn-sm"
+          >
+            📊 特征对比表
+          </Link>
+          <Link
+            to={`/organizations/${orgId}/cases/${caseId}/reports`}
+            className="btn btn-secondary btn-sm"
+          >
+            📄 证据与报告
+          </Link>
 
-      <main className="main-content">
-        {/* Navigation Breadcrumb */}
-        <div className="breadcrumb text-xs text-secondary mb-xs">
-          <Link to={`/organizations/${orgId}/cases`}>案件列表</Link> &gt;{' '}
-          <Link to={`/organizations/${orgId}/cases/${caseId}`}>
-            {currentCase?.case_number || '案件详情'}
-          </Link>{' '}
-          &gt; ⚖️ 独立复核与三审流转
-        </div>
-
-        {/* Page Header */}
-        <div className="page-header flex-between mb-md">
-          <div>
-            <div className="flex-row gap-sm mb-xs">
-              <span className="badge badge-neutral font-mono">{currentCase?.case_number}</span>
-              <span className="badge badge-neutral">{currentCase?.target_jurisdiction || 'CN'}</span>
-              <StatusBadge status={currentCase?.status || 'draft'} />
-            </div>
-            <h1 className="page-title text-2xl font-bold">
-              {currentCase?.title || '专利案件复核'}
-            </h1>
-            <p className="text-secondary text-sm">
-              技术领域：{currentCase?.technical_field || '未指定'}
-            </p>
-          </div>
-
-          <div className="actions flex-row gap-sm">
+          {isApproved ? (
             <Link
-              to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
-              className="btn btn-secondary btn-sm"
+              to={`/organizations/${orgId}/cases/${caseId}/delivery`}
+              className="btn btn-primary btn-sm"
             >
-              📊 特征对比表
+              📦 进入正式交付中心 →
             </Link>
-            <Link
-              to={`/organizations/${orgId}/cases/${caseId}/reports`}
-              className="btn btn-secondary btn-sm"
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowSubmitModal(true)}
+              className="btn btn-primary btn-sm"
             >
-              📄 证据与报告
-            </Link>
-
-            {isApproved ? (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/delivery`}
-                className="btn btn-primary btn-sm"
-              >
-                📦 进入正式交付中心 →
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowSubmitModal(true)}
-                className="btn btn-primary btn-sm"
-              >
-                {currentReview ? '🔄 重新发起提审 (下一轮)' : '🚀 提交复核申请'}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Workflow Lifecycle Stepper */}
-        <CaseWorkflowStepper
-          orgId={orgId}
-          caseId={caseId}
-          currentStep="review"
-          caseStatus={currentCase?.status}
-        />
-
-        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+              {currentReview ? '🔄 重新发起提审 (下一轮)' : '🚀 提交复核申请'}
+            </button>
+          )}
+        </>
+      }
+    >
 
         {/* Status Summary Banner */}
         <div className="card p-md mb-md">
@@ -652,7 +624,6 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
             </div>
           </Modal>
         )}
-      </main>
-    </div>
+    </WorkbenchLayout>
   )
 }

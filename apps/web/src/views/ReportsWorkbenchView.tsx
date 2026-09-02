@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { apiClient, ApiError } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
-import { Alert } from '../components/Alert'
-import { Header } from '../components/Header'
+import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { MarkdownViewer } from '../components/MarkdownViewer'
-import { CaseWorkflowStepper } from '../components/CaseWorkflowStepper'
 import type { EvidenceSnapshotDetail } from '../types/api'
 import { Link } from '../router/Router'
 
@@ -108,55 +106,40 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
   const payload = snapshotDetail?.payload
 
   return (
-    <div className="layout-container">
-      <Header />
-
-      <main className="main-content">
-        <div className="breadcrumb text-xs text-secondary mb-xs">
-          <Link to={`/organizations/${orgId}/cases`}>案件列表</Link> &gt;{' '}
-          <Link to={`/organizations/${orgId}/cases/${caseId}`}>案件详情</Link> &gt; 证据封存与专业报告
-        </div>
-
-        {/* Page Header */}
-        <div className="page-header flex-between mb-md">
-          <div>
-            <h1 className="page-title text-2xl font-bold">证据封存与专业报告 (Reports & Evidence)</h1>
-            <p className="text-secondary text-sm">
-              全案全生命周期不可变证据快照封存、Root SHA-256 防伪溯源与专业法律评估报告
-            </p>
-          </div>
-
-          <div className="actions flex-row gap-sm">
+    <WorkbenchLayout
+      currentStep="reports"
+      caseStatus={snapshotDetail ? 'in_review' : 'assessment_ready'}
+      orgId={orgId}
+      caseId={caseId}
+      title="证据封存与专业报告 (Reports & Evidence)"
+      description="全案全生命周期不可变证据快照封存、Root SHA-256 防伪溯源与专业法律评估报告"
+      breadcrumbCurrent="证据封存与专业报告"
+      error={error}
+      success={success}
+      onErrorClose={() => setError(null)}
+      onSuccessClose={() => setSuccess(null)}
+      headerActions={
+        <>
+          <Link
+            to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
+            className="btn btn-secondary btn-sm"
+          >
+            &larr; 特征比对表
+          </Link>
+          {snapshotDetail && (
             <Link
-              to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
-              className="btn btn-secondary btn-sm"
+              to={`/organizations/${orgId}/cases/${caseId}/review`}
+              className="btn btn-primary btn-sm font-bold"
             >
-              &larr; 特征比对表
+              ⚖️ 前往独立复核 &rarr;
             </Link>
-            {snapshotDetail && (
-              <Link
-                to={`/organizations/${orgId}/cases/${caseId}/review`}
-                className="btn btn-primary btn-sm font-bold"
-              >
-                ⚖️ 前往独立复核 &rarr;
-              </Link>
-            )}
-            <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
-              返回案件主页
-            </Link>
-          </div>
-        </div>
-
-        {/* Workflow Lifecycle Stepper */}
-        <CaseWorkflowStepper
-          orgId={orgId}
-          caseId={caseId}
-          currentStep="reports"
-          caseStatus={snapshotDetail ? 'in_review' : 'assessment_ready'}
-        />
-
-        {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
-        {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+          )}
+          <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
+            返回案件主页
+          </Link>
+        </>
+      }
+    >
 
         {snapshotDetail ? (
           <div className="flex-stack gap-md">
@@ -354,7 +337,6 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
             </button>
           </div>
         )}
-      </main>
-    </div>
+    </WorkbenchLayout>
   )
 }
