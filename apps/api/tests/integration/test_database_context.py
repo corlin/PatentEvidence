@@ -12,6 +12,7 @@ from patent_evidence_api.core.database import (
     create_engine,
     create_platform_session_factory,
     create_worker_session_factory,
+    invitation_token_transaction,
     platform_transaction,
     require_tenant_context,
     session_token_transaction,
@@ -28,6 +29,8 @@ MEMBERSHIP_B = UUID("20000000-0000-4000-8000-000000000002")
 SESSION_HASH = "session-hash-runtime-context"
 RUNTIME_IDENTITY = UUID("10000000-0000-4000-8000-000000000004")
 RUNTIME_SESSION = UUID("50000000-0000-4000-8000-000000000004")
+RUNTIME_INVITATION = UUID("60000000-0000-4000-8000-000000000004")
+INVITATION_HASH = "invitation-hash-runtime-context"
 
 
 def _async_application_url() -> str:
@@ -202,6 +205,56 @@ async def test_session_token_transaction_binds_hash_for_insert_and_lookup() -> N
                 await session.scalar(
                     text("SELECT count(*) FROM user_sessions WHERE id=:session_id"),
                     {"session_id": RUNTIME_SESSION},
+                )
+                == 0
+            )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_invitation_token_transaction_reveals_only_the_matching_invitation() -> (
+    None
+):
+    engine = create_engine(_async_application_url())
+    factory = create_application_session_factory(engine)
+    try:
+        async with tenant_transaction(factory, ORG_A) as session:
+            await session.execute(
+                text(
+                    """INSERT INTO organization_invitations
+                    (id,organization_id,email_normalized,role,token_hash,status,
+                     invited_by,expires_at,created_at,updated_at)
+                    VALUES (:id,:organization,'runtime-invite@example.test','reviewer',
+                            :token_hash,'pending',:actor,now()+interval '72 hours',
+                            now(),now())"""
+                ),
+                {
+                    "id": RUNTIME_INVITATION,
+                    "organization": ORG_A,
+                    "token_hash": INVITATION_HASH,
+                    "actor": ACTOR_A,
+                },
+            )
+
+        async with invitation_token_transaction(factory, INVITATION_HASH) as session:
+            assert (
+                await session.scalar(text("SELECT id FROM organization_invitations"))
+                == RUNTIME_INVITATION
+            )
+            assert (
+                await session.scalar(
+                    text("SELECT current_setting('app.current_organization_id')")
+                )
+                == ""
+            )
+
+        async with invitation_token_transaction(
+            factory, "wrong-invitation-hash"
+        ) as session:
+            assert (
+                await session.scalar(
+                    text("SELECT count(*) FROM organization_invitations")
                 )
                 == 0
             )

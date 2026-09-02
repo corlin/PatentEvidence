@@ -88,6 +88,21 @@ async def bind_session_token_hash(
     )
 
 
+async def bind_invitation_token_hash(
+    session: AsyncSession, invitation_token_hash: str
+) -> None:
+    if not invitation_token_hash:
+        raise ValueError("invitation_token_hash must not be empty")
+    if not session.in_transaction():
+        raise RuntimeError(
+            "invitation token context must be bound inside a transaction"
+        )
+    await session.execute(
+        text("SELECT set_config('app.current_invitation_token_hash', :value, true)"),
+        {"value": invitation_token_hash},
+    )
+
+
 async def bind_transaction_context(
     session: AsyncSession,
     *,
@@ -217,4 +232,15 @@ async def session_token_transaction(
             request_correlation_id=request_correlation_id,
         )
         await bind_session_token_hash(session, session_token_hash)
+        yield session
+
+
+@asynccontextmanager
+async def invitation_token_transaction(
+    factory: async_sessionmaker[AsyncSession], invitation_token_hash: str
+) -> AsyncIterator[AsyncSession]:
+    async with factory() as session, session.begin():
+        await verify_database_role(session, APPLICATION_DATABASE_ROLE)
+        await bind_transaction_context(session, organization_id=None)
+        await bind_invitation_token_hash(session, invitation_token_hash)
         yield session

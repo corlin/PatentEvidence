@@ -39,6 +39,17 @@ from patent_evidence_api.platform.organizations import (
     OrganizationLifecycle,
     OrganizationProvisioner,
 )
+from patent_evidence_api.organization.access import OrganizationAccess
+from patent_evidence_api.organization.api import (
+    create_invitation_router,
+    create_organization_router,
+)
+from patent_evidence_api.organization.audit import OrganizationAuditWriter
+from patent_evidence_api.organization.invitations import (
+    InvitationAcceptance,
+    InvitationService,
+)
+from patent_evidence_api.organization.members import MemberService
 
 
 def create_app(
@@ -78,6 +89,9 @@ def create_app(
     session_factory = create_application_session_factory(engine)
     platform_session_factory = create_platform_session_factory(platform_engine)
     session_authority = SessionAuthority(resolved_clock)
+    resolved_passwords = AsyncPasswordSecurity(
+        PasswordSecurity(), runner=resolved_password_runner
+    )
     privileged_guard = PrivilegedPrincipalGuard(session_authority, resolved_clock)
     platform_guard = PlatformPrincipalGuard()
     platform_access = PlatformAccess(
@@ -97,10 +111,7 @@ def create_app(
         create_auth_router(
             session_factory,
             clock=resolved_clock,
-            passwords=AsyncPasswordSecurity(
-                PasswordSecurity(),
-                runner=resolved_password_runner,
-            ),
+            passwords=resolved_passwords,
             totp=TotpSecurity(resolved_settings.mfa_encryption_key.get_secret_value()),
             rate_limiter=rate_limiter or DeterministicRateLimiter(),
             secure_cookies=resolved_settings.environment != "development",
@@ -126,6 +137,27 @@ def create_app(
             OrganizationProvisioner(resolved_clock),
             OrganizationDirectory(resolved_clock, OrganizationLifecycle()),
         )
+    )
+    organization_audit = OrganizationAuditWriter(resolved_clock)
+    invitation_acceptance = InvitationAcceptance(
+        session_factory,
+        clock=resolved_clock,
+        audit_writer=organization_audit,
+    )
+    application.include_router(
+        create_organization_router(
+            OrganizationAccess(
+                session_factory,
+                session_authority=session_authority,
+                audit_writer=organization_audit,
+                clock=resolved_clock,
+            ),
+            InvitationService(resolved_clock),
+            MemberService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_invitation_router(invitation_acceptance, resolved_passwords)
     )
 
     @application.get("/health")

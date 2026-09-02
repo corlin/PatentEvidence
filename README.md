@@ -11,6 +11,10 @@ business features.
   one-time recovery codes under `/api/v1/auth`.
 - Platform operations: MFA-gated organization provisioning, quota and lifecycle
   management under `/api/v1/platform/organizations`.
+- Organization administration: 72-hour single-use invitations, fixed-role
+  membership lifecycle, tenant-safe administration and last-admin protection
+  under `/api/v1/organizations`; token inspection/acceptance under
+  `/api/v1/invitations`.
 - Worker process health: `python -m patent_evidence_worker.main health`.
 - Web surface: a Vite/React page identifying PatentEvidence and P0 status.
 - Provenance: seven immutable source records are checked by

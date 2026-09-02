@@ -46,6 +46,7 @@ uv sync --frozen --no-install-project
   apps/api/tests/integration/test_database_roles_and_rls.py \
   apps/api/tests/integration/test_database_context.py \
   apps/api/tests/integration/test_authentication_api.py \
-  apps/api/tests/integration/test_platform_provisioning_api.py
+  apps/api/tests/integration/test_platform_provisioning_api.py \
+  apps/api/tests/integration/test_organization_administration_api.py
 .venv/bin/alembic -c apps/api/alembic.ini downgrade 0001_identity_tenancy
 .venv/bin/alembic -c apps/api/alembic.ini upgrade head
