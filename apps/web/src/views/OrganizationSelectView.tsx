@@ -21,15 +21,34 @@ export const OrganizationSelectView: React.FC = () => {
           </div>
 
           <div className="flex-stack gap-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveOrgId('90000000-0000-4000-8000-000000000001')
+                navigate('/organizations/90000000-0000-4000-8000-000000000001/cases')
+              }}
+              className="org-select-card p-md border rounded hover-border-primary transition text-left cursor-pointer"
+            >
+              <div className="flex-between">
+                <div>
+                  <strong className="text-base text-primary">⚖️ 北京前沿知识产权代理事务所</strong>
+                  <p className="text-xs text-secondary mt-xs">
+                    标准知识产权代理机构工作空间（案件中心、技术特征建模、Claim Chart 与报告）
+                  </p>
+                </div>
+                <span className="badge badge-success text-xs">进入工作台 &rarr;</span>
+              </div>
+            </button>
+
             <Link
               to="/platform/organizations"
               className="org-select-card p-md border rounded hover-border-primary transition"
             >
               <div className="flex-between">
                 <div>
-                  <strong className="text-base text-primary">🏢 平台管理中心</strong>
+                  <strong className="text-base text-primary">🏢 平台全局管理中心</strong>
                   <p className="text-xs text-secondary mt-xs">
-                    开通机构、配额策略管理与全局生命周期维护
+                    开通机构、配额策略管理与全局生命周期维护（限超级管理员）
                   </p>
                 </div>
                 <span className="badge badge-neutral text-xs">Platform</span>

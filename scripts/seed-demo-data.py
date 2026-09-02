@@ -40,6 +40,14 @@ def main() -> None:
                 ON CONFLICT (id) DO NOTHING""",
                 (SUPERADMIN_ID, pwd_hash, now, now),
             )
+            cur.execute(
+                """INSERT INTO platform_operator_grants
+                (id, global_identity_id, role, status, granted_by, granted_at, bootstrap_mfa_enrollment_expires_at)
+                VALUES
+                (%s, %s, 'platform_admin', 'active', NULL, %s, %s)
+                ON CONFLICT (id) DO NOTHING""",
+                (UUID("81000000-0000-4000-8000-000000000001"), SUPERADMIN_ID, now, now + timedelta(days=365)),
+            )
 
             # 2. Organization
             cur.execute(
@@ -75,6 +83,14 @@ def main() -> None:
                 (%s, %s, %s, 'organization_admin', 'active', %s, %s)
                 ON CONFLICT (id) DO NOTHING""",
                 (MEMBER_ID, ORG_ID, ADMIN_ID, now, now),
+            )
+            cur.execute(
+                """INSERT INTO organization_memberships
+                (id, organization_id, global_identity_id, role, status, created_at, updated_at)
+                VALUES
+                (%s, %s, %s, 'organization_admin', 'active', %s, %s)
+                ON CONFLICT (id) DO NOTHING""",
+                (UUID("82000000-0000-4000-8000-000000000001"), ORG_ID, SUPERADMIN_ID, now, now),
             )
 
             # 4. Demo Case

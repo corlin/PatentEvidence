@@ -7,7 +7,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  currentOrgName = '北京易光知识产权代理有限公司',
+  currentOrgName = '北京前沿知识产权代理事务所',
 }) => {
   const { session, logout, activeOrgId } = useSession()
   const { pathname } = useRouter()
