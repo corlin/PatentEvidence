@@ -122,3 +122,46 @@ class SearchStrategyPlanner:
             boolean_query_cnipr=boolean_cnipr,
             boolean_query_standard=boolean_standard,
         )
+
+
+async def plan_strategy_with_ai(
+    features: list[dict[str, Any]],
+    technical_field: str = "",
+    title: str = "",
+    llm_client: Any | None = None,
+) -> PlannedStrategy:
+    """Generate professional multi-jurisdiction search strategy using LLM and legal prompts."""
+    from adapters.llm.client import LlmClient
+    from adapters.llm.schemas import SearchStrategyResultSchema
+    from prompts.search_planning import SEARCH_PLANNING_SYSTEM_PROMPT, build_search_planning_user_prompt
+
+    client = llm_client or LlmClient()
+    if client.is_configured():
+        try:
+            messages = [
+                {"role": "system", "content": SEARCH_PLANNING_SYSTEM_PROMPT},
+                {"role": "user", "content": build_search_planning_user_prompt(title, technical_field, features)},
+            ]
+            res = await client.generate_structured(
+                messages=messages,
+                response_model=SearchStrategyResultSchema,
+            )
+
+            keywords_dict: dict[str, list[str]] = {
+                "中文关键词": res.keywords_zh,
+                "英文关键词": res.keywords_en,
+            }
+            ipc_list = [
+                {"code": c, "description": "推荐专利分类"} for c in (res.ipc_classes + res.cpc_classes)[:4]
+            ]
+            return PlannedStrategy(
+                keywords_matrix=keywords_dict,
+                ipc_classes=ipc_list,
+                boolean_query_cnipr=res.boolean_query_cnipr,
+                boolean_query_standard=res.boolean_query_epo or res.boolean_query_uspto or res.boolean_query_cnipr,
+            )
+        except Exception:
+            pass
+
+    return SearchStrategyPlanner().plan_strategy(features, technical_field, title)
+

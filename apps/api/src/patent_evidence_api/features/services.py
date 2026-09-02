@@ -71,8 +71,17 @@ class FeatureService:
         raw_struct = doc_ver["structure_json"]
         paragraphs = json.loads(raw_struct) if isinstance(raw_struct, str) else (raw_struct or [])
 
-        # 2. Extract draft features
-        draft_features = self._extractor.extract(paragraphs)
+        # Query case title
+        case_res = await session.execute(
+            text("SELECT title FROM cases WHERE id = :case_id AND organization_id = :org_id"),
+            {"case_id": case_id, "org_id": organization_id},
+        )
+        case_row = case_res.fetchone()
+        case_title = case_row[0] if case_row else ""
+
+        # 2. Extract draft features (AI-powered with rule fallback)
+        from modules.features.extractor import extract_features_with_ai
+        draft_features = await extract_features_with_ai(title=case_title, paragraphs=paragraphs)
         if not draft_features:
             # Fallback draft feature
             draft_features = [

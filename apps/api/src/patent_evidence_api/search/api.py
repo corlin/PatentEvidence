@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 from adapters.search.google_patents import GooglePatentsSearchAdapter
 from adapters.search.openalex import OpenAlexSearchAdapter
+from adapters.search.epo import EpoSearchAdapter
+from adapters.search.uspto import UsptoSearchAdapter
 from patent_evidence_api.core.http import parse_json_body, parse_uuid_or_404
 from patent_evidence_api.organization.access import OrganizationAccess
 from patent_evidence_api.search.services import (
@@ -49,6 +51,8 @@ def create_search_router(
 
     google_adapter = GooglePatentsSearchAdapter()
     openalex_adapter = OpenAlexSearchAdapter()
+    epo_adapter = EpoSearchAdapter()
+    uspto_adapter = UsptoSearchAdapter()
 
     @router.post(
         "/{organization_id}/cases/{case_id}/search/strategies/generate",
@@ -165,10 +169,14 @@ def create_search_router(
             strat = await strategy_service.get_active_strategy(
                 operation.session, org_uuid, c_uuid
             )
-            if not strat:
-                raise HTTPException(status_code=400, detail="generate_search_strategy_first")
-
-            adapter = openalex_adapter if body.source_type == "openalex" else google_adapter
+            if body.source_type == "epo":
+                adapter = epo_adapter
+            elif body.source_type == "uspto":
+                adapter = uspto_adapter
+            elif body.source_type == "openalex":
+                adapter = openalex_adapter
+            else:
+                adapter = google_adapter
             result = await execution_service.execute_public_search(
                 operation.session,
                 organization_id=org_uuid,

@@ -324,6 +324,24 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                     </button>
                     <button
                       type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleExecutePublicSearch('epo')}
+                      disabled={actionLoading}
+                      title="调用 epo-cli 查询欧洲专利局官方数据库"
+                    >
+                      🇪🇺 触发 EPO 官方检索
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleExecutePublicSearch('uspto')}
+                      disabled={actionLoading}
+                      title="调用 uspto-cli 查询美国专利局官方数据库"
+                    >
+                      🇺🇸 触发 USPTO 官方检索
+                    </button>
+                    <button
+                      type="button"
                       className="btn btn-success btn-sm"
                       onClick={() => handleExecutePublicSearch('google_patents')}
                       disabled={actionLoading}
@@ -489,7 +507,13 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                           相关度: {cand.relevance_score}分
                         </span>
                         <span className="badge badge-neutral text-xs">
-                          {cand.source_type === 'cnipr_manual' ? 'CNIPR人工导入' : '公开源检索'}
+                          {cand.source_type === 'cnipr_manual'
+                            ? '🇨🇳 CNIPR人工导入'
+                            : cand.source_type === 'epo'
+                            ? '🇪🇺 EPO官方检索'
+                            : cand.source_type === 'uspto'
+                            ? '🇺🇸 USPTO官方检索'
+                            : '🌐 公开源检索'}
                         </span>
                         {cand.publication_date && (
                           <span className="text-xs text-secondary">

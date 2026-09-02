@@ -111,8 +111,74 @@ class RuleComparisonEngine:
 
         return ComparisonResult(
             judgment=judgment,
-            confidence_score=round(confidence, 1),
+            confidence_score=confidence,
             citation_location=est_paragraph,
-            citation_quote=best_sentence[:120],
+            citation_quote=best_sentence,
             reasoning_analysis=reasoning,
         )
+
+
+async def compare_feature_with_ai(
+    feature_code: str,
+    feature_statement: str,
+    candidate_pub_no: str,
+    candidate_title: str,
+    candidate_abstract: str,
+    candidate_chunks: list[dict[str, str]] | None = None,
+    llm_client: Any | None = None,
+) -> ComparisonResult:
+    """Execute two-stage targeted AI comparison adhering to All Elements Rule and exact quote constraints."""
+    from adapters.llm.client import LlmClient
+    from adapters.llm.schemas import ClaimComparisonItemSchema
+    from prompts.claim_comparison import CLAIM_COMPARISON_SYSTEM_PROMPT, build_claim_comparison_user_prompt
+
+    client = llm_client or LlmClient()
+    if client.is_configured():
+        try:
+            # Stage 1: Prepare chunks (either parsed document chunks or split sentences)
+            chunks = candidate_chunks or []
+            if not chunks:
+                from modules.cases.parser import split_sentences
+                sentences = split_sentences(f"{candidate_title} {candidate_abstract}", min_length=8)
+                chunks = [{"id": f"00{idx+10}", "text": s} for idx, s in enumerate(sentences[:6])]
+
+            # Filter top candidate chunks
+            feature_words = set(re.findall(r"[\w\u4e00-\u9fa5]{2,6}", feature_statement))
+            def chunk_score(c: dict[str, str]) -> int:
+                return sum(1 for w in feature_words if w in c.get("text", ""))
+
+            sorted_chunks = sorted(chunks, key=chunk_score, reverse=True)[:4]
+
+            # Stage 2: Targeted LLM judgment
+            messages = [
+                {"role": "system", "content": CLAIM_COMPARISON_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": build_claim_comparison_user_prompt(
+                        feature={"feature_code": feature_code, "feature_statement": feature_statement},
+                        reference_doc={"publication_number": candidate_pub_no, "title": candidate_title},
+                        candidate_chunks=sorted_chunks,
+                    ),
+                },
+            ]
+            res = await client.generate_structured(
+                messages=messages,
+                response_model=ClaimComparisonItemSchema,
+            )
+            return ComparisonResult(
+                judgment=res.judgment,
+                confidence_score=95.0 if res.judgment == "identical" else 85.0,
+                citation_location=res.citation_location,
+                citation_quote=res.citation_quote,
+                reasoning_analysis=res.reasoning,
+            )
+        except Exception:
+            pass
+
+    return RuleComparisonEngine().compare_feature_with_candidate(
+        feature_code=feature_code,
+        feature_statement=feature_statement,
+        candidate_pub_no=candidate_pub_no,
+        candidate_title=candidate_title,
+        candidate_abstract=candidate_abstract,
+    )

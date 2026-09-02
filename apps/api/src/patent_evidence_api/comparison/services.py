@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.comparison.engine import RuleComparisonEngine
+from modules.comparison.engine import RuleComparisonEngine, compare_feature_with_ai
 from modules.comparison.evaluator import MatrixEvaluator
 
 Clock = Callable[[], datetime]
@@ -113,7 +113,7 @@ class ComparisonMatrixService:
         comparison_records: list[dict[str, Any]] = []
         for feat in features:
             for cand in active_candidates:
-                comp_res = self.engine.compare_feature_with_candidate(
+                comp_res = await compare_feature_with_ai(
                     feature_code=feat["feature_code"],
                     feature_statement=feat["feature_statement"],
                     candidate_pub_no=cand["publication_number"],

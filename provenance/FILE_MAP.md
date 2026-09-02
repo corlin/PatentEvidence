@@ -37,5 +37,10 @@ Add one row below before introducing any substantive derivative file.
 | `modules/comparison/` | Independent Architecture | Semantic comparison engine (Rule/LLM dual-mode), tristate judgment, and global risk evaluator. | PatentEvidence | `apps/api/tests/unit/test_comparison_engine.py` |
 | `apps/api/migrations/versions/0010_review_and_delivery.py` | Independent Architecture | Review submissions, review decisions, and delivery records schema with forced RLS. | PatentEvidence | `./scripts/test-postgres.sh` |
 | `modules/review/` | Independent Architecture | Review workflow engine with cryptographic decision signing, multi-round diffing, and secure delivery tokens. | PatentEvidence | `apps/api/tests/unit/test_review_workflow.py` |
+| `adapters/llm/` | Independent Architecture | OpenAI-compatible async LLM client with structured Pydantic schema validation and tenant BYOK key overrides. | PatentEvidence | `apps/api/tests/unit/test_llm_client.py` |
+| `adapters/search/epo.py` | `epo-cli@07491e42e6db37871cb51ffe55c84712ea053d69` | EPO official search adapter with controlled subprocess runner and offline fixture sandbox fallback. | PatentEvidence | `apps/api/tests/unit/test_epo_adapter.py` |
+| `adapters/search/uspto.py` | `uspto-cli@be955e3ce0cb484a8fed6fa65cd23a33b0ed99f0` | USPTO official search adapter with per-user key isolation, controlled subprocess, and offline fixture sandbox. | PatentEvidence | `apps/api/tests/unit/test_uspto_adapter.py` |
+| `prompts/` | Independent Architecture | Specialized legal patent analysis prompts aligned with CNIPA examination guidelines and Three-Step Test. | PatentEvidence | `apps/api/tests/unit/test_patent_prompts.py` |
+
 
 

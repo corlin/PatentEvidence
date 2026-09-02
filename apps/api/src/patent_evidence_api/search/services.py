@@ -75,8 +75,9 @@ class SearchStrategyService:
         )
         features = [dict(r._mapping) for r in res_feats.fetchall()]
 
-        # 4. Plan strategy
-        plan = self.planner.plan_strategy(
+        # 4. Plan strategy (AI-powered with rule fallback)
+        from modules.search.strategy_planner import plan_strategy_with_ai
+        plan = await plan_strategy_with_ai(
             features=features,
             technical_field=case_row.technical_field,
             title=case_row.title,

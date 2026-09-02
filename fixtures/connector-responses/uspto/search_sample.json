@@ -1,0 +1,23 @@
+{
+  "total_patent_count": 2,
+  "patents": [
+    {
+      "patent_number": "US11500645B2",
+      "patent_title": "Method and Apparatus for Sparse Matrix Decomposition in Deep Neural Networks",
+      "patent_abstract": "A processor architecture configured to perform quantized matrix vector operations by skipping zero-valued weights using bitmap indices.",
+      "patent_date": "2022-11-15",
+      "assignee_organization": "Advanced Tensor Computing Corp.",
+      "ipc_classification": "G06F 17/16",
+      "cpc_classification": "G06N 3/063"
+    },
+    {
+      "patent_number": "US10990409B1",
+      "patent_title": "Low-Precision Quantization Pipeline for Large Language Model Attention",
+      "patent_abstract": "Systems and methods for INT4 dynamic scaling and row-wise sparsity pruning during transformer self-attention calculations.",
+      "patent_date": "2021-04-27",
+      "assignee_organization": "Silicon Cloud Innovations Inc.",
+      "ipc_classification": "G06N 3/08",
+      "cpc_classification": "G06N 3/04"
+    }
+  ]
+}

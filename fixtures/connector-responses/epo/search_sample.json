@@ -1,0 +1,24 @@
+{
+  "total_results": 2,
+  "query": "quantization AND sparse AND matrix",
+  "results": [
+    {
+      "publication_number": "EP3989123A1",
+      "title": "Sparse Matrix Quantization and Acceleration Method for Neural Networks",
+      "abstract": "A neural network acceleration device and method using sparse weight matrices and non-uniform block quantization to reduce inference latency.",
+      "publication_date": "2022-04-27",
+      "applicant": "European Deep Learning Systems B.V.",
+      "ipc_classification": "G06N 3/063",
+      "cpc_classification": "G06N 3/045"
+    },
+    {
+      "publication_number": "EP3827419A1",
+      "title": "Hardware Accelerated Quantized Matrix Multiplication Engine",
+      "abstract": "An integrated systolic array with sparsity bitmask decoding for processing low-bitwidth quantized tensor multiplications.",
+      "publication_date": "2021-06-02",
+      "applicant": "Semiconductor Technologies Europe GmbH",
+      "ipc_classification": "G06F 17/16",
+      "cpc_classification": "G06F 7/544"
+    }
+  ]
+}

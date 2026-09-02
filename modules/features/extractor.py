@@ -122,3 +122,45 @@ class RuleFeatureExtractor:
                         break
 
         return features
+
+
+async def extract_features_with_ai(
+    title: str,
+    paragraphs: list[dict[str, Any]],
+    llm_client: Any | None = None,
+) -> list[DraftFeature]:
+    """Extract features via LLM using CNIPA examination prompts, falling back to rule extractor."""
+    from adapters.llm.client import LlmClient
+    from adapters.llm.schemas import FeatureExtractionResultSchema
+    from prompts.feature_modeling import FEATURE_MODELING_SYSTEM_PROMPT, build_feature_modeling_user_prompt
+
+    client = llm_client or LlmClient()
+    if client.is_configured():
+        try:
+            messages = [
+                {"role": "system", "content": FEATURE_MODELING_SYSTEM_PROMPT},
+                {"role": "user", "content": build_feature_modeling_user_prompt(title, paragraphs)},
+            ]
+            result = await client.generate_structured(
+                messages=messages,
+                response_model=FeatureExtractionResultSchema,
+            )
+            drafts: list[DraftFeature] = []
+            for idx, f in enumerate(result.features, start=1):
+                drafts.append(
+                    DraftFeature(
+                        feature_code=f.feature_code or f"F{idx}",
+                        feature_type=f.feature_type,
+                        feature_statement=f.feature_statement,
+                        source_paragraph_id=f.source_paragraph_id,
+                        citation_quote=f.citation_quote,
+                        sort_order=idx,
+                    )
+                )
+            if drafts:
+                return drafts
+        except Exception:
+            pass
+
+    return RuleFeatureExtractor().extract(paragraphs)
+
