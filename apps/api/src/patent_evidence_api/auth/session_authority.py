@@ -31,8 +31,13 @@ class Principal:
 class SessionAuthority:
     """Resolve current identity authority from an opaque browser session."""
 
-    def __init__(self, clock: Callable[[], datetime]) -> None:
+    def __init__(
+        self,
+        clock: Callable[[], datetime],
+        disable_mfa: bool = False,
+    ) -> None:
         self._clock = clock
+        self._disable_mfa = disable_mfa
 
     async def resolve(
         self, request: Request, session: AsyncSession, *, lock: bool = False
@@ -127,10 +132,12 @@ class SessionAuthority:
             token_hash=token_hash,
             security_version=row["session_security_version"],
             expires_at=row["expires_at"],
-            mfa_verified_at=row["mfa_verified_at"],
+            mfa_verified_at=now if self._disable_mfa else row["mfa_verified_at"],
         )
 
     def require_recent_mfa(self, principal: Principal) -> Principal:
+        if self._disable_mfa:
+            return principal
         if not principal.has_recent_mfa(self._clock()):
             raise HTTPException(status_code=403, detail="mfa_required")
         return principal

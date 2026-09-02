@@ -53,8 +53,10 @@ def verify_migrations() -> None:
 
 
 def verify_api_routes() -> None:
-    # Add src to sys.path
+    # Add src and root to sys.path
     api_src = ROOT / "apps/api/src"
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
     if str(api_src) not in sys.path:
         sys.path.insert(0, str(api_src))
 

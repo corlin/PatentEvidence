@@ -1,0 +1,572 @@
+import React, { useEffect, useState } from 'react'
+import { apiClient } from '../services/apiClient'
+import type { CaseDrawing, ReferenceMark } from '../types/api'
+import { Modal } from './Modal'
+import { Alert } from './Alert'
+
+interface DrawingsGalleryProps {
+  orgId: string
+  caseId: string
+  readOnly?: boolean
+}
+
+export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
+  orgId,
+  caseId,
+  readOnly = false,
+}) => {
+  const [drawings, setDrawings] = useState<CaseDrawing[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [reExtracting, setReExtracting] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
+
+  // Lightbox view state
+  const [selectedDrawing, setSelectedDrawing] = useState<CaseDrawing | null>(null)
+  const [zoomLevel, setZoomLevel] = useState<number>(1)
+
+  // Edit metadata modal state
+  const [editingDrawing, setEditingDrawing] = useState<CaseDrawing | null>(null)
+  const [editForm, setEditForm] = useState<{
+    figure_label: string
+    figure_title: string
+    reference_marks: ReferenceMark[]
+  }>({ figure_label: '', figure_title: '', reference_marks: [] })
+
+  // Add custom drawing modal state
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [addForm, setAddForm] = useState<{
+    figure_label: string
+    figure_title: string
+    marks_text: string
+  }>({ figure_label: '附图', figure_title: '', marks_text: '' })
+
+  const fetchDrawings = async () => {
+    try {
+      setLoading(true)
+      const res = await apiClient.listCaseDrawings(orgId, caseId)
+      setDrawings(res.items || [])
+      setError(null)
+    } catch (err: any) {
+      setError(err.message || '加载附图列表失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchDrawings()
+  }, [orgId, caseId])
+
+  const handleReExtract = async () => {
+    setReExtracting(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      const res = await apiClient.reExtractCaseDrawings(orgId, caseId)
+      setDrawings(res.items || [])
+      setSuccess(`附图提取完成！共识别并收录 ${res.items?.length || 0} 张说明书附图。`)
+    } catch (err: any) {
+      setError(err.message || '重新提取附图失败')
+    } finally {
+      setReExtracting(false)
+    }
+  }
+
+  const handleOpenEdit = (drawing: CaseDrawing) => {
+    setEditingDrawing(drawing)
+    setEditForm({
+      figure_label: drawing.figure_label,
+      figure_title: drawing.figure_title,
+      reference_marks: [...drawing.reference_marks],
+    })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingDrawing) return
+    try {
+      const res = await apiClient.updateCaseDrawing(orgId, caseId, editingDrawing.id, {
+        figure_label: editForm.figure_label,
+        figure_title: editForm.figure_title,
+        reference_marks: editForm.reference_marks,
+      })
+      setDrawings(drawings.map((d) => (d.id === editingDrawing.id ? res.drawing : d)))
+      setEditingDrawing(null)
+      setSuccess(`已更新 ${res.drawing.figure_label} 的元数据`)
+    } catch (err: any) {
+      setError(err.message || '保存附图元数据失败')
+    }
+  }
+
+  const handleDelete = async (drawing: CaseDrawing) => {
+    if (!confirm(`确定要删除 ${drawing.figure_label} 吗？`)) return
+    try {
+      await apiClient.deleteCaseDrawing(orgId, caseId, drawing.id)
+      setDrawings(drawings.filter((d) => d.id !== drawing.id))
+      if (selectedDrawing?.id === drawing.id) setSelectedDrawing(null)
+      setSuccess(`已删除 ${drawing.figure_label}`)
+    } catch (err: any) {
+      setError(err.message || '删除附图失败')
+    }
+  }
+
+  const handleAddDrawingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!uploadFile) {
+      setError('请选择要上传的附图图片')
+      return
+    }
+
+    const parsedMarks: ReferenceMark[] = []
+    if (addForm.marks_text.trim()) {
+      const lines = addForm.marks_text.split('\n')
+      for (const line of lines) {
+        const parts = line.split(/[:：、\s-—]+/)
+        if (parts.length >= 2 && parts[0].trim()) {
+          parsedMarks.push({ mark: parts[0].trim(), name: parts.slice(1).join(' ').trim() })
+        }
+      }
+    }
+
+    try {
+      const res = await apiClient.createCaseDrawing(orgId, caseId, {
+        filename: uploadFile.name,
+        figure_label: addForm.figure_label.trim() || '附图',
+        figure_title: addForm.figure_title.trim(),
+        reference_marks: parsedMarks,
+        file: uploadFile,
+      })
+      setDrawings([...drawings, res.drawing])
+      setIsAddModalOpen(false)
+      setUploadFile(null)
+      setAddForm({ figure_label: '附图', figure_title: '', marks_text: '' })
+      setSuccess(`成功添加 ${res.drawing.figure_label}！`)
+    } catch (err: any) {
+      setError(err.message || '上传附图失败')
+    }
+  }
+
+  return (
+    <div className="drawings-gallery-section card p-lg mt-md border rounded bg-surface">
+      <div className="flex-between mb-md">
+        <div>
+          <h3 className="text-lg font-bold flex-row items-center gap-xs">
+            <span>🖼️ 说明书附图资产库</span>
+            <span className="badge badge-primary text-xs">{drawings.length} 张附图</span>
+          </h3>
+          <p className="text-xs text-secondary mt-xs">
+            交底书与申请文档中提取的结构图、拓扑图与流程图，支持图文联动与 Claim Chart 深度对照
+          </p>
+        </div>
+
+        {!readOnly && (
+          <div className="flex-row gap-xs">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleReExtract}
+              disabled={reExtracting}
+            >
+              {reExtracting ? '正在深度提取附图...' : '🔄 重新提取附图'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setIsAddModalOpen(true)}
+            >
+              + 手动添加附图
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
+      {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      {loading ? (
+        <div className="p-lg text-center text-secondary text-sm">正在加载附图资产...</div>
+      ) : drawings.length === 0 ? (
+        <div className="p-xl text-center border-dashed rounded text-secondary bg-subtle">
+          <p className="text-sm">暂未提取到附图资产</p>
+          <p className="text-xs mt-xs">
+            点击上方【🔄 重新提取附图】或【+ 手动添加附图】即可收录专利图元
+          </p>
+        </div>
+      ) : (
+        <div className="grid-3-cols mt-sm">
+          {drawings.map((drawing) => {
+            const fileUrl = apiClient.getCaseDrawingFileUrl(orgId, caseId, drawing.id)
+            return (
+              <div
+                key={drawing.id}
+                className="drawing-card"
+              >
+                {/* 1. Thumbnail Image Container */}
+                <div
+                  className="drawing-thumbnail-container"
+                  onClick={() => {
+                    setSelectedDrawing(drawing)
+                    setZoomLevel(1)
+                  }}
+                  title="点击放大查看高清原图"
+                >
+                  <img
+                    src={fileUrl}
+                    alt={drawing.figure_label}
+                    loading="lazy"
+                  />
+                  <div className="absolute top-2 right-2 flex-row gap-xs">
+                    {drawing.page_number && (
+                      <span className="badge badge-neutral text-xs opacity-90">
+                        P.{drawing.page_number}
+                      </span>
+                    )}
+                    {drawing.is_manually_added && (
+                      <span className="badge badge-warning text-xs opacity-90">人工增补</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Figure Title and Hash */}
+                <div className="drawing-info">
+                  <div className="flex-between items-center">
+                    <strong className="text-sm text-primary">{drawing.figure_label}</strong>
+                    <span className="text-xs text-secondary font-mono">
+                      {drawing.sha256 ? drawing.sha256.substring(0, 8) + '...' : ''}
+                    </span>
+                  </div>
+                  <p className="text-xs text-secondary truncate" title={drawing.figure_title}>
+                    {drawing.figure_title || '（未命名附图）'}
+                  </p>
+
+                  {/* 3. Reference Marks Chips */}
+                  {drawing.reference_marks && drawing.reference_marks.length > 0 && (
+                    <div className="reference-marks-chips">
+                      {drawing.reference_marks.slice(0, 4).map((m, idx) => (
+                        <span
+                          key={idx}
+                          className="badge badge-subtle text-xs"
+                          title={`${m.mark}: ${m.name}`}
+                        >
+                          <strong className="text-primary">{m.mark}</strong> {m.name}
+                        </span>
+                      ))}
+                      {drawing.reference_marks.length > 4 && (
+                        <span className="badge badge-neutral text-xs">
+                          +{drawing.reference_marks.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Action Buttons */}
+                {!readOnly && (
+                  <div className="drawing-actions">
+                    <button
+                      type="button"
+                      className="btn-link text-xs text-primary"
+                      onClick={() => {
+                        setSelectedDrawing(drawing)
+                        setZoomLevel(1)
+                      }}
+                    >
+                      🔍 查看大图
+                    </button>
+                    <div className="flex-row gap-xs">
+                      <button
+                        type="button"
+                        className="btn-link text-xs text-secondary hover-text-primary"
+                        onClick={() => handleOpenEdit(drawing)}
+                        title="编辑图名与附图标记"
+                      >
+                        ✏️ 编辑
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-link text-xs text-danger"
+                        onClick={() => handleDelete(drawing)}
+                        title="删除该附图"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* --- Lightbox Modal --- */}
+      {selectedDrawing && (
+        <Modal
+          isOpen={true}
+          onClose={() => setSelectedDrawing(null)}
+          title={`${selectedDrawing.figure_label} - ${selectedDrawing.figure_title || '高清原图'}`}
+        >
+          <div className="lightbox-content flex-stack gap-md">
+            {/* Zoom Controls */}
+            <div className="flex-between items-center p-xs bg-subtle rounded text-xs">
+              <div className="flex-row gap-xs items-center">
+                <span>缩放比例: {Math.round(zoomLevel * 100)}%</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs"
+                  onClick={() => setZoomLevel((z) => Math.max(0.25, z - 0.25))}
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs"
+                  onClick={() => setZoomLevel((z) => Math.min(4, z + 0.25))}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs"
+                  onClick={() => setZoomLevel(1)}
+                >
+                  100%
+                </button>
+              </div>
+
+              <div className="flex-row gap-xs items-center">
+                <span className="font-mono text-secondary">
+                  SHA-256: {selectedDrawing.sha256}
+                </span>
+                <a
+                  href={apiClient.getCaseDrawingFileUrl(orgId, caseId, selectedDrawing.id)}
+                  download={`${selectedDrawing.figure_label}.png`}
+                  className="btn btn-secondary btn-xs"
+                >
+                  ⬇️ 下载原图
+                </a>
+              </div>
+            </div>
+
+            {/* High-res Image Display */}
+            <div
+              className="border rounded bg-surface p-md overflow-hidden flex-center"
+              style={{ maxHeight: '65vh', overflow: 'auto' }}
+            >
+              <img
+                src={apiClient.getCaseDrawingFileUrl(orgId, caseId, selectedDrawing.id)}
+                alt={selectedDrawing.figure_label}
+                style={{
+                  transform: `scale(${zoomLevel})`,
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.15s ease',
+                  maxWidth: zoomLevel === 1 ? '100%' : 'none',
+                  maxHeight: zoomLevel === 1 ? '60vh' : 'none',
+                  objectFit: 'contain',
+                }}
+              />
+            </div>
+
+            {/* Reference Marks list in Lightbox */}
+            {selectedDrawing.reference_marks && selectedDrawing.reference_marks.length > 0 && (
+              <div className="p-sm bg-subtle rounded border">
+                <div className="text-xs font-bold text-secondary mb-xs">
+                  本图包含的附图标记 ({selectedDrawing.reference_marks.length} 项)：
+                </div>
+                <div className="flex-row flex-wrap gap-xs">
+                  {selectedDrawing.reference_marks.map((m, idx) => (
+                    <span key={idx} className="badge badge-subtle text-xs">
+                      <strong className="text-primary">{m.mark}</strong> {m.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* --- Edit Metadata Modal --- */}
+      {editingDrawing && (
+        <Modal
+          isOpen={true}
+          onClose={() => setEditingDrawing(null)}
+          title={`编辑附图元数据 - ${editingDrawing.figure_label}`}
+        >
+          <div className="form-stack">
+            <div className="form-group">
+              <label className="form-label">附图标签 (图号)</label>
+              <input
+                type="text"
+                className="input-text"
+                value={editForm.figure_label}
+                onChange={(e) => setEditForm({ ...editForm, figure_label: e.target.value })}
+                placeholder="例如：图 1、图 2A、摘要附图"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">附图标题 / 说明</label>
+              <input
+                type="text"
+                className="input-text"
+                value={editForm.figure_title}
+                onChange={(e) => setEditForm({ ...editForm, figure_title: e.target.value })}
+                placeholder="例如：系统整体架构拓扑图"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">
+                附图标记与部件名称对应关系 ({editForm.reference_marks.length} 项)
+              </label>
+              <div className="flex-stack gap-xs">
+                {editForm.reference_marks.map((mark, idx) => (
+                  <div key={idx} className="flex-row gap-xs items-center">
+                    <input
+                      type="text"
+                      className="input-text"
+                      style={{ width: '80px' }}
+                      value={mark.mark}
+                      placeholder="编号"
+                      onChange={(e) => {
+                        const updated = [...editForm.reference_marks]
+                        updated[idx].mark = e.target.value
+                        setEditForm({ ...editForm, reference_marks: updated })
+                      }}
+                    />
+                    <input
+                      type="text"
+                      className="input-text"
+                      style={{ flex: 1 }}
+                      value={mark.name}
+                      placeholder="部件/模块名称"
+                      onChange={(e) => {
+                        const updated = [...editForm.reference_marks]
+                        updated[idx].name = e.target.value
+                        setEditForm({ ...editForm, reference_marks: updated })
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-xs text-danger"
+                      onClick={() => {
+                        const updated = editForm.reference_marks.filter((_, i) => i !== idx)
+                        setEditForm({ ...editForm, reference_marks: updated })
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs mt-xs"
+                  onClick={() =>
+                    setEditForm({
+                      ...editForm,
+                      reference_marks: [...editForm.reference_marks, { mark: '', name: '' }],
+                    })
+                  }
+                >
+                  + 添加一行标记
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-actions mt-md">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setEditingDrawing(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleSaveEdit}
+              >
+                保存元数据
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* --- Add Custom Drawing Modal --- */}
+      {isAddModalOpen && (
+        <Modal
+          isOpen={true}
+          onClose={() => setIsAddModalOpen(false)}
+          title="手动收录 / 添加说明书附图"
+        >
+          <form onSubmit={handleAddDrawingSubmit} className="form-stack">
+            <div className="form-group">
+              <label className="form-label">选择附图图片文件 *</label>
+              <input
+                type="file"
+                className="input-text"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                required
+              />
+              <p className="text-xs text-secondary mt-xs">支持 PNG, JPG, WebP, SVG 格式图片</p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">附图标签 (图号) *</label>
+              <input
+                type="text"
+                className="input-text"
+                value={addForm.figure_label}
+                onChange={(e) => setAddForm({ ...addForm, figure_label: e.target.value })}
+                placeholder="例如：图 1、图 2B"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">附图标题 / 说明</label>
+              <input
+                type="text"
+                className="input-text"
+                value={addForm.figure_title}
+                onChange={(e) => setAddForm({ ...addForm, figure_title: e.target.value })}
+                placeholder="例如：机器人末端夹爪结构分解图"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">附图标记快速录入 (每行一条)</label>
+              <textarea
+                className="input-text"
+                rows={3}
+                value={addForm.marks_text}
+                onChange={(e) => setAddForm({ ...addForm, marks_text: e.target.value })}
+                placeholder="例如：&#10;10: 机器人臂组件&#10;14: 末端手部&#10;16: 夹爪手指"
+              />
+            </div>
+
+            <div className="modal-actions mt-md">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setIsAddModalOpen(false)}
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+              >
+                上传并收录
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  )
+}

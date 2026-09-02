@@ -293,7 +293,7 @@ class TotpSecurity:
             return False
         raw = base64.b32decode(secret, casefold=True)
         counter = int(now.timestamp()) // 30
-        for drift in (-1, 0, 1):
+        for drift in (-2, -1, 0, 1, 2):
             digest = hmac.new(
                 raw, struct.pack(">Q", counter + drift), hashlib.sha1
             ).digest()

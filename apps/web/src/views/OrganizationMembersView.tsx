@@ -179,7 +179,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
 
   return (
     <div className="layout-container">
-      <Header currentOrgName="本机构成员管理" />
+      <Header />
 
       <main className="main-content">
         <div className="page-header flex-between mb-md">

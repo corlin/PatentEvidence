@@ -1,16 +1,37 @@
 import type {
+  CaseDetail,
+  CaseDrawing,
+  CaseSummary,
+  ClaimFeature,
+  ClaimFeatureComparison,
+  ComparisonMatrixDetail,
+  CreateCasePayload,
   CreateInvitationResult,
   CreateOrganizationPayload,
   CreateOrganizationResult,
+  DeliveryRecord,
+  DocumentVersion,
   EffectiveStatus,
+  EvidenceSnapshotDetail,
+  FeatureSetDetail,
+  FeatureSetVersion,
+  FeatureType,
+  HandoffPackage,
   InvitationInspection,
+  ItemizedFeedback,
+  JudgmentType,
   OrganizationDetail,
   OrganizationMembership,
   OrganizationRole,
   OrganizationSummary,
+  ReviewDecision,
+  ReviewSubmission,
+  SearchCandidate,
+  SearchStrategy,
   SessionInfo,
   TotpConfirmResult,
   TotpEnrollResult,
+  TriageStatus,
 } from '../types/api'
 
 export class ApiError extends Error {
@@ -36,7 +57,8 @@ async function request<T>(
   options: RequestInit & { idempotency?: boolean } = {}
 ): Promise<T> {
   const headers = new Headers(options.headers || {})
-  if (!headers.has('Content-Type') && options.body && typeof options.body === 'string') {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  if (!headers.has('Content-Type') && options.body && !isFormData && typeof options.body === 'string') {
     headers.set('Content-Type', 'application/json')
   }
   if (options.idempotency && !headers.has('Idempotency-Key')) {
@@ -231,6 +253,427 @@ export const apiClient = {
     })
   },
 
+  // Cases & Documents
+  async listCases(orgId: string): Promise<{ items: CaseSummary[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases`)
+  },
+
+  async getCase(orgId: string, caseId: string): Promise<CaseDetail> {
+    return request<CaseDetail>(`/api/v1/organizations/${orgId}/cases/${caseId}`)
+  },
+
+  async createCase(orgId: string, payload: CreateCasePayload): Promise<{ case: CaseSummary }> {
+    return request(`/api/v1/organizations/${orgId}/cases`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async uploadDocument(orgId: string, caseId: string, file: File): Promise<any> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/documents`, {
+      method: 'POST',
+      body: formData,
+    })
+  },
+
+  async listDocumentVersions(orgId: string, caseId: string): Promise<{ items: DocumentVersion[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/document-versions`)
+  },
+
+  async confirmDocumentVersion(orgId: string, caseId: string, versionId: string): Promise<any> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/document-versions/${versionId}/confirm`, {
+      method: 'POST',
+    })
+  },
+
+  // Case Drawings
+  async listCaseDrawings(orgId: string, caseId: string): Promise<{ items: CaseDrawing[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/drawings`)
+  },
+
+  async createCaseDrawing(
+    orgId: string,
+    caseId: string,
+    payload: {
+      filename: string
+      figure_label: string
+      figure_title?: string
+      reference_marks?: Array<{ mark: string; name: string }>
+      content_base64?: string
+      file?: File
+      mime_type?: string
+    }
+  ): Promise<{ drawing: CaseDrawing }> {
+    if (payload.file) {
+      const formData = new FormData()
+      formData.append('file', payload.file)
+      formData.append('figure_label', payload.figure_label)
+      if (payload.figure_title) formData.append('figure_title', payload.figure_title)
+      if (payload.reference_marks) formData.append('reference_marks', JSON.stringify(payload.reference_marks))
+      return request(`/api/v1/organizations/${orgId}/cases/${caseId}/drawings`, {
+        method: 'POST',
+        body: formData,
+      })
+    }
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/drawings`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async updateCaseDrawing(
+    orgId: string,
+    caseId: string,
+    drawingId: string,
+    updates: {
+      figure_label?: string
+      figure_title?: string
+      reference_marks?: Array<{ mark: string; name: string }>
+      order_index?: number
+    }
+  ): Promise<{ drawing: CaseDrawing }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/drawings/${drawingId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    })
+  },
+
+  async deleteCaseDrawing(orgId: string, caseId: string, drawingId: string): Promise<void> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/drawings/${drawingId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async reExtractCaseDrawings(orgId: string, caseId: string): Promise<{ items: CaseDrawing[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/drawings/re-extract`, {
+      method: 'POST',
+    })
+  },
+
+  getCaseDrawingFileUrl(orgId: string, caseId: string, drawingId: string): string {
+    return `/api/v1/organizations/${orgId}/cases/${caseId}/drawings/${drawingId}/file`
+  },
+
+  // Technical Features
+  async extractFeatures(orgId: string, caseId: string): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(`/api/v1/organizations/${orgId}/cases/${caseId}/features/extract`, {
+      method: 'POST',
+    })
+  },
+
+  async getActiveFeatures(orgId: string, caseId: string): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(`/api/v1/organizations/${orgId}/cases/${caseId}/features/active`)
+  },
+
+  async listFeatureVersions(orgId: string, caseId: string): Promise<{ items: FeatureSetVersion[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/features/versions`)
+  },
+
+  async getFeatureVersion(orgId: string, caseId: string, versionId: string): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(`/api/v1/organizations/${orgId}/cases/${caseId}/features/versions/${versionId}`)
+  },
+
+  async addFeatureItem(
+    orgId: string,
+    caseId: string,
+    versionId: string,
+    payload: {
+      feature_code?: string
+      feature_type?: FeatureType
+      feature_statement: string
+      source_paragraph_id?: string | null
+      citation_quote?: string | null
+    }
+  ): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/features/versions/${versionId}/items`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    )
+  },
+
+  async updateFeatureItem(
+    orgId: string,
+    caseId: string,
+    versionId: string,
+    featureId: string,
+    payload: {
+      feature_code?: string
+      feature_type?: FeatureType
+      feature_statement?: string
+      source_paragraph_id?: string | null
+      citation_quote?: string | null
+      sort_order?: number
+    }
+  ): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/features/versions/${versionId}/items/${featureId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }
+    )
+  },
+
+  async deleteFeatureItem(
+    orgId: string,
+    caseId: string,
+    versionId: string,
+    featureId: string
+  ): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/features/versions/${versionId}/items/${featureId}`,
+      {
+        method: 'DELETE',
+      }
+    )
+  },
+
+  async splitFeatureItem(
+    orgId: string,
+    caseId: string,
+    versionId: string,
+    featureId: string,
+    part1_statement: string,
+    part2_statement: string
+  ): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/features/versions/${versionId}/items/${featureId}/split`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ part1_statement, part2_statement }),
+      }
+    )
+  },
+
+  async mergeFeatureItems(
+    orgId: string,
+    caseId: string,
+    versionId: string,
+    featureId1: string,
+    featureId2: string,
+    merged_statement: string
+  ): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/features/versions/${versionId}/merge`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          feature_id_1: featureId1,
+          feature_id_2: featureId2,
+          merged_statement,
+        }),
+      }
+    )
+  },
+
+  async confirmFeatureVersion(
+    orgId: string,
+    caseId: string,
+    versionId: string
+  ): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/features/versions/${versionId}/confirm`,
+      {
+        method: 'POST',
+      }
+    )
+  },
+
+  async createFeatureRevision(
+    orgId: string,
+    caseId: string,
+    versionId: string
+  ): Promise<FeatureSetDetail> {
+    return request<FeatureSetDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/features/versions/${versionId}/revision`,
+      {
+        method: 'POST',
+      }
+    )
+  },
+
+  // Patent Search & Candidate Pool
+  async generateSearchStrategy(orgId: string, caseId: string): Promise<SearchStrategy> {
+    return request<SearchStrategy>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/search/strategies/generate`,
+      { method: 'POST' }
+    )
+  },
+
+  async getActiveSearchStrategy(orgId: string, caseId: string): Promise<SearchStrategy> {
+    return request<SearchStrategy>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/search/strategies/active`
+    )
+  },
+
+  async updateSearchStrategy(
+    orgId: string,
+    caseId: string,
+    strategyId: string,
+    payload: {
+      keywords_matrix?: Record<string, string[]>
+      ipc_classes?: Array<{ code: string; description: string }>
+      boolean_query_cnipr?: string
+      boolean_query_standard?: string
+    }
+  ): Promise<SearchStrategy> {
+    return request<SearchStrategy>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/search/strategies/${strategyId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }
+    )
+  },
+
+  async getSearchHandoffPackage(
+    orgId: string,
+    caseId: string,
+    strategyId: string
+  ): Promise<HandoffPackage> {
+    return request<HandoffPackage>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/search/strategies/${strategyId}/handoff`
+    )
+  },
+
+  async executePublicSearch(
+    orgId: string,
+    caseId: string,
+    sourceType: string = 'google_patents'
+  ): Promise<{ job_id: string; status: string; results_count: number }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/search/jobs/execute-public`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ source_type: sourceType }),
+      }
+    )
+  },
+
+  async importCniprCandidates(
+    orgId: string,
+    caseId: string,
+    rawContent: string
+  ): Promise<{ imported_count: number }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/search/candidates/import-cnipr`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ raw_content: rawContent }),
+      }
+    )
+  },
+
+  async listSearchCandidates(
+    orgId: string,
+    caseId: string,
+    triageStatus?: string
+  ): Promise<{ items: SearchCandidate[] }> {
+    const query = triageStatus ? `?triage_status=${triageStatus}` : ''
+    return request<{ items: SearchCandidate[] }>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/search/candidates${query}`
+    )
+  },
+
+  async updateCandidateTriage(
+    orgId: string,
+    caseId: string,
+    candidateId: string,
+    payload: {
+      triage_status: TriageStatus
+      exclusion_reason?: string | null
+      notes?: string | null
+    }
+  ): Promise<SearchCandidate> {
+    return request<SearchCandidate>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/search/candidates/${candidateId}/triage`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    )
+  },
+
+  // Feature Comparison Matrix
+  async generateComparisonMatrix(orgId: string, caseId: string): Promise<ComparisonMatrixDetail> {
+    return request<ComparisonMatrixDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/comparisons/generate`,
+      { method: 'POST' }
+    )
+  },
+
+  async getActiveComparisonMatrix(orgId: string, caseId: string): Promise<ComparisonMatrixDetail> {
+    return request<ComparisonMatrixDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/comparisons/active`
+    )
+  },
+
+  async updateComparisonItem(
+    orgId: string,
+    caseId: string,
+    comparisonId: string,
+    payload: {
+      judgment?: JudgmentType
+      citation_location?: string | null
+      citation_quote?: string | null
+      reasoning_analysis?: string | null
+    }
+  ): Promise<ComparisonMatrixDetail> {
+    return request<ComparisonMatrixDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/comparisons/items/${comparisonId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }
+    )
+  },
+
+  async confirmComparisonMatrix(
+    orgId: string,
+    caseId: string,
+    matrixId: string
+  ): Promise<ComparisonMatrixDetail> {
+    return request<ComparisonMatrixDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/comparisons/${matrixId}/confirm`,
+      { method: 'POST' }
+    )
+  },
+
+  // Evidence Snapshots & Analysis Reports
+  async sealEvidenceSnapshot(orgId: string, caseId: string): Promise<EvidenceSnapshotDetail> {
+    return request<EvidenceSnapshotDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/evidence/seal`,
+      { method: 'POST' }
+    )
+  },
+
+  async getActiveEvidenceSnapshot(
+    orgId: string,
+    caseId: string
+  ): Promise<EvidenceSnapshotDetail> {
+    return request<EvidenceSnapshotDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/evidence/active`
+    )
+  },
+
+  async generateReport(orgId: string, caseId: string): Promise<EvidenceSnapshotDetail> {
+    return request<EvidenceSnapshotDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/reports/generate`,
+      { method: 'POST' }
+    )
+  },
+
+  async getActiveReport(orgId: string, caseId: string): Promise<EvidenceSnapshotDetail> {
+    return request<EvidenceSnapshotDetail>(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/reports/active`
+    )
+  },
+
   // Public Invitations
   async inspectInvitation(token: string): Promise<InvitationInspection> {
     return request<InvitationInspection>('/api/v1/invitations/inspect', {
@@ -248,5 +691,65 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(params),
     })
+  },
+
+  // Review and Delivery
+  async submitCaseReview(
+    orgId: string,
+    caseId: string,
+    submitterNotes: string = ''
+  ): Promise<{ submission: ReviewSubmission }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/review/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ submitter_notes: submitterNotes }),
+    })
+  },
+
+  async getCurrentReview(
+    orgId: string,
+    caseId: string
+  ): Promise<{ review: ReviewSubmission | null }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/review/current`)
+  },
+
+  async listReviewHistory(
+    orgId: string,
+    caseId: string
+  ): Promise<{ items: ReviewSubmission[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/review/history`)
+  },
+
+  async recordReviewDecision(
+    orgId: string,
+    caseId: string,
+    payload: {
+      decision: 'approved' | 'changes_requested' | 'rejected'
+      overall_comments?: string
+      itemized_feedback?: ItemizedFeedback[]
+      is_self_audit?: boolean
+    }
+  ): Promise<any> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/review/decide`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async deliverCase(
+    orgId: string,
+    caseId: string,
+    clientRecipient: string
+  ): Promise<{ delivery: DeliveryRecord }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/delivery/deliver`, {
+      method: 'POST',
+      body: JSON.stringify({ client_recipient: clientRecipient }),
+    })
+  },
+
+  async getDeliveryRecord(
+    orgId: string,
+    caseId: string
+  ): Promise<{ delivery: DeliveryRecord | null }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/delivery/record`)
   },
 }

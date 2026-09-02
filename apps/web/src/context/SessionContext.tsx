@@ -22,7 +22,21 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [session, setSession] = useState<SessionInfo | null>(null)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeOrgId, setActiveOrgId] = useState<string | null>(null)
+  const [activeOrgId, setActiveOrgIdState] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('pe_active_org_id') || '90000000-0000-4000-8000-000000000001'
+    } catch {
+      return '90000000-0000-4000-8000-000000000001'
+    }
+  })
+
+  const setActiveOrgId = useCallback((id: string | null) => {
+    setActiveOrgIdState(id)
+    try {
+      if (id) localStorage.setItem('pe_active_org_id', id)
+      else localStorage.removeItem('pe_active_org_id')
+    } catch {}
+  }, [])
 
   const [isMfaModalOpen, setIsMfaModalOpen] = useState(false)
   const [mfaSuccessCallback, setMfaSuccessCallback] = useState<(() => void) | null>(null)

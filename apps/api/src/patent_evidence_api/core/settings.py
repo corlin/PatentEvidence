@@ -34,6 +34,10 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="PATENT_EVIDENCE_EXPOSE_DEVELOPMENT_TOKENS",
     )
+    disable_mfa: bool = Field(
+        default=False,
+        validation_alias="PATENT_EVIDENCE_DISABLE_MFA",
+    )
     password_work_workers: int = Field(
         default=2,
         ge=1,

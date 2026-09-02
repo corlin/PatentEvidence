@@ -333,14 +333,17 @@ export const PlatformOrganizationsView: React.FC = () => {
 
           <div className="grid-2-cols gap-sm">
             <div className="form-group">
-              <label className="form-label">配额方案 Key</label>
-              <input
-                type="text"
+              <label className="form-label">服务版本方案</label>
+              <select
                 className="input-text"
                 value={createForm.plan_key}
                 onChange={(e) => setCreateForm({ ...createForm, plan_key: e.target.value })}
-                required
-              />
+              >
+                <option value="standard_agency">标准机构版 (Standard)</option>
+                <option value="professional_agency">专业高级版 (Professional)</option>
+                <option value="enterprise_agency">企业旗舰版 (Enterprise)</option>
+                <option value="trial_agency">试用版 (Trial)</option>
+              </select>
             </div>
             <div className="form-group">
               <label className="form-label">每月案件配额 (件)</label>

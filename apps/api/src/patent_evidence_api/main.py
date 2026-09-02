@@ -50,6 +50,23 @@ from patent_evidence_api.organization.invitations import (
     InvitationService,
 )
 from patent_evidence_api.organization.members import MemberService
+from adapters.object_storage.client import ObjectStorageClient
+from patent_evidence_api.cases.api import create_cases_router
+from patent_evidence_api.cases.services import CaseService, DocumentService, DrawingService
+from patent_evidence_api.features.api import create_features_router
+from patent_evidence_api.features.services import FeatureService
+from patent_evidence_api.search.api import create_search_router
+from patent_evidence_api.search.services import (
+    CandidateTriageService,
+    SearchExecutionService,
+    SearchStrategyService,
+)
+from patent_evidence_api.comparison.api import create_comparison_router
+from patent_evidence_api.comparison.services import ComparisonMatrixService
+from patent_evidence_api.reports.api import create_reports_router
+from patent_evidence_api.reports.services import EvidenceReportService
+from patent_evidence_api.review.api import create_review_router
+from patent_evidence_api.review.services import ReviewService
 
 
 def create_app(
@@ -88,7 +105,9 @@ def create_app(
     platform_engine = create_engine(resolved_settings.platform_database_url)
     session_factory = create_application_session_factory(engine)
     platform_session_factory = create_platform_session_factory(platform_engine)
-    session_authority = SessionAuthority(resolved_clock)
+    session_authority = SessionAuthority(
+        resolved_clock, disable_mfa=resolved_settings.disable_mfa
+    )
     resolved_passwords = AsyncPasswordSecurity(
         PasswordSecurity(), runner=resolved_password_runner
     )
@@ -144,20 +163,63 @@ def create_app(
         clock=resolved_clock,
         audit_writer=organization_audit,
     )
+    organization_access = OrganizationAccess(
+        session_factory,
+        session_authority=session_authority,
+        audit_writer=organization_audit,
+        clock=resolved_clock,
+    )
     application.include_router(
         create_organization_router(
-            OrganizationAccess(
-                session_factory,
-                session_authority=session_authority,
-                audit_writer=organization_audit,
-                clock=resolved_clock,
-            ),
+            organization_access,
             InvitationService(resolved_clock),
             MemberService(resolved_clock),
         )
     )
     application.include_router(
         create_invitation_router(invitation_acceptance, resolved_passwords)
+    )
+    storage_client = ObjectStorageClient()
+    application.include_router(
+        create_cases_router(
+            organization_access,
+            CaseService(resolved_clock),
+            DocumentService(resolved_clock),
+            storage_client,
+            DrawingService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_features_router(
+            organization_access,
+            FeatureService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_search_router(
+            organization_access,
+            SearchStrategyService(resolved_clock),
+            SearchExecutionService(resolved_clock),
+            CandidateTriageService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_comparison_router(
+            organization_access,
+            ComparisonMatrixService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_reports_router(
+            organization_access,
+            EvidenceReportService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_review_router(
+            organization_access,
+            ReviewService(resolved_clock),
+        )
     )
 
     @application.get("/health")
