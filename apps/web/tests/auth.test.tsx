@@ -107,7 +107,9 @@ describe('Authentication & Security Invariants', () => {
 
     const codeInput = screen.getByLabelText(/输入验证器生成的 6 位动态验证码确认/i)
     fireEvent.change(codeInput, { target: { value: '654321' } })
-    fireEvent.click(screen.getByRole('button', { name: /确认并启用/i }))
+
+    const confirmBtn = await screen.findByRole('button', { name: /确认并启用/i })
+    fireEvent.click(confirmBtn)
 
     await waitFor(() => {
       expect(screen.getByText('保存您的一次性恢复码')).toBeDefined()
