@@ -20,9 +20,11 @@ graph LR
    - 机构隔离（PostgreSQL Row-Level Security 强制隔离）与单向审计日志不可变性；
    - 12 小时安全会话、TOTP 双因素认证（MFA Step-Up）、一次性恢复码与 72 小时单次邀请生命周期。
 
-2. **案件交底与说明书附图提取（Case Intake & Drawings Gallery）**
-   - 支持 DOCX 与文字版 PDF 解析、自动安全哈希计算与结构化段落分块；
-   - 说明书附图（Figures）自动提取画廊与附图标记（Reference Marks）图文对照抽屉。
+2. **案件交底与说明书附图高精度提炼（Case Intake & Patent Drawings Gallery）**
+   - **高保真图纸解析与哈希存证**：支持 DOCX 与文字版 PDF 矢量/光栅图纸智能分离，每张附图均计算独立 SHA-256 哈希存证；
+   - **视觉 OCR 字模与说明书字典双重交叉核验**：采用本地视觉字模 OCR 与正文词典交叉验证，支持大写英文字母标号（如 `218A`~`218E`、`150A`~`150D`），彻底剔除非本图引出的背景干扰项，确保与图纸引出线 100% 严格真实对齐；
+   - **《权利要求书》法定权威术语提炼与核心特征穿透**：专项解析权利要求书标准括号标注（如 `前臂构件（12）`、`腕关节（100）`）及法定特征术语，法定名称优先权威定名，并全流程点亮金色专属 `[权]` 权项徽章；
+   - **专业“左图右文”工作台视口布局**：弹窗全面升级为 1140px 左右分栏工作台，左侧高清图纸居中呈现（自适应锁定 66vh，支持平移缩放），右侧审查看板独立垂直滚动，配备即时检索框与 `全部` / `⭐ 权利要求特征` 一键切换胶囊，彻底解决垂直超长撑屏问题。
 
 3. **权利要求技术特征建模（Claim Feature Modeling）**
    - 权利要求层级拆解（F1~Fn）、前序/表征特征分类与交底书段落原文锚定；
@@ -74,7 +76,7 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run Python unit tests (22/22 passed)
+# Run Python unit tests (44/44 passed)
 .venv/bin/pytest apps/api/tests/unit/
 
 # Run PostgreSQL RLS integration tests (81/81 passed)
