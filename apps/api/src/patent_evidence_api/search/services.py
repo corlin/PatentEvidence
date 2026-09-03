@@ -249,6 +249,7 @@ class SearchExecutionService:
         adapter: BaseSearchAdapter,
         actor_identity_id: UUID,
         source_type: str = "google_patents",
+        adapter_kwargs: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now = self.clock()
         job_id = uuid4()
@@ -276,7 +277,7 @@ class SearchExecutionService:
 
         # 2. Query adapter
         try:
-            items = await adapter.search(query)
+            items = await adapter.search(query, limit=20, **(adapter_kwargs or {}))
         except Exception as exc:
             await session.execute(
                 text(

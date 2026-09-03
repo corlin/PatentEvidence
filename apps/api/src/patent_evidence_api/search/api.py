@@ -28,7 +28,10 @@ class UpdateStrategyBody(BaseModel):
 
 
 class ExecutePublicSearchBody(BaseModel):
-    source_type: str = Field(default="google_patents")
+    source_type: str = Field(default="openalex")
+    api_key: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
 
 
 class ImportCniprBody(BaseModel):
@@ -173,10 +176,19 @@ def create_search_router(
                 adapter = epo_adapter
             elif body.source_type == "uspto":
                 adapter = uspto_adapter
-            elif body.source_type == "openalex":
+            elif body.source_type in ("openalex", "google_patents"):
                 adapter = openalex_adapter
             else:
                 adapter = google_adapter
+
+            adapter_kwargs: dict[str, Any] = {}
+            if body.api_key:
+                adapter_kwargs["api_key_override"] = body.api_key
+            if body.client_id:
+                adapter_kwargs["client_id_override"] = body.client_id
+            if body.client_secret:
+                adapter_kwargs["client_secret_override"] = body.client_secret
+
             result = await execution_service.execute_public_search(
                 operation.session,
                 organization_id=org_uuid,
@@ -185,6 +197,7 @@ def create_search_router(
                 adapter=adapter,
                 actor_identity_id=operation.principal.identity_id,
                 source_type=body.source_type,
+                adapter_kwargs=adapter_kwargs,
             )
             operation.describe(
                 target_id=UUID(result["job_id"]),

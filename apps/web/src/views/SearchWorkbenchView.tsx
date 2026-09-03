@@ -45,6 +45,13 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
   const [excludeReason, setExcludeReason] = useState('技术领域不符')
   const [excludeNotes, setExcludeNotes] = useState('')
 
+  // Key configuration modal
+  const [isKeyConfigModalOpen, setIsKeyConfigModalOpen] = useState(false)
+  const [keyModalSource, setKeyModalSource] = useState<'epo' | 'uspto'>('epo')
+  const [customApiKey, setCustomApiKey] = useState('')
+  const [customClientId, setCustomClientId] = useState('')
+  const [customClientSecret, setCustomClientSecret] = useState('')
+
   // Edit strategy state
   const [editCniprQuery, setEditCniprQuery] = useState('')
   const [editStdQuery, setEditStdQuery] = useState('')
@@ -141,12 +148,21 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
     }
   }
 
-  const handleExecutePublicSearch = async (sourceType: string = 'google_patents') => {
+  const handleExecutePublicSearch = async (
+    sourceType: string = 'openalex',
+    keyConfig?: { apiKey?: string; clientId?: string; clientSecret?: string }
+  ) => {
     setActionLoading(true)
     setError(null)
     try {
-      const res = await apiClient.executePublicSearch(orgId, caseId, sourceType)
-      setSuccess(`公网检索执行完成，新增检索出 ${res.results_count} 篇候选专利！`)
+      const res = await apiClient.executePublicSearch(orgId, caseId, sourceType, keyConfig)
+      const label =
+        sourceType === 'epo'
+          ? '欧洲专利局 (EPO OPS)'
+          : sourceType === 'uspto'
+          ? '美国专利商标局 (USPTO ODP)'
+          : '全球公开源 (OpenAlex)'
+      setSuccess(`${label} 检索执行完成，新增检索出 ${res.results_count} 篇候选文献！`)
       await fetchCandidates()
       setActiveTab('candidates')
     } catch (err: any) {
@@ -305,29 +321,58 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                     >
                       📦 导出 CNIPR 规范交接包
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleExecutePublicSearch('epo')}
-                      disabled={actionLoading}
-                      title="调用 epo-cli 查询欧洲专利局官方数据库"
-                    >
-                      🇪🇺 触发 EPO 官方检索
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleExecutePublicSearch('uspto')}
-                      disabled={actionLoading}
-                      title="调用 uspto-cli 查询美国专利局官方数据库"
-                    >
-                      🇺🇸 触发 USPTO 官方检索
-                    </button>
+                    <div className="flex-row gap-xs align-center">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleExecutePublicSearch('epo', customClientId && customClientSecret ? { clientId: customClientId, clientSecret: customClientSecret } : undefined)}
+                        disabled={actionLoading}
+                        title="查询欧洲专利局官方 OPS API"
+                      >
+                        🇪🇺 触发 EPO 官方检索
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm px-xs"
+                        onClick={() => {
+                          setKeyModalSource('epo')
+                          setIsKeyConfigModalOpen(true)
+                        }}
+                        title="配置专属 EPO 官方凭证"
+                      >
+                        ⚙️
+                      </button>
+                    </div>
+
+                    <div className="flex-row gap-xs align-center">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleExecutePublicSearch('uspto', customApiKey ? { apiKey: customApiKey } : undefined)}
+                        disabled={actionLoading}
+                        title="查询美国专利商标局官方 ODP API"
+                      >
+                        🇺🇸 触发 USPTO 官方检索
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm px-xs"
+                        onClick={() => {
+                          setKeyModalSource('uspto')
+                          setIsKeyConfigModalOpen(true)
+                        }}
+                        title="配置专属 USPTO 官方凭证"
+                      >
+                        ⚙️
+                      </button>
+                    </div>
+
                     <button
                       type="button"
                       className="btn btn-success btn-sm"
-                      onClick={() => handleExecutePublicSearch('google_patents')}
+                      onClick={() => handleExecutePublicSearch('openalex')}
                       disabled={actionLoading}
+                      title="直连 OpenAlex 全球开放学术与专利技术成果"
                     >
                       ⚡ 执行公开源检索
                     </button>
@@ -511,7 +556,16 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                       </div>
 
                       {/* Triage Status & Actions */}
-                      <div className="flex-row gap-xs">
+                      <div className="flex-row gap-xs align-center">
+                        <a
+                          href={cand.raw_metadata?.google_patents_url || `https://patents.google.com/?q=${encodeURIComponent(cand.publication_number)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-secondary btn-xs"
+                          title="在 Google Patents 官方图文库查看真实公开专利"
+                        >
+                          🔗 谷歌专利查验 ↗
+                        </a>
                         {cand.triage_status === 'pending' && (
                           <>
                             <button
@@ -653,9 +707,24 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
         onClose={() => setIsImportModalOpen(false)}
       >
         <form onSubmit={handleImportCniprSubmit} className="form-stack">
-          <p className="text-xs text-secondary">
-            支持直接粘贴 CNIPR 官方导出的 CSV 内容，或按行粘贴专利公开号（如 CN118000123A）：
-          </p>
+          <div className="flex-between align-center">
+            <p className="text-xs text-secondary">
+              支持直接粘贴 CNIPR 官方导出的 CSV 内容，或按行粘贴专利公开号：
+            </p>
+            <button
+              type="button"
+              className="btn btn-secondary btn-xs"
+              onClick={() => {
+                setImportText(`公开(公告)号,发明名称,申请人/专利权人,公开(公告)日,主分类号,摘要
+CN117283912A,一种基于大语言模型的多尺度模型量化加速装置及系统,华为技术有限公司,2024-03-15,G06N 3/08,本发明公开了一种基于大语言模型的多尺度模型量化加速装置及系统。该装置包括：特征分析模块，用于获取大语言模型注意力机制中的激活值分布；奇异值分解模块，用于将动态高位宽张量投影为低秩敏感子空间与非敏感残差矩阵；混合精度量化单元，用于对敏感子空间保持FP8精度，对残差矩阵执行INT4非对称量化；稀疏查找表引擎，用于在硬件推理阶段通过跳零索引表直接完成解量化与张量点积运算。本方案大幅降低边缘设备显存占用并显著提升吞吐。
+CN116549201B,面向深度神经网络的自适应稀疏矩阵量化计算方法与介质,百度在线网络技术(北京)有限公司,2023-11-20,G06F 17/16,针对大模型注意力层激活值动态范围大且硬件位宽固定的瓶颈，本发明提出一种面向深度神经网络的自适应稀疏矩阵量化计算方法。步骤包括：对多层感知机及注意力权重的极值奇异点进行行级分块敏感度评级；采用多位宽混合定点数自适应校准各块量化尺度因子；在硬件层构建位掩码解码流水线，只对非零稀疏有效权重进行脉动阵列计算。经实测在基本不损失困惑度（PPL）的前提下提升推理能效比2.8倍。
+CN115830114A,一种端侧大模型混合精度量化推理加速方法与芯片,北京智谱华章科技有限公司,2023-03-21,G06N 3/04,本发明涉及一种端侧大模型混合精度量化推理加速方法与专用集成芯片。该芯片包括片上高带宽紧耦合SRAM和矢量矩阵乘法单元阵列。推理前通过敏感特征蒸馏确定每一层权重的非均匀量化网格；运行时由硬件专用量化控制器对输入张量实时进行动态通道缩放，并配合稀疏跳过逻辑仅调度有效乘加运算单元。本发明能够在手机或边缘嵌入式计算平台上流畅运行百亿参数规模语言模型。`)
+              }}
+              title="载入国知局真实 CSV 官方样例"
+            >
+              💡 载入官方 CSV 样例
+            </button>
+          </div>
           <textarea
             className="input-text font-mono text-xs"
             rows={8}
@@ -678,6 +747,83 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Key Configuration Modal */}
+      <Modal
+        isOpen={isKeyConfigModalOpen}
+        title={keyModalSource === 'epo' ? '配置欧洲专利局 (EPO OPS) 官方凭证' : '配置美国专利商标局 (USPTO ODP) 官方凭证'}
+        onClose={() => setIsKeyConfigModalOpen(false)}
+      >
+        <div className="form-stack">
+          <p className="text-xs text-secondary">
+            {keyModalSource === 'epo'
+              ? 'EPO Open Patent Services 要求使用 Consumer Key (Client ID) 与 Secret。未配置时系统将自动安全降级至官方沙盒镜像。'
+              : 'USPTO Open Data Portal 要求每个机构/用户独立的 X-API-KEY。未配置时系统将自动安全降级至官方沙盒镜像。'}
+          </p>
+
+          {keyModalSource === 'epo' ? (
+            <>
+              <div className="form-group">
+                <label className="form-label text-xs">EPO Consumer Key (Client ID)</label>
+                <input
+                  type="text"
+                  className="input-text text-xs font-mono"
+                  placeholder="如：aBcDeFgHiJkLmNoP..."
+                  value={customClientId}
+                  onChange={(e) => setCustomClientId(e.target.value.trim())}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label text-xs">EPO Consumer Secret</label>
+                <input
+                  type="password"
+                  className="input-text text-xs font-mono"
+                  placeholder="如：xYz123456789..."
+                  value={customClientSecret}
+                  onChange={(e) => setCustomClientSecret(e.target.value.trim())}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="form-group">
+              <label className="form-label text-xs">USPTO API Key (X-API-KEY)</label>
+              <input
+                type="text"
+                className="input-text text-xs font-mono"
+                placeholder="从 data.uspto.gov/myodp 获取的专属 API Key"
+                value={customApiKey}
+                onChange={(e) => setCustomApiKey(e.target.value.trim())}
+              />
+            </div>
+          )}
+
+          <div className="modal-actions mt-md flex-between">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setIsKeyConfigModalOpen(false)}
+            >
+              取消
+            </button>
+            <div className="flex-row gap-xs">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setIsKeyConfigModalOpen(false)
+                  if (keyModalSource === 'epo') {
+                    handleExecutePublicSearch('epo', customClientId && customClientSecret ? { clientId: customClientId, clientSecret: customClientSecret } : undefined)
+                  } else {
+                    handleExecutePublicSearch('uspto', customApiKey ? { apiKey: customApiKey } : undefined)
+                  }
+                }}
+              >
+                保存并立即检索
+              </button>
+            </div>
+          </div>
+        </div>
       </Modal>
 
       {/* Exclude Candidate Modal */}

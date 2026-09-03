@@ -15,19 +15,27 @@ async def test_uspto_adapter_fallback_to_fixture_sandbox():
 
 
 @pytest.mark.asyncio
-async def test_uspto_adapter_subprocess_with_per_user_key():
-    adapter = UsptoSearchAdapter(cli_path="/usr/local/bin/uspto-cli", api_key="secret-user-key")
+async def test_uspto_adapter_native_with_per_user_key():
+    adapter = UsptoSearchAdapter(api_key="secret-user-key")
 
-    mock_proc = MagicMock()
-    mock_proc.returncode = 0
-    mock_proc.stdout = '{"patents": [{"patent_number": "US9999999B2", "patent_title": "Subprocess USPTO Patent", "patent_abstract": "Mock USPTO abstract"}]}'
+    fake_resp = MagicMock()
+    fake_resp.status_code = 200
+    fake_resp.json.return_value = {
+        "results": [
+            {
+                "patent_number": "US9999999B2",
+                "patent_title": "Subprocess USPTO Patent",
+                "patent_abstract": "Mock USPTO abstract",
+            }
+        ]
+    }
 
-    with patch("subprocess.run", return_value=mock_proc) as mock_run:
+    with patch("httpx.AsyncClient.post", return_value=fake_resp) as mock_post:
         results = await adapter.search("transformer sparse", limit=2)
         assert len(results) == 1
         assert results[0].publication_number == "US9999999B2"
         assert results[0].source_type == "uspto"
 
-        # Verify per-user API key was passed in environment
-        env = mock_run.call_args[1]["env"]
-        assert env["USPTO_API_KEY"] == "secret-user-key"
+        # Verify API key was passed in header
+        headers = mock_post.call_args[1]["headers"]
+        assert headers["X-API-KEY"] == "secret-user-key"

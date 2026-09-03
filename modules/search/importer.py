@@ -56,23 +56,23 @@ class CniprResultsImporter:
         ipc_idx = -1
 
         for i, h in enumerate(headers):
-            h_clean = h.lower()
-            if any(k in h_clean for k in ("公开号", "公告号", "申请号", "pub_no", "publication", "doc_number")):
+            h_clean = h.lower().replace("（", "(").replace("）", ")").strip()
+            if any(k in h_clean for k in ("公开号", "公告号", "公开(公告)号", "申请号", "申请(专利)号", "pub_no", "publication", "doc_number")):
                 if pub_idx == -1:
                     pub_idx = i
-            elif any(k in h_clean for k in ("名称", "标题", "题名", "title")):
+            elif any(k in h_clean for k in ("发明名称", "专利名称", "名称", "标题", "题名", "title")):
                 if title_idx == -1:
                     title_idx = i
-            elif any(k in h_clean for k in ("摘要", "文摘", "abstract")):
+            elif any(k in h_clean for k in ("摘要", "文摘", "摘要(文摘)", "abstract")):
                 if abs_idx == -1:
                     abs_idx = i
-            elif any(k in h_clean for k in ("公开日", "公告日", "date")):
+            elif any(k in h_clean for k in ("公开日", "公告日", "公开(公告)日", "申请日", "date")):
                 if date_idx == -1:
                     date_idx = i
-            elif any(k in h_clean for k in ("申请人", "专利权人", "applicant", "assignee")):
+            elif any(k in h_clean for k in ("申请人", "专利权人", "申请人/专利权人", "当前权利人", "applicant", "assignee")):
                 if app_idx == -1:
                     app_idx = i
-            elif any(k in h_clean for k in ("分类号", "ipc", "cpc")):
+            elif any(k in h_clean for k in ("主分类号", "分类号", "ipc", "cpc")):
                 if ipc_idx == -1:
                     ipc_idx = i
 

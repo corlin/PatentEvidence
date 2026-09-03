@@ -21,6 +21,6 @@ class BaseSearchAdapter(ABC):
     """Abstract interface for external search providers."""
 
     @abstractmethod
-    async def search(self, query: str, limit: int = 20) -> list[SearchResultItem]:
+    async def search(self, query: str, limit: int = 20, **kwargs: Any) -> list[SearchResultItem]:
         """Execute search query and return list of result items."""
         raise NotImplementedError

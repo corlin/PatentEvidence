@@ -287,6 +287,7 @@ export interface SearchCandidate {
   exclusion_reason: string | null
   notes: string | null
   triaged_at: string | null
+  raw_metadata?: Record<string, any> | null
 }
 
 // Comparison Matrix Types

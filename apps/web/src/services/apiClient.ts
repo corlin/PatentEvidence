@@ -544,13 +544,19 @@ export const apiClient = {
   async executePublicSearch(
     orgId: string,
     caseId: string,
-    sourceType: string = 'google_patents'
+    sourceType: string = 'openalex',
+    keyConfig?: { apiKey?: string; clientId?: string; clientSecret?: string }
   ): Promise<{ job_id: string; status: string; results_count: number }> {
     return request(
       `/api/v1/organizations/${orgId}/cases/${caseId}/search/jobs/execute-public`,
       {
         method: 'POST',
-        body: JSON.stringify({ source_type: sourceType }),
+        body: JSON.stringify({
+          source_type: sourceType,
+          api_key: keyConfig?.apiKey,
+          client_id: keyConfig?.clientId,
+          client_secret: keyConfig?.clientSecret,
+        }),
       }
     )
   },
