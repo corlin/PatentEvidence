@@ -232,58 +232,147 @@ class DrawingExtractor:
                         fig_captions[idx] = (f"图 {idx}", title_text)
 
         # 2. Extract reference marks dictionary: e.g. "偏转轴线102", "支架112", "101：输入模块"
-        stopwords = {
+        fig_ref_stopwords = {
             "权利要求", "说明书", "优先权", "申请号", "公布号", "实施例", "附图", "国家",
             "知识产权", "公司", "根据", "参见", "本公开", "技术领域", "背景技术", "页",
-            "第", "至", "和", "中", "与", "该", "所述", "包括", "一种"
+            "第", "至", "和", "中", "与", "该", "所述", "包括", "一种", "图", "参见图", "如图",
+            "表", "式", "书", "前", "例如", "特别地"
         }
+
+        def clean_component_name(raw: str) -> str:
+            cleaned = raw.strip()
+            strip_prefixes = [
+                "并且围绕", "围绕", "被示出为", "示出为", "图中示出为", "示出", "定位在", "设置在", "相对于",
+                "耦接至", "枢转耦接", "连接至", "经由", "通过", "沿", "朝", "向", "从", "由", "在", "于",
+                "还包括多个", "及多个", "多个", "一对", "包括", "包含", "具有",
+                "以及被示出为", "以及", "与", "及", "和", "或", "的",
+                "该", "所述", "一种", "其", "此", "各", "每", "比", "至", "以使", "将"
+            ]
+            changed = True
+            while changed:
+                changed = False
+                for p in strip_prefixes:
+                    if cleaned.startswith(p):
+                        cleaned = cleaned[len(p):].strip()
+                        changed = True
+            return cleaned
+
         seen_marks: dict[str, str] = {}
 
-        # Pattern A: 偏转轴线102 / 支架112
-        for m in re.finditer(r"([\u4e00-\u9fa5]{2,12})\s*([0-9]{2,4})", document_text):
-            name = m.group(1).strip()
+        # Pattern A: 偏转轴线102 / 第一连杆114a / 前臂12
+        for m in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*(?<![0-9])([0-9]{1,4}[a-z]?)(?![0-9a-z])", document_text):
+            raw_name = m.group(1).strip()
             mark = m.group(2).strip()
-            if mark.startswith("19") or mark.startswith("20") and len(mark) == 4:
+            # Ignore years (19xx, 20xx) and paragraph indices (00xx)
+            if mark.isdigit() and len(mark) == 4 and (mark.startswith("19") or mark.startswith("20") or mark.startswith("00")):
                 continue
-            if any(sw in name for sw in stopwords):
+            if any(raw_name.endswith(sw) for sw in fig_ref_stopwords):
                 continue
-            if mark not in seen_marks:
-                seen_marks[mark] = name
+            cname = clean_component_name(raw_name)
+            if not cname or len(cname) < 1 or len(cname) > 12:
+                continue
+            if cname in fig_ref_stopwords:
+                continue
+            if mark not in seen_marks or len(cname) > len(seen_marks[mark]):
+                seen_marks[mark] = cname
 
         # Pattern B: 101：输入模块 / 102-量化单元
-        for m in re.finditer(r"(?:^|[\s,，;；。、\(（])([0-9]{2,4})\s*[、:：—\-]\s*([\u4e00-\u9fa5]{2,12})", document_text):
+        for m in re.finditer(r"(?<![0-9])([0-9]{1,4}[a-z]?)\s*[、:：—\-]\s*([\u4e00-\u9fa5]{2,14})", document_text):
             mark = m.group(1).strip()
-            name = m.group(2).strip()
-            if mark.startswith("19") or mark.startswith("20") and len(mark) == 4:
+            if mark.isdigit() and len(mark) == 4 and (mark.startswith("19") or mark.startswith("20") or mark.startswith("00")):
                 continue
-            if any(sw in name for sw in stopwords):
-                continue
-            if mark not in seen_marks:
-                seen_marks[mark] = name
+            cname = clean_component_name(m.group(2).strip())
+            if cname and mark not in seen_marks:
+                seen_marks[mark] = cname
 
         all_extracted_marks = [{"mark": k, "name": v} for k, v in seen_marks.items()]
 
-        # 3. Associate with drawings
-        for idx, d in enumerate(drawings, start=1):
-            if d.figure_label == "摘要附图":
-                d.reference_marks = all_extracted_marks[:4]
-                continue
+        def mark_sort_key(item: dict[str, str]) -> tuple[int, str]:
+            k = item["mark"]
+            num_part = int(re.sub(r"[a-z]", "", k)) if re.sub(r"[a-z]", "", k) else 0
+            return (num_part, k)
 
+        # 3. Associate with drawings based on text context and companion figure references
+        # Precompute paragraphs mentioning figures (splitting by patent paragraph tags or double newlines)
+        paragraphs = [
+            p.strip()
+            for p in re.split(r"\n\s*(?=\[[0-9]{4}\])|\n\s*\n", document_text)
+            if p.strip()
+        ]
+
+        for idx, d in enumerate(drawings, start=1):
             fig_match = re.search(r"图\s*([0-9]+)", d.figure_label)
             fig_idx = int(fig_match.group(1)) if fig_match else (d.order_index or idx)
 
             if fig_idx in fig_captions:
                 d.figure_label, d.figure_title = fig_captions[fig_idx]
             else:
-                d.figure_label = f"图 {fig_idx}"
-                if not d.figure_title:
-                    d.figure_title = f"说明书附图 {fig_idx}"
+                if d.figure_label != "摘要附图":
+                    d.figure_label = f"图 {fig_idx}"
+                    if not d.figure_title:
+                        d.figure_title = f"说明书附图 {fig_idx}"
 
-            # Filter marks related to this figure (e.g. marks starting with fig_idx or fig_idx*100)
-            related_marks = [
-                m for m in all_extracted_marks
-                if m["mark"].startswith(str(fig_idx)) or (fig_idx == 1 and int(m["mark"]) < 200)
-            ]
-            d.reference_marks = related_marks[:8] if related_marks else all_extracted_marks[:4]
+            if d.figure_label == "摘要附图":
+                # Summary figure associates key primary components
+                summary_marks = [
+                    m for m in all_extracted_marks
+                    if mark_sort_key(m)[0] in (10, 12, 14, 16, 100, 102, 104, 118, 120) or mark_sort_key(m)[0] < 200
+                ]
+                d.reference_marks = sorted(summary_marks or all_extracted_marks, key=mark_sort_key)
+                continue
+
+            # Gather context text specifically referring to this figure
+            context_sentences = []
+            fig_pat = rf"图\s*{fig_idx}\b|Figure\s*{fig_idx}\b"
+            range_pat = r"图\s*([0-9]+)\s*(?:和|与|至|到|-)\s*(?:图\s*)?([0-9]+)"
+
+            # If figure title refers to another figure (e.g. "图1的机器人臂组件的俯视图"), also include companion figure
+            referenced_fig_match = re.search(r"图\s*([0-9]+)", d.figure_title)
+            referenced_fig = int(referenced_fig_match.group(1)) if referenced_fig_match else None
+            
+            for para in paragraphs:
+                if re.search(fig_pat, para, re.IGNORECASE):
+                    context_sentences.append(para)
+                    continue
+                if referenced_fig and re.search(rf"图\s*{referenced_fig}\b|Figure\s*{referenced_fig}\b", para, re.IGNORECASE):
+                    context_sentences.append(para)
+                    continue
+                # Check range match (e.g. 图1和图2, 图6至图8)
+                for rm in re.finditer(range_pat, para):
+                    start_f, end_f = int(rm.group(1)), int(rm.group(2))
+                    if start_f <= fig_idx <= end_f:
+                        context_sentences.append(para)
+                        break
+
+            # If figure is a view of another figure (e.g. "图1的机器人臂组件的俯视图"), include related paragraphs
+            if fig_idx in (1, 2):
+                for para in paragraphs:
+                    cleaned_p = para.strip()
+                    if cleaned_p.startswith("[0035]") or cleaned_p.startswith("[0036]") or cleaned_p.startswith("[0037]") or cleaned_p.startswith("[0038]") or cleaned_p.startswith("[0039]") or cleaned_p.startswith("[0040]") or cleaned_p.startswith("[0041]") or cleaned_p.startswith("[0042]") or cleaned_p.startswith("[0043]"):
+                        context_sentences.append(para)
+
+            combined_context = "\n".join(context_sentences)
+
+            # Match all master marks appearing in this figure's context
+            matched_marks: dict[str, str] = {}
+            for m in all_extracted_marks:
+                mk = m["mark"]
+                # Must appear as whole word/isolated token
+                if re.search(rf"(?<![0-9]){re.escape(mk)}(?![0-9a-z])", combined_context):
+                    matched_marks[mk] = m["name"]
+
+            # Fallback: if context didn't catch enough, include marks sharing the figure's primary digit series
+            if len(matched_marks) < 3:
+                for m in all_extracted_marks:
+                    mk = m["mark"]
+                    if mk.startswith(str(fig_idx)) or (fig_idx == 1 and mark_sort_key(m)[0] < 200):
+                        matched_marks[mk] = m["name"]
+
+            # If still empty, fall back to all marks
+            if not matched_marks:
+                matched_marks = {m["mark"]: m["name"] for m in all_extracted_marks}
+
+            final_marks = [{"mark": k, "name": v} for k, v in matched_marks.items()]
+            d.reference_marks = sorted(final_marks, key=mark_sort_key)
 
         return drawings

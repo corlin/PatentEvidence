@@ -65,3 +65,63 @@ def test_drawing_extractor_corrupt_bytes_graceful():
     corrupt_bytes = b"not a valid pdf or docx"
     drawings = extractor.extract_drawings(corrupt_bytes, "corrupt.pdf")
     assert drawings == []
+
+
+def test_drawing_extractor_complex_marks_alphanumeric_and_context():
+    extractor = DrawingExtractor()
+    sample_text = """
+    [0025] 图1是机器人臂组件的侧视图。
+    [0026] 图2是图1的机器人臂组件的俯视图。
+    
+    [0035] 机器人臂组件10包含前臂12与手14。关节组件100允许手14围绕偏转轴线102和俯仰轴线104旋转。
+    [0038] 关节组件100还包括第一致动器116a和第二致动器116b，以及第一连杆114a和第二连杆114b。
+    [0041] 如图2所示，连杆114经由耦接万向节122围绕第一轴线106a和第一轴线106b与手结构120枢转耦接。
+    耦接万向节122还限定第二轴线108a和第二轴线108b。沿中心线18，俯仰轴线104与偏转轴线102偏移距离136。
+    在手结构120的第一侧140和第二侧142处设置控制线缆174。
+    """
+
+    drawings = [
+        ExtractedDrawing(
+            data=b"fake_image_2",
+            filename="fig2.png",
+            mime_type="image/png",
+            sha256="hash2",
+            figure_label="图 2",
+            order_index=2,
+        ),
+    ]
+
+    associated = extractor.associate_captions_and_marks(drawings, sample_text)
+    assert len(associated) == 1
+    d2 = associated[0]
+    assert d2.figure_label == "图 2"
+    
+    mark_keys = [m["mark"] for m in d2.reference_marks]
+    # Check that alphanumeric marks, short numbers, and all context marks are mapped
+    assert "10" in mark_keys
+    assert "12" in mark_keys
+    assert "14" in mark_keys
+    assert "18" in mark_keys
+    assert "102" in mark_keys
+    assert "104" in mark_keys
+    assert "106a" in mark_keys
+    assert "106b" in mark_keys
+    assert "108a" in mark_keys
+    assert "108b" in mark_keys
+    assert "114a" in mark_keys
+    assert "114b" in mark_keys
+    assert "116a" in mark_keys
+    assert "116b" in mark_keys
+    assert "120" in mark_keys
+    assert "122" in mark_keys
+    assert "136" in mark_keys
+    assert "140" in mark_keys
+    assert "142" in mark_keys
+    assert "174" in mark_keys
+    
+    # Check clean name formatting
+    name_map = {m["mark"]: m["name"] for m in d2.reference_marks}
+    assert name_map["106a"] == "第一轴线106a" or "第一轴线" in name_map["106a"]
+    assert "偏转轴线" in name_map["102"]
+    assert "俯仰轴线" in name_map["104"]
+

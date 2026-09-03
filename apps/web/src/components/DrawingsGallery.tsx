@@ -24,6 +24,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
   // Lightbox view state
   const [selectedDrawing, setSelectedDrawing] = useState<CaseDrawing | null>(null)
   const [zoomLevel, setZoomLevel] = useState<number>(1)
+  const [markFilter, setMarkFilter] = useState<string>('')
 
   // Edit metadata modal state
   const [editingDrawing, setEditingDrawing] = useState<CaseDrawing | null>(null)
@@ -208,6 +209,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                   onClick={() => {
                     setSelectedDrawing(drawing)
                     setZoomLevel(1)
+                    setMarkFilter('')
                   }}
                   title="点击放大查看高清原图"
                 >
@@ -270,6 +272,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                       onClick={() => {
                         setSelectedDrawing(drawing)
                         setZoomLevel(1)
+                        setMarkFilter('')
                       }}
                     >
                       🔍 查看大图
@@ -369,20 +372,59 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
             </div>
 
             {/* Reference Marks list in Lightbox */}
-            {selectedDrawing.reference_marks && selectedDrawing.reference_marks.length > 0 && (
-              <div className="p-sm bg-subtle rounded border">
-                <div className="text-xs font-bold text-secondary mb-xs">
-                  本图包含的附图标记 ({selectedDrawing.reference_marks.length} 项)：
+            {selectedDrawing.reference_marks && selectedDrawing.reference_marks.length > 0 && (() => {
+              const sortedMarks = [...selectedDrawing.reference_marks].sort((a, b) => {
+                const numA = parseInt(a.mark.replace(/[^0-9]/g, '')) || 0
+                const numB = parseInt(b.mark.replace(/[^0-9]/g, '')) || 0
+                return numA !== numB ? numA - numB : a.mark.localeCompare(b.mark)
+              })
+              const filterTrimmed = markFilter.trim().toLowerCase()
+              const filteredMarks = filterTrimmed
+                ? sortedMarks.filter(
+                    m =>
+                      m.mark.toLowerCase().includes(filterTrimmed) ||
+                      m.name.toLowerCase().includes(filterTrimmed)
+                  )
+                : sortedMarks
+
+              return (
+                <div className="p-sm bg-subtle rounded border mt-sm">
+                  <div className="flex-row items-center justify-between gap-sm mb-xs">
+                    <div className="text-xs font-bold text-secondary">
+                      本图包含的附图标记 (共 {selectedDrawing.reference_marks.length} 项
+                      {filterTrimmed ? `，匹配 ${filteredMarks.length} 项` : ''})：
+                    </div>
+                    {selectedDrawing.reference_marks.length > 6 && (
+                      <input
+                        type="text"
+                        className="form-input text-xs py-xs px-sm"
+                        placeholder="🔍 快速筛选部件/标记 (如 114 或 连杆)..."
+                        value={markFilter}
+                        onChange={e => setMarkFilter(e.target.value)}
+                        style={{ maxWidth: '280px' }}
+                      />
+                    )}
+                  </div>
+                  <div
+                    className="flex-row flex-wrap gap-xs"
+                    style={{ maxHeight: '180px', overflowY: 'auto' }}
+                  >
+                    {filteredMarks.map((m, idx) => (
+                      <span
+                        key={idx}
+                        className="badge badge-subtle text-xs"
+                        style={{ padding: '4px 8px' }}
+                      >
+                        <strong className="text-primary">{m.mark}</strong> {m.name}
+                      </span>
+                    ))}
+                    {filteredMarks.length === 0 && (
+                      <div className="text-xs text-muted py-xs">未找到匹配的附图标记</div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-row flex-wrap gap-xs">
-                  {selectedDrawing.reference_marks.map((m, idx) => (
-                    <span key={idx} className="badge badge-subtle text-xs">
-                      <strong className="text-primary">{m.mark}</strong> {m.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+              )
+            })()}
           </div>
         </Modal>
       )}
