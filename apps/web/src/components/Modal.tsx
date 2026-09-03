@@ -5,9 +5,20 @@ interface ModalProps {
   title: string
   onClose: () => void
   children: React.ReactNode
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  maxWidth?: string
+  className?: string
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, title, onClose, children }) => {
+export const Modal: React.FC<ModalProps> = ({
+  isOpen,
+  title,
+  onClose,
+  children,
+  size = 'md',
+  maxWidth,
+  className = '',
+}) => {
   const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,7 +44,8 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, title, onClose, children }
   return (
     <div className="modal-backdrop" onClick={onClose} role="presentation">
       <div
-        className="modal-container"
+        className={`modal-container modal-size-${size} ${className}`}
+        style={maxWidth ? { maxWidth } : undefined}
         ref={modalRef}
         onClick={(e) => e.stopPropagation()}
         role="dialog"

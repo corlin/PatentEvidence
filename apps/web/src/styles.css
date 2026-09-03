@@ -523,9 +523,36 @@ a:hover {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  max-width: 520px;
+  max-width: 540px;
   width: 100%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+.modal-container.modal-size-sm {
+  max-width: 400px;
+}
+
+.modal-container.modal-size-md {
+  max-width: 560px;
+}
+
+.modal-container.modal-size-lg {
+  max-width: 820px;
+}
+
+.modal-container.modal-size-xl {
+  max-width: 1140px;
+  width: 95vw;
+  max-height: 86vh;
+}
+
+.modal-container.modal-size-full {
+  max-width: 96vw;
+  width: 96vw;
+  max-height: 92vh;
 }
 
 .modal-header {
@@ -553,6 +580,72 @@ a:hover {
 
 .modal-body {
   padding: 20px;
+}
+
+/* Lightbox Workbench Split Layout */
+.lightbox-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  gap: 16px;
+  align-items: stretch;
+  height: 73vh;
+  max-height: 73vh;
+  overflow: hidden;
+}
+
+.lightbox-canvas-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lightbox-canvas-container {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.lightbox-sidebar-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+
+.lightbox-marks-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+}
+
+@media (max-width: 900px) {
+  .lightbox-workbench {
+    grid-template-columns: 1fr;
+    height: auto;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .lightbox-sidebar-pane {
+    max-height: 250px;
+  }
 }
 
 .modal-actions {

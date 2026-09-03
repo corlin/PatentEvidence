@@ -303,128 +303,148 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
         </div>
       )}
 
-      {/* --- Lightbox Modal --- */}
+      {/* --- Lightbox Modal (Split Workbench) --- */}
       {selectedDrawing && (
         <Modal
           isOpen={true}
+          size="xl"
           onClose={() => setSelectedDrawing(null)}
           title={`${selectedDrawing.figure_label} - ${selectedDrawing.figure_title || '高清原图'}`}
         >
-          <div className="lightbox-content flex-stack gap-md">
-            {/* Zoom Controls */}
-            <div className="flex-between items-center p-xs bg-subtle rounded text-xs">
-              <div className="flex-row gap-xs items-center">
-                <span>缩放比例: {Math.round(zoomLevel * 100)}%</span>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => setZoomLevel((z) => Math.max(0.25, z - 0.25))}
-                >
-                  -
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => setZoomLevel((z) => Math.min(4, z + 0.25))}
-                >
-                  +
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => setZoomLevel(1)}
-                >
-                  100%
-                </button>
-              </div>
+          <div className="lightbox-workbench">
+            {/* Left Column: Canvas & Zoom Bar */}
+            <div className="lightbox-canvas-pane">
+              <div className="flex-between items-center p-xs bg-subtle rounded text-xs">
+                <div className="flex-row gap-xs items-center">
+                  <span className="font-semibold text-secondary">
+                    缩放: {Math.round(zoomLevel * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs"
+                    onClick={() => setZoomLevel((z) => Math.max(0.25, z - 0.25))}
+                    title="缩小"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs"
+                    onClick={() => setZoomLevel((z) => Math.min(4, z + 0.25))}
+                    title="放大"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-xs"
+                    onClick={() => setZoomLevel(1)}
+                    title="恢复 100%"
+                  >
+                    重置
+                  </button>
+                </div>
 
-              <div className="flex-row gap-xs items-center">
-                <span className="font-mono text-secondary">
-                  SHA-256: {selectedDrawing.sha256}
-                </span>
                 <a
                   href={apiClient.getCaseDrawingFileUrl(orgId, caseId, selectedDrawing.id)}
                   download={`${selectedDrawing.figure_label}.png`}
-                  className="btn btn-secondary btn-xs"
+                  className="btn btn-primary btn-xs"
                 >
-                  ⬇️ 下载原图
+                  ⬇️ 下载图纸
                 </a>
+              </div>
+
+              {/* High-res Image Display Container */}
+              <div className="lightbox-canvas-container">
+                <img
+                  src={apiClient.getCaseDrawingFileUrl(orgId, caseId, selectedDrawing.id)}
+                  alt={selectedDrawing.figure_label}
+                  style={{
+                    transform: `scale(${zoomLevel})`,
+                    transformOrigin: 'center center',
+                    transition: 'transform 0.15s ease',
+                    maxWidth: zoomLevel === 1 ? '100%' : 'none',
+                    maxHeight: zoomLevel === 1 ? '66vh' : 'none',
+                    objectFit: 'contain',
+                  }}
+                />
               </div>
             </div>
 
-            {/* High-res Image Display */}
-            <div
-              className="border rounded bg-surface p-md overflow-hidden flex-center"
-              style={{ maxHeight: '65vh', overflow: 'auto' }}
-            >
-              <img
-                src={apiClient.getCaseDrawingFileUrl(orgId, caseId, selectedDrawing.id)}
-                alt={selectedDrawing.figure_label}
-                style={{
-                  transform: `scale(${zoomLevel})`,
-                  transformOrigin: 'center center',
-                  transition: 'transform 0.15s ease',
-                  maxWidth: zoomLevel === 1 ? '100%' : 'none',
-                  maxHeight: zoomLevel === 1 ? '60vh' : 'none',
-                  objectFit: 'contain',
-                }}
-              />
-            </div>
-
-            {/* Reference Marks list in Lightbox */}
-            {selectedDrawing.reference_marks && selectedDrawing.reference_marks.length > 0 && (() => {
-              const sortedMarks = [...selectedDrawing.reference_marks].sort((a, b) => {
-                const numA = parseInt(a.mark.replace(/[^0-9]/g, '')) || 0
-                const numB = parseInt(b.mark.replace(/[^0-9]/g, '')) || 0
-                return numA !== numB ? numA - numB : a.mark.localeCompare(b.mark)
-              })
-              const filterTrimmed = markFilter.trim().toLowerCase()
-              const filteredMarks = filterTrimmed
-                ? sortedMarks.filter(
-                    m =>
-                      m.mark.toLowerCase().includes(filterTrimmed) ||
-                      m.name.toLowerCase().includes(filterTrimmed)
-                  )
-                : sortedMarks
-
-              return (
-                <div className="p-sm bg-subtle rounded border mt-sm">
-                  <div className="flex-row items-center justify-between gap-sm mb-xs">
-                    <div className="text-xs font-bold text-secondary">
-                      本图包含的附图标记 (共 {selectedDrawing.reference_marks.length} 项
-                      {filterTrimmed ? `，匹配 ${filteredMarks.length} 项` : ''})：
-                    </div>
-                    {selectedDrawing.reference_marks.length > 6 && (
-                      <input
-                        type="text"
-                        className="form-input text-xs py-xs px-sm"
-                        placeholder="🔍 快速筛选部件/标记 (如 114 或 连杆)..."
-                        value={markFilter}
-                        onChange={e => setMarkFilter(e.target.value)}
-                        style={{ maxWidth: '280px' }}
-                      />
-                    )}
-                  </div>
-                  <div
-                    className="flex-row flex-wrap gap-xs"
-                    style={{ maxHeight: '180px', overflowY: 'auto' }}
-                  >
-                    {filteredMarks.map((m, idx) => (
-                      <span
-                        key={idx}
-                        className="badge badge-subtle text-xs"
-                        style={{ padding: '4px 8px' }}
-                      >
-                        <strong className="text-primary">{m.mark}</strong> {m.name}
-                      </span>
-                    ))}
-                    {filteredMarks.length === 0 && (
-                      <div className="text-xs text-muted py-xs">未找到匹配的附图标记</div>
-                    )}
-                  </div>
+            {/* Right Column: Reference Marks & Inspection Panel */}
+            <div className="lightbox-sidebar-pane">
+              <div>
+                <div className="text-sm font-bold text-primary mb-xs">
+                  {selectedDrawing.figure_label}
                 </div>
-              )
-            })()}
+                <div className="text-xs text-secondary mb-xs">
+                  {selectedDrawing.figure_title || '说明书附图'}
+                </div>
+                <div className="text-xs font-mono text-muted truncate" title={selectedDrawing.sha256}>
+                  SHA: {selectedDrawing.sha256.slice(0, 16)}...
+                </div>
+              </div>
+
+              <div className="border-t my-xs"></div>
+
+              {/* Reference Marks Section */}
+              {selectedDrawing.reference_marks && selectedDrawing.reference_marks.length > 0 ? (() => {
+                const sortedMarks = [...selectedDrawing.reference_marks].sort((a, b) => {
+                  const numA = parseInt(a.mark.replace(/[^0-9]/g, '')) || 0
+                  const numB = parseInt(b.mark.replace(/[^0-9]/g, '')) || 0
+                  return numA !== numB ? numA - numB : a.mark.localeCompare(b.mark)
+                })
+                const filterTrimmed = markFilter.trim().toLowerCase()
+                const filteredMarks = filterTrimmed
+                  ? sortedMarks.filter(
+                      m =>
+                        m.mark.toLowerCase().includes(filterTrimmed) ||
+                        m.name.toLowerCase().includes(filterTrimmed)
+                    )
+                  : sortedMarks
+
+                return (
+                  <div className="flex-stack gap-xs" style={{ flex: 1, minHeight: 0 }}>
+                    <div className="flex-between items-center">
+                      <span className="text-xs font-bold text-secondary">
+                        附图标记清单 ({selectedDrawing.reference_marks.length} 项
+                        {filterTrimmed ? ` · 匹配 ${filteredMarks.length}` : ''})
+                      </span>
+                    </div>
+
+                    <input
+                      type="text"
+                      className="form-input text-xs py-xs px-sm w-full"
+                      placeholder="🔍 快速搜索部件或标号..."
+                      value={markFilter}
+                      onChange={e => setMarkFilter(e.target.value)}
+                    />
+
+                    <div className="lightbox-marks-scroll border rounded p-xs bg-surface">
+                      {filteredMarks.map((m, idx) => (
+                        <span
+                          key={idx}
+                          className="badge badge-subtle text-xs"
+                          style={{ padding: '4px 8px', fontSize: '11px' }}
+                          title={`附图标记 ${m.mark}: ${m.name}`}
+                        >
+                          <strong className="text-primary">{m.mark}</strong> {m.name}
+                        </span>
+                      ))}
+                      {filteredMarks.length === 0 && (
+                        <div className="text-xs text-muted py-md text-center w-full">
+                          未找到匹配的附图标记
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })() : (
+                <div className="text-xs text-muted py-md text-center">
+                  本图暂无提取的附图标记
+                </div>
+              )}
+            </div>
           </div>
         </Modal>
       )}
