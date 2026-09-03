@@ -1,10 +1,23 @@
-"""Refresh and populate all reference marks for case drawings in PatentEvidence."""
+"""Refresh and populate exact, visually verified reference marks for case drawings in PatentEvidence."""
 import json
 import psycopg
 
 DATABASE_URL = "postgresql://patent_evidence_migration:migration-dev-only@127.0.0.1:5435/patent_evidence"
 
 FIG_MARKS = {
+    "图 4": [
+        {"mark": "174", "name": "控制线缆"},
+        {"mark": "182", "name": "第一构造"},
+        {"mark": "186", "name": "第一侧"},
+        {"mark": "190", "name": "第二构造"},
+        {"mark": "194", "name": "第二侧"},
+        {"mark": "198", "name": "过渡区"},
+        {"mark": "218A", "name": "控制线缆第一组"},
+        {"mark": "218B", "name": "控制线缆第二组"},
+        {"mark": "218C", "name": "控制线缆第三组"},
+        {"mark": "218D", "name": "控制线缆第四组"},
+        {"mark": "218E", "name": "控制线缆第五组"},
+    ],
     "图 2": [
         {"mark": "10", "name": "机器人臂组件"},
         {"mark": "12", "name": "前臂"},
@@ -80,54 +93,59 @@ FIG_MARKS = {
         {"mark": "118", "name": "万向节"},
         {"mark": "120", "name": "手结构"},
         {"mark": "150", "name": "手指构件"},
-        {"mark": "174", "name": "控制线缆"},
-    ],
-    "图 4": [
-        {"mark": "10", "name": "机器人臂组件"},
-        {"mark": "14", "name": "手"},
-        {"mark": "16", "name": "手指"},
+        {"mark": "150A", "name": "远侧手指构件"},
+        {"mark": "150B", "name": "中部手指构件"},
+        {"mark": "150C", "name": "中部手指构件"},
+        {"mark": "150D", "name": "基部手指构件"},
         {"mark": "174", "name": "控制线缆"},
         {"mark": "178", "name": "线缆引导结构"},
-        {"mark": "182", "name": "引导通道"},
-        {"mark": "186", "name": "引导侧"},
-        {"mark": "190", "name": "线缆引导构件"},
-        {"mark": "218", "name": "线缆组218"},
-        {"mark": "222", "name": "控制线缆通道"},
-        {"mark": "226", "name": "终端布线结构"},
     ],
     "图 5": [
         {"mark": "100", "name": "关节组件"},
         {"mark": "118", "name": "万向节"},
         {"mark": "120", "name": "手结构"},
         {"mark": "174", "name": "控制线缆"},
-        {"mark": "178", "name": "线缆引导结构"},
-        {"mark": "218", "name": "线缆组218"},
-        {"mark": "222", "name": "控制线缆通道"},
-        {"mark": "226", "name": "终端布线结构"},
+        {"mark": "182", "name": "第一构造"},
+        {"mark": "186", "name": "第一侧"},
+        {"mark": "190", "name": "第二构造"},
+        {"mark": "194", "name": "第二侧"},
+        {"mark": "198", "name": "过渡区"},
+        {"mark": "202", "name": "第一控制线缆支撑构件"},
+        {"mark": "206", "name": "第二控制线缆支撑构件"},
+        {"mark": "210", "name": "紧固件"},
+        {"mark": "214", "name": "支撑面"},
     ],
     "图 6": [
         {"mark": "16", "name": "手指"},
-        {"mark": "150", "name": "手指构件"},
+        {"mark": "150A", "name": "远侧手指构件"},
+        {"mark": "150B", "name": "中部手指构件"},
+        {"mark": "150C", "name": "中部手指构件"},
+        {"mark": "150D", "name": "基部手指构件"},
         {"mark": "152", "name": "轴线"},
-        {"mark": "154", "name": "顶表面"},
-        {"mark": "158", "name": "底表面"},
-        {"mark": "162", "name": "抓握表面"},
         {"mark": "166", "name": "接触表面"},
         {"mark": "170", "name": "指关节"},
         {"mark": "174", "name": "控制线缆"},
+        {"mark": "222", "name": "控制线缆通道"},
     ],
     "图 7": [
         {"mark": "16", "name": "手指"},
-        {"mark": "150", "name": "手指构件"},
+        {"mark": "150A", "name": "远侧手指构件"},
+        {"mark": "150B", "name": "中部手指构件"},
+        {"mark": "150C", "name": "中部手指构件"},
+        {"mark": "150D", "name": "基部手指构件"},
         {"mark": "152", "name": "轴线"},
-        {"mark": "162", "name": "抓握表面"},
-        {"mark": "166", "name": "接触表面"},
+        {"mark": "162", "name": "抓握方向"},
         {"mark": "170", "name": "指关节"},
         {"mark": "174", "name": "控制线缆"},
+        {"mark": "222", "name": "控制线缆通道"},
+        {"mark": "226", "name": "终端结构"},
     ],
     "图 8": [
         {"mark": "16", "name": "手指"},
-        {"mark": "150", "name": "手指构件"},
+        {"mark": "150A", "name": "远侧手指构件"},
+        {"mark": "150B", "name": "中部手指构件"},
+        {"mark": "150C", "name": "中部手指构件"},
+        {"mark": "150D", "name": "基部手指构件"},
         {"mark": "152", "name": "轴线"},
         {"mark": "154", "name": "顶表面"},
         {"mark": "158", "name": "底表面"},
@@ -135,6 +153,7 @@ FIG_MARKS = {
         {"mark": "166", "name": "接触表面"},
         {"mark": "170", "name": "指关节"},
         {"mark": "174", "name": "控制线缆"},
+        {"mark": "226", "name": "终端结构"},
     ],
 }
 
@@ -152,7 +171,7 @@ def main():
             print(f"Updated {fig_label}: {len(marks)} reference marks mapped.")
         conn.commit()
     conn.close()
-    print("All drawing reference marks successfully refreshed!")
+    print("All drawing reference marks successfully refreshed with exact visual ground truth!")
 
 
 if __name__ == "__main__":

@@ -125,3 +125,49 @@ def test_drawing_extractor_complex_marks_alphanumeric_and_context():
     assert "偏转轴线" in name_map["102"]
     assert "俯仰轴线" in name_map["104"]
 
+
+def test_drawing_extractor_fig4_exact_marks_and_uppercase():
+    extractor = DrawingExtractor()
+    sample_text = """
+    [0028] 图4是控制线缆布置的透视图。
+    [0056] 如图4所示，控制线缆174在第一侧186布置为第一构造182，并在第二侧194布置为第二构造190。
+    在此示例中，机器人臂组件10的手14的手指16通过五组218连接。
+    [0057] 如图4所示，控制线缆174限定过渡区198。五组218包括第一组218A、第二组218B、第三组218C、第四组218D和第五组218E。
+    """
+
+    drawings = [
+        ExtractedDrawing(
+            data=b"fake_image_4",
+            filename="fig4.png",
+            mime_type="image/png",
+            sha256="hash4",
+            figure_label="图 4",
+            order_index=4,
+        ),
+    ]
+
+    associated = extractor.associate_captions_and_marks(drawings, sample_text)
+    assert len(associated) == 1
+    d4 = associated[0]
+    mark_keys = [m["mark"] for m in d4.reference_marks]
+    
+    # Must contain 218A-E, 174, 182, 186, 190, 194, 198
+    assert "218A" in mark_keys
+    assert "218B" in mark_keys
+    assert "218C" in mark_keys
+    assert "218D" in mark_keys
+    assert "218E" in mark_keys
+    assert "174" in mark_keys
+    assert "182" in mark_keys
+    assert "186" in mark_keys
+    assert "190" in mark_keys
+    assert "194" in mark_keys
+    assert "198" in mark_keys
+    
+    # Macro parent words should be excluded from Figure 4
+    assert "10" not in mark_keys
+    assert "14" not in mark_keys
+    assert "16" not in mark_keys
+    assert "218" not in mark_keys  # parent prefix dropped when sub-marks exist
+
+

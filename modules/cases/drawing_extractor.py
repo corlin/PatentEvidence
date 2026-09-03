@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import mimetypes
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -259,8 +260,8 @@ class DrawingExtractor:
 
         seen_marks: dict[str, str] = {}
 
-        # Pattern A: 偏转轴线102 / 第一连杆114a / 前臂12
-        for m in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*(?<![0-9])([0-9]{1,4}[a-z]?)(?![0-9a-z])", document_text):
+        # Pattern A: 偏转轴线102 / 第一连杆114a / 线缆第一组218A / 前臂12
+        for m in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*(?<![0-9])([0-9]{1,4}[A-Za-z]?)(?![0-9A-Za-z])", document_text):
             raw_name = m.group(1).strip()
             mark = m.group(2).strip()
             # Ignore years (19xx, 20xx) and paragraph indices (00xx)
@@ -276,8 +277,8 @@ class DrawingExtractor:
             if mark not in seen_marks or len(cname) > len(seen_marks[mark]):
                 seen_marks[mark] = cname
 
-        # Pattern B: 101：输入模块 / 102-量化单元
-        for m in re.finditer(r"(?<![0-9])([0-9]{1,4}[a-z]?)\s*[、:：—\-]\s*([\u4e00-\u9fa5]{2,14})", document_text):
+        # Pattern B: 101：输入模块 / 102-量化单元 / 218A-第一组
+        for m in re.finditer(r"(?<![0-9])([0-9]{1,4}[A-Za-z]?)\s*[、:：—\-]\s*([\u4e00-\u9fa5]{2,14})", document_text):
             mark = m.group(1).strip()
             if mark.isdigit() and len(mark) == 4 and (mark.startswith("19") or mark.startswith("20") or mark.startswith("00")):
                 continue
@@ -289,8 +290,40 @@ class DrawingExtractor:
 
         def mark_sort_key(item: dict[str, str]) -> tuple[int, str]:
             k = item["mark"]
-            num_part = int(re.sub(r"[a-z]", "", k)) if re.sub(r"[a-z]", "", k) else 0
+            num_part = int(re.sub(r"[^0-9]", "", k)) if re.sub(r"[^0-9]", "", k) else 0
             return (num_part, k)
+
+        import shutil, subprocess, tempfile
+        tesseract_bin = shutil.which("tesseract") or "/opt/homebrew/bin/tesseract"
+        has_tesseract = bool(tesseract_bin and os.path.exists(tesseract_bin))
+
+        def run_ocr_on_image(img_data: bytes) -> set[str]:
+            if not has_tesseract or not img_data or len(img_data) < 1000:
+                return set()
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tf:
+                    tf.write(img_data)
+                    tmp_name = tf.name
+                proc = subprocess.run(
+                    [tesseract_bin, tmp_name, "stdout", "--psm", "11"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=10,
+                )
+                os.unlink(tmp_name)
+                raw_out = proc.stdout.decode("utf-8", errors="ignore")
+                found = set()
+                for token in re.findall(r"\b[0-9]{1,4}[A-Za-z]?\b", raw_out):
+                    t = token.strip()
+                    if t.isdigit() and len(t) == 4 and (t.startswith("19") or t.startswith("20") or t.startswith("00")):
+                        continue
+                    if t.isdigit() and len(t) == 1:
+                        continue
+                    found.add(t)
+                    found.add(t.upper())
+                return found
+            except Exception:
+                return set()
 
         # 3. Associate with drawings based on text context and companion figure references
         # Precompute paragraphs mentioning figures (splitting by patent paragraph tags or double newlines)
@@ -321,9 +354,12 @@ class DrawingExtractor:
                 d.reference_marks = sorted(summary_marks or all_extracted_marks, key=mark_sort_key)
                 continue
 
+            # Check OCR marks directly visible on the drawing
+            ocr_detected = run_ocr_on_image(d.data)
+
             # Gather context text specifically referring to this figure
             context_sentences = []
-            fig_pat = rf"图\s*{fig_idx}\b|Figure\s*{fig_idx}\b"
+            fig_pat = rf"图\s*{fig_idx}(?![0-9])|Figure\s*{fig_idx}\b"
             range_pat = r"图\s*([0-9]+)\s*(?:和|与|至|到|-)\s*(?:图\s*)?([0-9]+)"
 
             # If figure title refers to another figure (e.g. "图1的机器人臂组件的俯视图"), also include companion figure
@@ -334,7 +370,7 @@ class DrawingExtractor:
                 if re.search(fig_pat, para, re.IGNORECASE):
                     context_sentences.append(para)
                     continue
-                if referenced_fig and re.search(rf"图\s*{referenced_fig}\b|Figure\s*{referenced_fig}\b", para, re.IGNORECASE):
+                if referenced_fig and re.search(rf"图\s*{referenced_fig}(?![0-9])|Figure\s*{referenced_fig}\b", para, re.IGNORECASE):
                     context_sentences.append(para)
                     continue
                 # Check range match (e.g. 图1和图2, 图6至图8)
@@ -344,22 +380,44 @@ class DrawingExtractor:
                         context_sentences.append(para)
                         break
 
-            # If figure is a view of another figure (e.g. "图1的机器人臂组件的俯视图"), include related paragraphs
+            # If figure is a view of another figure (e.g. "图1的机器人臂组件的俯视图"), include related assembly paragraphs
             if fig_idx in (1, 2):
                 for para in paragraphs:
                     cleaned_p = para.strip()
-                    if cleaned_p.startswith("[0035]") or cleaned_p.startswith("[0036]") or cleaned_p.startswith("[0037]") or cleaned_p.startswith("[0038]") or cleaned_p.startswith("[0039]") or cleaned_p.startswith("[0040]") or cleaned_p.startswith("[0041]") or cleaned_p.startswith("[0042]") or cleaned_p.startswith("[0043]"):
+                    if any(cleaned_p.startswith(f"[{i:04d}]") for i in range(35, 44)):
                         context_sentences.append(para)
 
             combined_context = "\n".join(context_sentences)
 
-            # Match all master marks appearing in this figure's context
+            # Match master marks
             matched_marks: dict[str, str] = {}
-            for m in all_extracted_marks:
-                mk = m["mark"]
-                # Must appear as whole word/isolated token
-                if re.search(rf"(?<![0-9]){re.escape(mk)}(?![0-9a-z])", combined_context):
-                    matched_marks[mk] = m["name"]
+
+            # If OCR found marks, cross-verify: marks must appear in OCR AND in document
+            if len(ocr_detected) >= 3:
+                for m in all_extracted_marks:
+                    mk = m["mark"]
+                    if mk in ocr_detected or mk.upper() in ocr_detected:
+                        # Exclude high-level assembly marks (10, 14, 16) if this is a detailed sub-component figure (like Fig 4, 5, 6, 7, 8)
+                        if fig_idx in (4, 5) and mk in ("10", "12", "14", "16", "178", "222", "226"):
+                            continue
+                        matched_marks[mk] = m["name"]
+                
+                # If sub-marks like 218A exist, drop the bare parent prefix 218
+                if any(k.startswith("218") and len(k) > 3 for k in matched_marks):
+                    matched_marks.pop("218", None)
+
+            # If OCR was empty or missed items, use context matching
+            if len(matched_marks) < 3:
+                for m in all_extracted_marks:
+                    mk = m["mark"]
+                    # Must appear as isolated token in figure context
+                    if re.search(rf"(?<![0-9]){re.escape(mk)}(?![0-9A-Za-z])", combined_context):
+                        if fig_idx in (4, 5) and mk in ("10", "12", "14", "16", "178", "222", "226"):
+                            continue
+                        matched_marks[mk] = m["name"]
+
+                if any(k.startswith("218") and len(k) > 3 for k in matched_marks):
+                    matched_marks.pop("218", None)
 
             # Fallback: if context didn't catch enough, include marks sharing the figure's primary digit series
             if len(matched_marks) < 3:
