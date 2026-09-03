@@ -169,6 +169,7 @@ export interface DocumentVersion {
 export interface ReferenceMark {
   mark: string
   name: string
+  is_claim_feature?: boolean
 }
 
 export interface CaseDrawing {

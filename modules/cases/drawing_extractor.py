@@ -286,10 +286,70 @@ class DrawingExtractor:
             if cname and mark not in seen_marks:
                 seen_marks[mark] = cname
 
-        all_extracted_marks = [{"mark": k, "name": v} for k, v in seen_marks.items()]
+        # Pattern C: Parenthesized marks, highly common in claims: 前臂构件（12） / 控制线缆(174)
+        for m in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*[（\(]\s*([0-9]{1,4}[A-Za-z]?)\s*[）\)]", document_text):
+            raw_name = m.group(1).strip()
+            mark = m.group(2).strip()
+            if mark.isdigit() and len(mark) == 4 and (mark.startswith("19") or mark.startswith("20") or mark.startswith("00")):
+                continue
+            cname = clean_component_name(raw_name)
+            if cname and len(cname) >= 1 and cname not in fig_ref_stopwords:
+                seen_marks[mark] = cname
 
-        def mark_sort_key(item: dict[str, str]) -> tuple[int, str]:
-            k = item["mark"]
+        # Locate Claims section to extract authoritative claim terminology and claim-linked features
+        claims_text = ""
+        c_match = re.search(
+            r"(?:【?权利要求书?】?|(?:\n|^)\s*1\s*[\.、]\s*一种)(.*?)(?=\n\s*\[0001\]|【?说明书?】?|$)",
+            document_text,
+            re.DOTALL,
+        )
+        if c_match and len(c_match.group(1).strip()) > 30:
+            claims_text = c_match.group(1).strip()
+
+        claim_marks: dict[str, str] = {}
+        claim_terms: set[str] = set()
+
+        if claims_text:
+            # 1. Explicit parenthesized marks in claims (highest legal authority)
+            for cm in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*[（\(]\s*([0-9]{1,4}[A-Za-z]?)\s*[）\)]", claims_text):
+                cname = clean_component_name(cm.group(1).strip())
+                cmark = cm.group(2).strip()
+                if cname and cmark:
+                    claim_marks[cmark] = cname
+                    seen_marks[cmark] = cname  # Override with canonical claim name
+
+            # 2. Direct marks in claims
+            for cm in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*(?<![0-9])([0-9]{1,4}[A-Za-z]?)(?![0-9A-Za-z])", claims_text):
+                cname = clean_component_name(cm.group(1).strip())
+                cmark = cm.group(2).strip()
+                if cname and cmark and not (cmark.isdigit() and len(cmark) == 4 and (cmark.startswith("19") or cmark.startswith("20") or cmark.startswith("00"))):
+                    claim_marks[cmark] = cname
+                    seen_marks[cmark] = cname
+
+            # 3. Extract core technical feature terms from claims (for implicit mapping)
+            raw_claim_terms = set(
+                re.findall(r"[\u4e00-\u9fa5]{2,10}(?:构件|组件|结构|关节|线缆|构造|区|轴线|通道|表面|电机|基部|端|装置|体)", claims_text)
+            )
+            for ct in raw_claim_terms:
+                cct = clean_component_name(ct)
+                if cct and len(cct) >= 2 and not any(cct.startswith(sw) for sw in fig_ref_stopwords):
+                    claim_terms.add(cct)
+
+        all_extracted_marks: list[dict[str, Any]] = []
+        for k, v in seen_marks.items():
+            is_claim = False
+            if k in claim_marks:
+                is_claim = True
+                v = claim_marks[k]
+            else:
+                for ct in claim_terms:
+                    if ct in v or v in ct:
+                        is_claim = True
+                        break
+            all_extracted_marks.append({"mark": k, "name": v, "is_claim_feature": is_claim})
+
+        def mark_sort_key(item: dict[str, Any]) -> tuple[int, str]:
+            k = str(item["mark"])
             num_part = int(re.sub(r"[^0-9]", "", k)) if re.sub(r"[^0-9]", "", k) else 0
             return (num_part, k)
 
@@ -390,7 +450,7 @@ class DrawingExtractor:
             combined_context = "\n".join(context_sentences)
 
             # Match master marks
-            matched_marks: dict[str, str] = {}
+            matched_marks: dict[str, dict[str, Any]] = {}
 
             # If OCR found marks, cross-verify: marks must appear in OCR AND in document
             if len(ocr_detected) >= 3:
@@ -400,7 +460,7 @@ class DrawingExtractor:
                         # Exclude high-level assembly marks (10, 14, 16) if this is a detailed sub-component figure (like Fig 4, 5, 6, 7, 8)
                         if fig_idx in (4, 5) and mk in ("10", "12", "14", "16", "178", "222", "226"):
                             continue
-                        matched_marks[mk] = m["name"]
+                        matched_marks[mk] = dict(m)
                 
                 # If sub-marks like 218A exist, drop the bare parent prefix 218
                 if any(k.startswith("218") and len(k) > 3 for k in matched_marks):
@@ -414,7 +474,7 @@ class DrawingExtractor:
                     if re.search(rf"(?<![0-9]){re.escape(mk)}(?![0-9A-Za-z])", combined_context):
                         if fig_idx in (4, 5) and mk in ("10", "12", "14", "16", "178", "222", "226"):
                             continue
-                        matched_marks[mk] = m["name"]
+                        matched_marks[mk] = dict(m)
 
                 if any(k.startswith("218") and len(k) > 3 for k in matched_marks):
                     matched_marks.pop("218", None)
@@ -424,13 +484,13 @@ class DrawingExtractor:
                 for m in all_extracted_marks:
                     mk = m["mark"]
                     if mk.startswith(str(fig_idx)) or (fig_idx == 1 and mark_sort_key(m)[0] < 200):
-                        matched_marks[mk] = m["name"]
+                        matched_marks[mk] = dict(m)
 
             # If still empty, fall back to all marks
             if not matched_marks:
-                matched_marks = {m["mark"]: m["name"] for m in all_extracted_marks}
+                matched_marks = {m["mark"]: dict(m) for m in all_extracted_marks}
 
-            final_marks = [{"mark": k, "name": v} for k, v in matched_marks.items()]
+            final_marks = list(matched_marks.values())
             d.reference_marks = sorted(final_marks, key=mark_sort_key)
 
         return drawings

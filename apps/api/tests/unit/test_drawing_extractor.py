@@ -171,3 +171,44 @@ def test_drawing_extractor_fig4_exact_marks_and_uppercase():
     assert "218" not in mark_keys  # parent prefix dropped when sub-marks exist
 
 
+def test_drawing_extractor_claim_marks_and_authority():
+    extractor = DrawingExtractor()
+    sample_text = """
+    1.一种机器人下臂组件，包括：
+    前臂构件（12）；
+    手构件（14）；
+    腕关节（100）；以及
+    多个控制线缆（174），其中控制线缆在腕关节处布置为第一构造（182）和第二构造（190），并且限定过渡区（198）。
+    
+    [0001] 技术领域
+    [0028] 图4是控制线缆布置的透视图。
+    [0056] 如图4所示，控制线缆174在第一侧186布置为第一构造182，并在第二侧194布置为第二构造190。
+    [0057] 如图4所示，控制线缆174限定过渡区198。控制线缆分为五组，包括第一组218A、第二组218B。
+    """
+
+    drawings = [
+        ExtractedDrawing(
+            data=b"fake_image_4",
+            filename="fig4.png",
+            mime_type="image/png",
+            sha256="hash4",
+            figure_label="图 4",
+            order_index=4,
+        ),
+    ]
+
+    associated = extractor.associate_captions_and_marks(drawings, sample_text)
+    assert len(associated) == 1
+    d4 = associated[0]
+    marks_by_key = {m["mark"]: m for m in d4.reference_marks}
+
+    # Core claim features should be recognized and tagged with is_claim_feature=True
+    assert marks_by_key["174"]["is_claim_feature"] is True
+    assert marks_by_key["182"]["is_claim_feature"] is True
+    assert marks_by_key["190"]["is_claim_feature"] is True
+    assert marks_by_key["198"]["is_claim_feature"] is True
+    assert "控制线缆" in marks_by_key["174"]["name"]
+    assert "第一构造" in marks_by_key["182"]["name"]
+
+
+

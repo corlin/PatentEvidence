@@ -25,6 +25,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
   const [selectedDrawing, setSelectedDrawing] = useState<CaseDrawing | null>(null)
   const [zoomLevel, setZoomLevel] = useState<number>(1)
   const [markFilter, setMarkFilter] = useState<string>('')
+  const [onlyClaims, setOnlyClaims] = useState<boolean>(false)
 
   // Edit metadata modal state
   const [editingDrawing, setEditingDrawing] = useState<CaseDrawing | null>(null)
@@ -249,8 +250,21 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                         <span
                           key={idx}
                           className="badge badge-subtle text-xs"
-                          title={`${m.mark}: ${m.name}`}
+                          style={{
+                            border: m.is_claim_feature ? '1px solid #f59e0b' : undefined,
+                            background: m.is_claim_feature ? 'rgba(245, 158, 11, 0.08)' : undefined,
+                          }}
+                          title={`${m.mark}: ${m.name}${m.is_claim_feature ? ' (权利要求保护特征)' : ''}`}
                         >
+                          {m.is_claim_feature && (
+                            <span
+                              className="font-bold mr-xs"
+                              style={{ color: '#b45309', fontSize: '10px' }}
+                              title="权利要求特征"
+                            >
+                              权
+                            </span>
+                          )}
                           <strong className="text-primary">{m.mark}</strong> {m.name}
                         </span>
                       ))}
@@ -394,23 +408,53 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                   const numB = parseInt(b.mark.replace(/[^0-9]/g, '')) || 0
                   return numA !== numB ? numA - numB : a.mark.localeCompare(b.mark)
                 })
+                const claimMarksCount = sortedMarks.filter(m => m.is_claim_feature).length
+                const baseMarks = onlyClaims ? sortedMarks.filter(m => m.is_claim_feature) : sortedMarks
                 const filterTrimmed = markFilter.trim().toLowerCase()
                 const filteredMarks = filterTrimmed
-                  ? sortedMarks.filter(
+                  ? baseMarks.filter(
                       m =>
                         m.mark.toLowerCase().includes(filterTrimmed) ||
                         m.name.toLowerCase().includes(filterTrimmed)
                     )
-                  : sortedMarks
+                  : baseMarks
 
                 return (
                   <div className="flex-stack gap-xs" style={{ flex: 1, minHeight: 0 }}>
                     <div className="flex-between items-center">
                       <span className="text-xs font-bold text-secondary">
                         附图标记清单 ({selectedDrawing.reference_marks.length} 项
-                        {filterTrimmed ? ` · 匹配 ${filteredMarks.length}` : ''})
+                        {filterTrimmed || onlyClaims ? ` · 匹配 ${filteredMarks.length}` : ''})
                       </span>
                     </div>
+
+                    {/* Quick filter pills */}
+                    {claimMarksCount > 0 && (
+                      <div className="flex-row gap-xs mb-xs">
+                        <button
+                          type="button"
+                          className={`btn btn-xs ${!onlyClaims ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ fontSize: '11px', padding: '2px 8px' }}
+                          onClick={() => setOnlyClaims(false)}
+                        >
+                          全部 ({sortedMarks.length})
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-xs ${onlyClaims ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{
+                            fontSize: '11px',
+                            padding: '2px 8px',
+                            borderColor: '#f59e0b',
+                            color: onlyClaims ? '#fff' : '#b45309',
+                            backgroundColor: onlyClaims ? '#d97706' : 'rgba(245, 158, 11, 0.1)',
+                          }}
+                          onClick={() => setOnlyClaims(true)}
+                        >
+                          ⭐ 权利要求特征 ({claimMarksCount})
+                        </button>
+                      </div>
+                    )}
 
                     <input
                       type="text"
@@ -425,9 +469,29 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                         <span
                           key={idx}
                           className="badge badge-subtle text-xs"
-                          style={{ padding: '4px 8px', fontSize: '11px' }}
-                          title={`附图标记 ${m.mark}: ${m.name}`}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '11px',
+                            border: m.is_claim_feature ? '1px solid #f59e0b' : undefined,
+                            background: m.is_claim_feature ? 'rgba(245, 158, 11, 0.08)' : undefined,
+                          }}
+                          title={`附图标记 ${m.mark}: ${m.name}${m.is_claim_feature ? ' 【权利要求法定保护特征】' : ''}`}
                         >
+                          {m.is_claim_feature && (
+                            <span
+                              className="font-bold mr-xs"
+                              style={{
+                                color: '#b45309',
+                                backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                                borderRadius: '2px',
+                                padding: '1px 3px',
+                                fontSize: '10px',
+                              }}
+                              title="权利要求核心保护特征"
+                            >
+                              权
+                            </span>
+                          )}
                           <strong className="text-primary">{m.mark}</strong> {m.name}
                         </span>
                       ))}
