@@ -211,4 +211,87 @@ def test_drawing_extractor_claim_marks_and_authority():
     assert "第一构造" in marks_by_key["182"]["name"]
 
 
+def test_drawing_extractor_claim_numbers_and_hierarchy():
+    extractor = DrawingExtractor()
+    sample_text = """
+    【权利要求书】
+    1. 一种机器人组件，包括主干框架（10）和驱动电机（20）。
+    2. 根据权利要求1所述的机器人组件，其特征在于，还包括传感模块（30）。
+    3. 根据权利要求1或2所述的机器人组件，其特征在于，还包括万向节（40）。
+
+    【说明书附图说明】
+    图1是机器人组件的整体结构图。
+
+    【具体实施方式】
+    如图1所示，机器人组件包括主干框架10、驱动电机20、传感模块30和万向节40。
+    """
+    drawings = [
+        ExtractedDrawing(
+            data=b"fake_image_1",
+            filename="fig1.png",
+            mime_type="image/png",
+            sha256="hash1",
+            figure_label="图 1",
+            order_index=1,
+        )
+    ]
+    res = extractor.associate_captions_and_marks(drawings, sample_text)
+    marks_by_key = {m["mark"]: m for m in res[0].reference_marks}
+
+    # Mark 10 is in independent claim 1
+    assert marks_by_key["10"]["is_claim_feature"] is True
+    assert 1 in marks_by_key["10"]["claim_numbers"]
+    assert marks_by_key["10"]["is_independent"] is True
+
+    # Mark 30 is in dependent claim 2
+    assert marks_by_key["30"]["is_claim_feature"] is True
+    assert 2 in marks_by_key["30"]["claim_numbers"]
+    assert marks_by_key["30"]["is_independent"] is False
+
+
+def test_drawing_extractor_patent_linter():
+    extractor = DrawingExtractor()
+    sample_text = """
+    【权利要求书】
+    1. 一种结构，包括框架（10）和未绘出构件（99）。
+
+    【说明书附图说明】
+    图1是框架立体图。
+    图2是框架剖面图。
+    """
+    drawings = [
+        ExtractedDrawing(
+            data=b"img1",
+            filename="fig1.png",
+            mime_type="image/png",
+            sha256="h1",
+            figure_label="图 1",
+            reference_marks=[
+                {"mark": "10", "name": "支撑框架"},
+                {"mark": "20", "name": "连杆"},
+            ],
+        ),
+        ExtractedDrawing(
+            data=b"img2",
+            filename="fig2.png",
+            mime_type="image/png",
+            sha256="h2",
+            figure_label="图 2",
+            reference_marks=[
+                {"mark": "10", "name": "主壳体框架"},  # naming drift from 支撑框架
+                {"mark": "30", "name": ""},         # undefined mark
+            ],
+        ),
+    ]
+
+    report = extractor.lint_drawing_marks(drawings, sample_text)
+    assert report["has_issues"] is True
+    issue_types = [i["type"] for i in report["issues"]]
+    # Should catch naming drift (10), dangling claim mark (99), and undefined mark (30)
+    assert "naming_drift" in issue_types
+    assert "dangling_claim_mark" in issue_types
+    assert "undefined_mark" in issue_types
+
+
+
 

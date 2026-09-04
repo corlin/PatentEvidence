@@ -170,6 +170,8 @@ export interface ReferenceMark {
   mark: string
   name: string
   is_claim_feature?: boolean
+  claim_numbers?: number[]
+  is_independent?: boolean
 }
 
 export interface CaseDrawing {

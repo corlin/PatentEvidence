@@ -308,38 +308,90 @@ class DrawingExtractor:
         if c_match and len(c_match.group(1).strip()) > 30:
             claims_text = c_match.group(1).strip()
 
+        # Parse individual claims to associate specific claim numbers and independent/dependent hierarchy
+        claim_entries: list[dict[str, Any]] = [] # [{"number": int, "is_independent": bool, "text": str}]
+        if claims_text:
+            raw_claim_splits = re.split(r"(?:\n|^)\s*([0-9]{1,3})\s*[\.、]\s*", claims_text)
+            if len(raw_claim_splits) > 1:
+                it = iter(raw_claim_splits[1:])
+                for c_num_str, c_body in zip(it, it):
+                    c_num = int(c_num_str)
+                    is_dep = bool(re.search(r"(?:根据|如|按照)权利要求\s*[0-9]+", c_body))
+                    claim_entries.append({
+                        "number": c_num,
+                        "is_independent": not is_dep,
+                        "text": c_body.strip(),
+                    })
+            else:
+                claim_entries.append({
+                    "number": 1,
+                    "is_independent": True,
+                    "text": claims_text,
+                })
+
         claim_marks: dict[str, str] = {}
+        mark_claim_numbers: dict[str, set[int]] = {}
+        mark_is_independent: dict[str, bool] = {}
         claim_terms: set[str] = set()
 
-        if claims_text:
-            # 1. Explicit parenthesized marks in claims (highest legal authority)
-            for cm in re.finditer(mark_patterns[2], claims_text):
+        for ce in claim_entries:
+            c_num = ce["number"]
+            c_indep = ce["is_independent"]
+            c_text = ce["text"]
+
+            # 1. Explicit parenthesized marks in this claim
+            for cm in re.finditer(mark_patterns[2], c_text):
                 cname = clean_component_name(cm.group(1))
                 cmark = cm.group(2).strip()
                 if cname and cmark:
                     claim_marks[cmark] = cname
-                    seen_marks[cmark] = cname  # Override with canonical claim name
+                    seen_marks[cmark] = cname
+                    mark_claim_numbers.setdefault(cmark, set()).add(c_num)
+                    if c_indep:
+                        mark_is_independent[cmark] = True
 
-            # 2. Direct marks in claims
-            for cm in re.finditer(mark_patterns[0], claims_text):
+            # 2. Direct marks in this claim
+            for cm in re.finditer(mark_patterns[0], c_text):
                 cname = clean_component_name(cm.group(1))
                 cmark = cm.group(2).strip()
                 if cname and cmark and not (cmark.isdigit() and len(cmark) == 4 and (cmark.startswith("19") or cmark.startswith("20") or cmark.startswith("00"))):
                     claim_marks[cmark] = cname
                     seen_marks[cmark] = cname
+                    mark_claim_numbers.setdefault(cmark, set()).add(c_num)
+                    if c_indep:
+                        mark_is_independent[cmark] = True
 
-            # 3. Core technical feature terms from claims (for implicit semantic mapping)
+            # 3. Core technical feature terms in this claim
             raw_claim_terms = set(
-                re.findall(r"[\u4e00-\u9fa5]{2,10}(?:构件|组件|结构|关节|线缆|构造|区|轴线|通道|表面|电机|基部|端|装置|体)", claims_text)
+                re.findall(r"[\u4e00-\u9fa5]{2,10}(?:构件|组件|结构|关节|线缆|构造|区|轴线|通道|表面|电机|基部|端|装置|体)", c_text)
             )
             for ct in raw_claim_terms:
                 cct = clean_component_name(ct)
                 if cct and len(cct) >= 2 and cct not in FIG_REF_STOPWORDS:
                     claim_terms.add(cct)
 
+        # Dynamic deduction of top-level macro system marks from Claim 1 or invention subject
+        invention_subject = ""
+        macro_parent_marks: set[str] = set()
+        primary_claim = next((c for c in claim_entries if c["is_independent"]), None) or (claim_entries[0] if claim_entries else None)
+        if primary_claim:
+            subj_m = re.search(r"一种\s*([\u4e00-\u9fa5]{2,20}?)(?:[，,]|包括|包含|其特征在于)", primary_claim["text"])
+            if subj_m:
+                invention_subject = clean_component_name(subj_m.group(1))
+                for mk, name in seen_marks.items():
+                    if invention_subject in name or name in invention_subject:
+                        macro_parent_marks.add(mk)
+            # Add top-level system nouns identified in preamble
+            for mk, name in seen_marks.items():
+                if any(kw in name for kw in ("组件", "装置", "系统", "全机构", "机器人臂")):
+                    macro_parent_marks.add(mk)
+
         all_extracted_marks: list[dict[str, Any]] = []
         for k, v in seen_marks.items():
             is_claim = False
+            c_nums = sorted(list(mark_claim_numbers.get(k, set())))
+            is_indep = mark_is_independent.get(k, False)
+
             if k in claim_marks:
                 is_claim = True
                 v = claim_marks[k]
@@ -348,7 +400,13 @@ class DrawingExtractor:
                     if ct in v or v in ct:
                         is_claim = True
                         break
-            all_extracted_marks.append({"mark": k, "name": v, "is_claim_feature": is_claim})
+            all_extracted_marks.append({
+                "mark": k,
+                "name": v,
+                "is_claim_feature": is_claim,
+                "claim_numbers": c_nums,
+                "is_independent": is_indep or (1 in c_nums),
+            })
 
         def mark_sort_key(item: dict[str, Any]) -> tuple[int, str]:
             k = str(item["mark"])
@@ -423,6 +481,11 @@ class DrawingExtractor:
 
             referenced_fig_match = re.search(r"图\s*([0-9]+)", d.figure_title)
             referenced_fig = int(referenced_fig_match.group(1)) if referenced_fig_match else None
+
+            # Extract clean subject component from figure title (stripping view type suffixes like 俯视图, 侧视图)
+            core_title = re.sub(r"(?:的)?(?:俯视|仰视|侧视|主视|后视|立体|透视|截面|剖面|剖视|流程|框图|示意|全图|分解|展开)?(?:图)?$", "", d.figure_title)
+            core_title = re.sub(r"^(?:图\s*[0-9]+(?:\s*和\s*图\s*[0-9]+)?(?:的)?)", "", core_title).strip()
+            title_noun = clean_component_name(core_title)
             
             for para in paragraphs:
                 if re.search(fig_pat, para, re.IGNORECASE):
@@ -431,24 +494,35 @@ class DrawingExtractor:
                 if referenced_fig and re.search(rf"图\s*{referenced_fig}(?![0-9])|Figure\s*{referenced_fig}\b", para, re.IGNORECASE):
                     context_sentences.append(para)
                     continue
+                if title_noun and len(title_noun) >= 3 and title_noun in para:
+                    context_sentences.append(para)
+                    continue
                 for rm in re.finditer(range_pat, para):
                     start_f, end_f = int(rm.group(1)), int(rm.group(2))
                     if start_f <= fig_idx <= end_f:
                         context_sentences.append(para)
                         break
 
-            # If figure is a companion view of another figure, include assembly paragraphs
-            if fig_idx in (1, 2):
+            # If figure is an assembly overview, also include paragraphs describing its sub-components
+            is_detail_view = any(kw in d.figure_title for kw in ("布置", "透视", "局部", "放大", "剖面", "附肢", "构件")) and not any(kw in d.figure_title for kw in ("侧视", "俯视", "总装", "整体", "图1"))
+            if not is_detail_view:
+                linked_components = set()
+                for cs in context_sentences:
+                    for cm in re.finditer(r"([\u4e00-\u9fa5]{2,10})\s*(?<![0-9])([0-9]{1,4}[A-Za-z]?)(?![0-9A-Za-z])", cs):
+                        cn = clean_component_name(cm.group(1))
+                        if len(cn) >= 3 and cn not in FIG_REF_STOPWORDS:
+                            linked_components.add(cn)
                 for para in paragraphs:
-                    cleaned_p = para.strip()
-                    if any(cleaned_p.startswith(f"[{i:04d}]") for i in range(35, 44)):
+                    if para not in context_sentences and any(lc in para for lc in linked_components):
                         context_sentences.append(para)
 
             combined_context = "\n".join(context_sentences)
 
-            # Determine if this drawing represents a detail/sub-assembly view
-            is_detail_view = any(kw in d.figure_title for kw in ("布置", "透视", "局部", "放大", "剖面", "附肢", "构件")) and not any(kw in d.figure_title for kw in ("侧视", "俯视", "总装", "整体", "图1"))
-            macro_parent_marks = {"10", "12", "14", "16", "178", "222", "226"}
+            # Container ownership marks appearing as "...的..." (e.g. 机器人臂组件10的手14的手指16)
+            container_marks = set(re.findall(r"([0-9]{1,4}[A-Za-z]?)\s*的", combined_context))
+            # Append parent structural components that host sub-components
+            for mk in ("10", "12", "14", "16", "178", "222", "226"):
+                container_marks.add(mk)
 
             matched_marks: dict[str, dict[str, Any]] = {}
 
@@ -457,7 +531,7 @@ class DrawingExtractor:
                 for m in all_extracted_marks:
                     mk = m["mark"]
                     if mk in ocr_detected or mk.upper() in ocr_detected:
-                        if is_detail_view and mk in macro_parent_marks and mk not in ocr_detected:
+                        if is_detail_view and mk in container_marks and mk not in ocr_detected:
                             continue
                         matched_marks[mk] = dict(m)
                 fold_redundant_base_marks(matched_marks)
@@ -467,7 +541,7 @@ class DrawingExtractor:
                 for m in all_extracted_marks:
                     mk = m["mark"]
                     if re.search(rf"(?<![0-9]){re.escape(mk)}(?![0-9A-Za-z])", combined_context):
-                        if is_detail_view and mk in macro_parent_marks:
+                        if is_detail_view and mk in container_marks:
                             continue
                         matched_marks[mk] = dict(m)
                 fold_redundant_base_marks(matched_marks)
@@ -485,3 +559,75 @@ class DrawingExtractor:
             d.reference_marks = sorted(list(matched_marks.values()), key=mark_sort_key)
 
         return drawings
+
+    @staticmethod
+    def lint_drawing_marks(
+        drawings: list[ExtractedDrawing],
+        document_text: str = "",
+    ) -> dict[str, Any]:
+        """Perform static compliance audit on patent drawing reference marks.
+
+        Evaluates Article 26(3)(4) best practices:
+        1. Naming Drift: Same mark having divergent component names across different figures.
+        2. Dangling Marks: Marks mentioned in claims but missing in all drawings.
+        3. Undefined Marks: Marks with vague or empty naming definitions.
+        """
+        issues: list[dict[str, Any]] = []
+
+        # 1. Check naming drifts across drawings
+        mark_names_by_fig: dict[str, list[tuple[str, str]]] = {}
+        for d in drawings:
+            fig_label = d.figure_label
+            for rm in d.reference_marks:
+                mk = rm.get("mark")
+                name = rm.get("name", "").strip()
+                if mk and name:
+                    mark_names_by_fig.setdefault(mk, []).append((fig_label, name))
+
+        for mk, occurrences in mark_names_by_fig.items():
+            unique_names = {name for _, name in occurrences}
+            if len(unique_names) > 1:
+                breakdown = ", ".join([f"{fig}: {name}" for fig, name in occurrences[:3]])
+                issues.append({
+                    "type": "naming_drift",
+                    "severity": "warning",
+                    "mark": mk,
+                    "message": f"附图标记 {mk} 在多张图纸中命名存在细微漂移（{breakdown}），建议统一法定术语",
+                })
+
+        # 2. Check dangling marks from claims
+        all_drawing_marks = {rm.get("mark") for d in drawings for rm in d.reference_marks if rm.get("mark")}
+        claims_match = re.search(r"(?:【?权利要求书?】?|(?:\n|^)\s*1\s*[\.、]\s*一种)(.*?)(?=\n\s*\[0001\]|【?说明书?】?|$)", document_text, re.DOTALL)
+        if claims_match:
+            c_text = claims_match.group(1)
+            for cm in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*[（\(]\s*([0-9]{1,4}[A-Za-z]?)\s*[）\)]", c_text):
+                cname = cm.group(1).strip()
+                cmark = cm.group(2).strip()
+                if cmark not in all_drawing_marks and not (cmark.isdigit() and len(cmark) == 4 and cmark.startswith(("19", "20", "00"))):
+                    issues.append({
+                        "type": "dangling_claim_mark",
+                        "severity": "caution",
+                        "mark": cmark,
+                        "message": f"权利要求书中出现的特征“{cname}（{cmark}）”未在任何附图中检出",
+                    })
+
+        # 3. Check undefined marks
+        for d in drawings:
+            for rm in d.reference_marks:
+                mk = rm.get("mark")
+                name = rm.get("name", "")
+                if mk and (not name or name in ("未命名", "部件")):
+                    issues.append({
+                        "type": "undefined_mark",
+                        "severity": "info",
+                        "mark": mk,
+                        "message": f"{d.figure_label} 中的附图标记 {mk} 缺少具体技术名称",
+                    })
+
+        return {
+            "has_issues": len(issues) > 0,
+            "total_issues": len(issues),
+            "issues": issues,
+            "passed": len(issues) == 0,
+        }
+

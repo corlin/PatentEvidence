@@ -12,24 +12,84 @@ export function naturalSortMarks(marks: ReferenceMark[]): ReferenceMark[] {
   })
 }
 
+interface LinterIssue {
+  type: string
+  severity: 'warning' | 'info'
+  mark: string
+  message: string
+}
+
+function lintMarksInClient(drawings: CaseDrawing[]): LinterIssue[] {
+  const issues: LinterIssue[] = []
+  const markOccurrences: Record<string, { fig: string; name: string }[]> = {}
+
+  for (const d of drawings) {
+    for (const rm of d.reference_marks || []) {
+      if (rm.mark && rm.name) {
+        if (!markOccurrences[rm.mark]) markOccurrences[rm.mark] = []
+        markOccurrences[rm.mark].push({ fig: d.figure_label, name: rm.name })
+      }
+    }
+  }
+
+  for (const [mk, items] of Object.entries(markOccurrences)) {
+    const names = Array.from(new Set(items.map(i => i.name)))
+    if (names.length > 1) {
+      issues.push({
+        type: 'naming_drift',
+        severity: 'warning',
+        mark: mk,
+        message: `附图标记 ${mk} 在不同图纸中存在用词偏差（${items.slice(0, 3).map(i => `${i.fig}: ${i.name}`).join('；')}）`,
+      })
+    }
+  }
+
+  return issues
+}
+
 export const ReferenceMarkBadge: React.FC<{
   mark: ReferenceMark
   size?: 'sm' | 'md'
 }> = ({ mark, size = 'md' }) => {
   const isClaim = Boolean(mark.is_claim_feature)
+  const isIndep = Boolean(mark.is_independent)
+  const claimNums = mark.claim_numbers || []
+  const firstClaimNum = claimNums[0]
+
+  let badgeClass = 'badge badge-subtle text-xs'
+  let tagClass = 'badge-claim-tag'
+  let tagText = '权'
+
+  if (isClaim) {
+    if (isIndep) {
+      badgeClass += ' badge-claim-independent'
+      tagClass = 'badge-claim-tag-independent'
+      tagText = firstClaimNum ? `独权${firstClaimNum}` : '独权'
+    } else {
+      badgeClass += ' badge-claim-dependent'
+      tagClass = 'badge-claim-tag-dependent'
+      tagText = firstClaimNum ? `从权${firstClaimNum}` : '从权'
+    }
+  }
+
+  const claimDesc = isClaim
+    ? ` 【${isIndep ? '独立权利要求' : '从属权利要求'}${claimNums.length ? ` (第 ${claimNums.join(', ')} 条)` : ''}保护特征】`
+    : ''
+
   const style =
     size === 'sm'
       ? { fontSize: '11px', padding: '2px 6px' }
       : { fontSize: '11px', padding: '4px 8px' }
+
   return (
     <span
-      className={`badge badge-subtle text-xs ${isClaim ? 'badge-claim' : ''}`}
+      className={badgeClass}
       style={style}
-      title={`附图标记 ${mark.mark}: ${mark.name}${isClaim ? ' 【权利要求法定保护特征】' : ''}`}
+      title={`附图标记 ${mark.mark}: ${mark.name}${claimDesc}`}
     >
       {isClaim && (
-        <span className="badge-claim-tag" title="权利要求核心保护特征">
-          权
+        <span className={tagClass} title={claimDesc || '权利要求核心保护特征'}>
+          {tagText}
         </span>
       )}
       <strong className="text-primary">{mark.mark}</strong> {mark.name}
@@ -76,6 +136,10 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
     figure_title: string
     marks_text: string
   }>({ figure_label: '附图', figure_title: '', marks_text: '' })
+
+  // Patent Linter Drawer state
+  const [isLinterDrawerOpen, setIsLinterDrawerOpen] = useState<boolean>(false)
+  const linterIssues = useMemo(() => lintMarksInClient(drawings), [drawings])
 
   const fetchDrawings = async () => {
     try {
@@ -236,6 +300,47 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
 
       {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
       {success && <Alert type="success" message={success} onClose={() => setSuccess(null)} />}
+
+      {/* Patent Compliance Linter Bar */}
+      {!loading && drawings.length > 0 && (
+        <div className="mb-sm">
+          {linterIssues.length > 0 ? (
+            <div
+              className="linter-banner linter-warning flex-between items-center"
+              onClick={() => setIsLinterDrawerOpen(!isLinterDrawerOpen)}
+              title="点击展开/收起审查合规建议"
+            >
+              <span>
+                <strong>⚠️ 附图规范体检提示</strong>：检测到 {linterIssues.length} 处跨图用词或标记一致性建议
+              </span>
+              <button
+                type="button"
+                className="btn btn-xs btn-secondary"
+                style={{ fontSize: '11px', padding: '1px 6px' }}
+              >
+                {isLinterDrawerOpen ? '收起详情 ▲' : '查看详情 ▼'}
+              </button>
+            </div>
+          ) : (
+            <div className="linter-banner linter-success">
+              <span>✓ 全案附图标记与权项跨图对照一致，未发现用词漂移</span>
+            </div>
+          )}
+
+          {isLinterDrawerOpen && linterIssues.length > 0 && (
+            <div className="linter-drawer">
+              <div className="font-bold mb-xs">审查员/合规核对建议：</div>
+              <ul style={{ margin: 0, paddingLeft: '18px' }}>
+                {linterIssues.map((issue, idx) => (
+                  <li key={idx} className="mb-xs">
+                    {issue.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="p-lg text-center text-secondary text-sm">正在加载附图资产...</div>

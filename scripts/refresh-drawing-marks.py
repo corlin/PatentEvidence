@@ -224,6 +224,38 @@ FIG_MARKS = {
 }
 
 
+CLAIM_DETAILS = {
+    "12": {"claim_numbers": [1], "is_independent": True},
+    "14": {"claim_numbers": [1], "is_independent": True},
+    "16": {"claim_numbers": [1], "is_independent": True},
+    "100": {"claim_numbers": [1], "is_independent": True},
+    "102": {"claim_numbers": [6], "is_independent": False},
+    "104": {"claim_numbers": [6], "is_independent": False},
+    "150": {"claim_numbers": [1], "is_independent": True},
+    "150A": {"claim_numbers": [12], "is_independent": False},
+    "150B": {"claim_numbers": [12], "is_independent": False},
+    "150C": {"claim_numbers": [12], "is_independent": False},
+    "150D": {"claim_numbers": [12], "is_independent": False},
+    "166": {"claim_numbers": [9], "is_independent": False},
+    "170": {"claim_numbers": [9, 11], "is_independent": False},
+    "174": {"claim_numbers": [1, 11, 12, 14], "is_independent": True},
+    "182": {"claim_numbers": [1, 2], "is_independent": True},
+    "186": {"claim_numbers": [1], "is_independent": True},
+    "190": {"claim_numbers": [1, 2], "is_independent": True},
+    "194": {"claim_numbers": [1], "is_independent": True},
+    "198": {"claim_numbers": [5], "is_independent": False},
+    "202": {"claim_numbers": [3, 4], "is_independent": False},
+    "206": {"claim_numbers": [3, 4], "is_independent": False},
+    "218A": {"claim_numbers": [14], "is_independent": False},
+    "218B": {"claim_numbers": [14], "is_independent": False},
+    "218C": {"claim_numbers": [14], "is_independent": False},
+    "218D": {"claim_numbers": [14], "is_independent": False},
+    "218E": {"claim_numbers": [14], "is_independent": False},
+    "222": {"claim_numbers": [7, 8, 9], "is_independent": False},
+    "226": {"claim_numbers": [10], "is_independent": False},
+}
+
+
 def main():
     conn = psycopg.connect(DATABASE_URL)
     with conn.cursor() as cur:
@@ -231,11 +263,14 @@ def main():
             enriched_marks = []
             for m in marks:
                 mk = m["mark"]
-                is_claim = CLAIM_MARKS.get(mk, False)
+                claim_info = CLAIM_DETAILS.get(mk)
+                is_claim = bool(claim_info)
                 enriched_marks.append({
                     "mark": mk,
                     "name": m["name"],
                     "is_claim_feature": is_claim,
+                    "claim_numbers": claim_info["claim_numbers"] if claim_info else [],
+                    "is_independent": claim_info["is_independent"] if claim_info else False,
                 })
             cur.execute(
                 """UPDATE case_drawings
@@ -243,11 +278,12 @@ def main():
                 WHERE figure_label = %s""",
                 (json.dumps(enriched_marks), fig_label),
             )
-            claim_count = sum(1 for item in enriched_marks if item["is_claim_feature"])
-            print(f"Updated {fig_label}: {len(enriched_marks)} marks ({claim_count} claim features).")
+            indep_count = sum(1 for item in enriched_marks if item.get("is_independent"))
+            dep_count = sum(1 for item in enriched_marks if item.get("is_claim_feature") and not item.get("is_independent"))
+            print(f"Updated {fig_label}: {len(enriched_marks)} marks ({indep_count} 独权, {dep_count} 从权).")
         conn.commit()
     conn.close()
-    print("All drawing reference marks successfully updated with claims integration!")
+    print("All drawing reference marks successfully updated with claim hierarchy!")
 
 
 if __name__ == "__main__":
