@@ -2,6 +2,8 @@
 
 PatentEvidence is a high-assurance, multi-tenant enterprise SaaS platform designed for professional patent practitioners, litigation attorneys, and enterprise IP departments. It provides end-to-end traceable patent evidence workflows, automated claim modeling, intelligent prior art comparison matrices (Claim Charts), cryptographic Merkle Root SHA-256 evidence sealing, multi-round peer review approval flows, and secure client delivery gateways.
 
+> **Language note:** Product capability descriptions are written in Chinese (the platform's primary operating language), while section headings, technical commands, and tooling references are kept in English. Domain terminology is defined authoritatively in [`CONTEXT.md`](./CONTEXT.md).
+
 ---
 
 ## 🚀 Core Product Capabilities & Workbenches
@@ -42,6 +44,7 @@ graph LR
 6. **证据链哈希封存与预评估报告（Merkle Root SHA-256 & Reports）**
    - 全案多源证据 Merkle Root SHA-256 不可变防伪根哈希计算与快照封存；
    - 结构化富文本 Markdown 分析与预评估报告在线生成与预览。
+   - 图纸、文档与报告原件统一存放于 MinIO 对象存储，内容寻址并绑定内容哈希，与数据库中的证据记录形成可交叉核验的完整证据链。
 
 7. **独立专业复核与三审流转（Multi-round Review & Governance）**
    - 多轮提审流转（Round 1, Round 2...）、逐特征专家修改批注与退回高亮标记；
@@ -50,6 +53,41 @@ graph LR
 8. **客户交付网关与防伪下载凭证（Client Delivery & Verification Gateway）**
    - 登记客户委托方全称并一键锁定全案状态为已交付（`delivered`）；
    - 生成专用防伪交付证书（Delivery Certificate）与受控下载令牌（Token）。
+
+---
+
+## 📐 Project Structure & Tech Stack
+
+**Tech stack**
+
+| Layer | Technology |
+| --- | --- |
+| Backend API | Python 3.12, FastAPI, SQLAlchemy (async), Alembic |
+| Background Worker | Python 3.12 (async job processing) |
+| Frontend | React 19, TypeScript, Vite |
+| Database | PostgreSQL 16 (Row-Level Security enforced) |
+| Object Storage | MinIO (content-addressed evidence blobs) |
+| Testing | pytest (API/worker), Vitest + React Testing Library (web) |
+| Packaging | `uv` (Python), `pnpm` workspaces (Node) |
+
+**Repository layout**
+
+```
+apps/            Deployable services
+  api/           FastAPI application (src, alembic migrations, tests)
+  web/           React + Vite single-page frontend
+  worker/        Async background job processor
+modules/         Domain logic, one package per capability:
+                 cases, features, feature-modeling, search,
+                 comparison, evidence, reports, review,
+                 retrieval, delivery, assessment, platform
+packages/        Shared cross-app libraries
+scripts/         Ops tooling: seeding, bootstrap, verify-* release gates
+db/              Database schemas, roles, and RLS policies
+docs/            ADRs, API specs, architecture, compliance & validation notes
+provenance/      Release provenance and source-lock artifacts
+fixtures/        Deterministic test fixtures
+```
 
 ---
 
@@ -76,13 +114,13 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run Python unit tests (44/44 passed)
+# Run API unit tests
 .venv/bin/pytest apps/api/tests/unit/
 
-# Run PostgreSQL RLS integration tests (81/81 passed)
+# Run PostgreSQL RLS integration tests
 ./scripts/test-postgres.sh
 
-# Run frontend Vitest suite (22/22 passed)
+# Run frontend Vitest suite
 pnpm test:web
 
 # Build production frontend bundle
@@ -101,12 +139,22 @@ docker compose config > /dev/null
 ### 4. Starting the Development Stack
 
 ```sh
-# Start PostgreSQL, API, and Worker via Docker Compose
+# Start PostgreSQL, API, Worker, Web, and MinIO via Docker Compose
 docker compose up --build
 
 # Or run frontend dev server locally
 pnpm --filter @patent-evidence/web dev --port 5173
 ```
+
+Once the stack is up:
+
+| Service | Default URL |
+| --- | --- |
+| Web (Vite + React) | `http://localhost:5173` |
+| API (FastAPI, health probe) | `http://localhost:8000` (`/health`) |
+| MinIO object storage | `http://localhost:9000` (console `:9001`) |
+
+Ports are overridable via `API_PORT`, `WEB_PORT`, etc. in `.env`.
 
 ---
 
@@ -115,3 +163,32 @@ pnpm --filter @patent-evidence/web dev --port 5173
 - **租户数据强隔离（Tenant Isolation）**：所有数据库表均开启 PostgreSQL Row Level Security（RLS），任何跨租户数据访问均在数据库层强制拒绝。
 - **不可变审计链（Immutable Provenance）**：证据快照与复核决策均绑定 SHA-256 数字摘要，禁止物理修改或覆盖已有记录。
 - **合规边界（CNIPR Manual-Handoff）**：严格遵守 CNIPR 数据规范与人工交接隔离策略，确保法律证据链合法合规。
+
+---
+
+## 📚 Documentation & Deep Dive
+
+More detailed, authoritative documentation lives under [`docs/`](./docs):
+
+| Area | Location |
+| --- | --- |
+| Architecture Decision Records (ADRs) | [`docs/adr/`](./docs/adr) |
+| API specifications | [`docs/api/`](./docs/api) |
+| System architecture & scaffolding | [`docs/architecture/`](./docs/architecture) |
+| Compliance & validation notes | [`docs/compliance/`](./docs/compliance), [`docs/validation/`](./docs/validation) |
+| Operations runbooks & local dev | [`docs/operations/`](./docs/operations) |
+| Planning & product specs | [`docs/plans/`](./docs/plans), [`docs/product/`](./docs/product) |
+| Verification & release evidence | [`docs/verification/`](./docs/verification) |
+| Domain language glossary | [`CONTEXT.md`](./CONTEXT.md) |
+
+Release provenance and source-lock artifacts are retained in [`provenance/`](./provenance).
+
+---
+
+## 📄 License
+
+© 2026 PatentEvidence contributors. All rights reserved.
+
+This repository is **proprietary and confidential** under the *PatentEvidence Commercial License*. No permission is granted to use, copy, modify, distribute, sublicense, or sell any portion of this repository without a separate written agreement from the copyright holder. See [`LICENSE`](./LICENSE) for the full terms.
+
+Third-party components retain their own licenses, as documented in [`provenance/THIRD_PARTY_NOTICES.md`](./provenance/THIRD_PARTY_NOTICES.md).

@@ -636,6 +636,21 @@ a:hover {
   align-content: flex-start;
 }
 
+.badge-claim {
+  border: 1px solid #f59e0b !important;
+  background: rgba(245, 158, 11, 0.08) !important;
+}
+
+.badge-claim-tag {
+  color: #b45309;
+  background-color: rgba(245, 158, 11, 0.2);
+  border-radius: 2px;
+  padding: 1px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
 @media (max-width: 900px) {
   .lightbox-workbench {
     grid-template-columns: 1fr;

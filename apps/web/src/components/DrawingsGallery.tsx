@@ -1,8 +1,41 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { apiClient } from '../services/apiClient'
 import type { CaseDrawing, ReferenceMark } from '../types/api'
 import { Modal } from './Modal'
 import { Alert } from './Alert'
+
+export function naturalSortMarks(marks: ReferenceMark[]): ReferenceMark[] {
+  return [...marks].sort((a, b) => {
+    const numA = parseInt(a.mark.replace(/[^0-9]/g, '')) || 0
+    const numB = parseInt(b.mark.replace(/[^0-9]/g, '')) || 0
+    return numA !== numB ? numA - numB : a.mark.localeCompare(b.mark)
+  })
+}
+
+export const ReferenceMarkBadge: React.FC<{
+  mark: ReferenceMark
+  size?: 'sm' | 'md'
+}> = ({ mark, size = 'md' }) => {
+  const isClaim = Boolean(mark.is_claim_feature)
+  const style =
+    size === 'sm'
+      ? { fontSize: '11px', padding: '2px 6px' }
+      : { fontSize: '11px', padding: '4px 8px' }
+  return (
+    <span
+      className={`badge badge-subtle text-xs ${isClaim ? 'badge-claim' : ''}`}
+      style={style}
+      title={`附图标记 ${mark.mark}: ${mark.name}${isClaim ? ' 【权利要求法定保护特征】' : ''}`}
+    >
+      {isClaim && (
+        <span className="badge-claim-tag" title="权利要求核心保护特征">
+          权
+        </span>
+      )}
+      <strong className="text-primary">{mark.mark}</strong> {mark.name}
+    </span>
+  )
+}
 
 interface DrawingsGalleryProps {
   orgId: string
@@ -60,6 +93,24 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
   useEffect(() => {
     fetchDrawings()
   }, [orgId, caseId])
+
+  const { sortedMarks, claimMarksCount, filteredMarks } = useMemo(() => {
+    if (!selectedDrawing?.reference_marks?.length) {
+      return { sortedMarks: [], claimMarksCount: 0, filteredMarks: [] }
+    }
+    const sorted = naturalSortMarks(selectedDrawing.reference_marks)
+    const claimCount = sorted.filter(m => m.is_claim_feature).length
+    const base = onlyClaims ? sorted.filter(m => m.is_claim_feature) : sorted
+    const filterTrimmed = markFilter.trim().toLowerCase()
+    const filtered = filterTrimmed
+      ? base.filter(
+          m =>
+            m.mark.toLowerCase().includes(filterTrimmed) ||
+            m.name.toLowerCase().includes(filterTrimmed)
+        )
+      : base
+    return { sortedMarks: sorted, claimMarksCount: claimCount, filteredMarks: filtered }
+  }, [selectedDrawing, markFilter, onlyClaims])
 
   const handleReExtract = async () => {
     setReExtracting(true)
@@ -246,27 +297,8 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                   {/* 3. Reference Marks Chips */}
                   {drawing.reference_marks && drawing.reference_marks.length > 0 && (
                     <div className="reference-marks-chips">
-                      {drawing.reference_marks.slice(0, 4).map((m, idx) => (
-                        <span
-                          key={idx}
-                          className="badge badge-subtle text-xs"
-                          style={{
-                            border: m.is_claim_feature ? '1px solid #f59e0b' : undefined,
-                            background: m.is_claim_feature ? 'rgba(245, 158, 11, 0.08)' : undefined,
-                          }}
-                          title={`${m.mark}: ${m.name}${m.is_claim_feature ? ' (权利要求保护特征)' : ''}`}
-                        >
-                          {m.is_claim_feature && (
-                            <span
-                              className="font-bold mr-xs"
-                              style={{ color: '#b45309', fontSize: '10px' }}
-                              title="权利要求特征"
-                            >
-                              权
-                            </span>
-                          )}
-                          <strong className="text-primary">{m.mark}</strong> {m.name}
-                        </span>
+                      {naturalSortMarks(drawing.reference_marks).slice(0, 4).map((m, idx) => (
+                        <ReferenceMarkBadge key={idx} mark={m} size="sm" />
                       ))}
                       {drawing.reference_marks.length > 4 && (
                         <span className="badge badge-neutral text-xs">
@@ -402,108 +434,63 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
               <div className="border-t my-xs"></div>
 
               {/* Reference Marks Section */}
-              {selectedDrawing.reference_marks && selectedDrawing.reference_marks.length > 0 ? (() => {
-                const sortedMarks = [...selectedDrawing.reference_marks].sort((a, b) => {
-                  const numA = parseInt(a.mark.replace(/[^0-9]/g, '')) || 0
-                  const numB = parseInt(b.mark.replace(/[^0-9]/g, '')) || 0
-                  return numA !== numB ? numA - numB : a.mark.localeCompare(b.mark)
-                })
-                const claimMarksCount = sortedMarks.filter(m => m.is_claim_feature).length
-                const baseMarks = onlyClaims ? sortedMarks.filter(m => m.is_claim_feature) : sortedMarks
-                const filterTrimmed = markFilter.trim().toLowerCase()
-                const filteredMarks = filterTrimmed
-                  ? baseMarks.filter(
-                      m =>
-                        m.mark.toLowerCase().includes(filterTrimmed) ||
-                        m.name.toLowerCase().includes(filterTrimmed)
-                    )
-                  : baseMarks
+              {selectedDrawing.reference_marks && selectedDrawing.reference_marks.length > 0 ? (
+                <div className="flex-stack gap-xs" style={{ flex: 1, minHeight: 0 }}>
+                  <div className="flex-between items-center">
+                    <span className="text-xs font-bold text-secondary">
+                      附图标记清单 ({selectedDrawing.reference_marks.length} 项
+                      {markFilter.trim() || onlyClaims ? ` · 匹配 ${filteredMarks.length}` : ''})
+                    </span>
+                  </div>
 
-                return (
-                  <div className="flex-stack gap-xs" style={{ flex: 1, minHeight: 0 }}>
-                    <div className="flex-between items-center">
-                      <span className="text-xs font-bold text-secondary">
-                        附图标记清单 ({selectedDrawing.reference_marks.length} 项
-                        {filterTrimmed || onlyClaims ? ` · 匹配 ${filteredMarks.length}` : ''})
-                      </span>
+                  {/* Quick filter pills */}
+                  {claimMarksCount > 0 && (
+                    <div className="flex-row gap-xs mb-xs">
+                      <button
+                        type="button"
+                        className={`btn btn-xs ${!onlyClaims ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ fontSize: '11px', padding: '2px 8px' }}
+                        onClick={() => setOnlyClaims(false)}
+                      >
+                        全部 ({sortedMarks.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-xs ${onlyClaims ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{
+                          fontSize: '11px',
+                          padding: '2px 8px',
+                          borderColor: '#f59e0b',
+                          color: onlyClaims ? '#fff' : '#b45309',
+                          backgroundColor: onlyClaims ? '#d97706' : 'rgba(245, 158, 11, 0.1)',
+                        }}
+                        onClick={() => setOnlyClaims(true)}
+                      >
+                        ⭐ 权利要求特征 ({claimMarksCount})
+                      </button>
                     </div>
+                  )}
 
-                    {/* Quick filter pills */}
-                    {claimMarksCount > 0 && (
-                      <div className="flex-row gap-xs mb-xs">
-                        <button
-                          type="button"
-                          className={`btn btn-xs ${!onlyClaims ? 'btn-primary' : 'btn-secondary'}`}
-                          style={{ fontSize: '11px', padding: '2px 8px' }}
-                          onClick={() => setOnlyClaims(false)}
-                        >
-                          全部 ({sortedMarks.length})
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn btn-xs ${onlyClaims ? 'btn-primary' : 'btn-secondary'}`}
-                          style={{
-                            fontSize: '11px',
-                            padding: '2px 8px',
-                            borderColor: '#f59e0b',
-                            color: onlyClaims ? '#fff' : '#b45309',
-                            backgroundColor: onlyClaims ? '#d97706' : 'rgba(245, 158, 11, 0.1)',
-                          }}
-                          onClick={() => setOnlyClaims(true)}
-                        >
-                          ⭐ 权利要求特征 ({claimMarksCount})
-                        </button>
+                  <input
+                    type="text"
+                    className="form-input text-xs py-xs px-sm w-full"
+                    placeholder="🔍 快速搜索部件或标号..."
+                    value={markFilter}
+                    onChange={e => setMarkFilter(e.target.value)}
+                  />
+
+                  <div className="lightbox-marks-scroll border rounded p-xs bg-surface">
+                    {filteredMarks.map((m, idx) => (
+                      <ReferenceMarkBadge key={idx} mark={m} />
+                    ))}
+                    {filteredMarks.length === 0 && (
+                      <div className="text-xs text-muted py-md text-center w-full">
+                        未找到匹配的附图标记
                       </div>
                     )}
-
-                    <input
-                      type="text"
-                      className="form-input text-xs py-xs px-sm w-full"
-                      placeholder="🔍 快速搜索部件或标号..."
-                      value={markFilter}
-                      onChange={e => setMarkFilter(e.target.value)}
-                    />
-
-                    <div className="lightbox-marks-scroll border rounded p-xs bg-surface">
-                      {filteredMarks.map((m, idx) => (
-                        <span
-                          key={idx}
-                          className="badge badge-subtle text-xs"
-                          style={{
-                            padding: '4px 8px',
-                            fontSize: '11px',
-                            border: m.is_claim_feature ? '1px solid #f59e0b' : undefined,
-                            background: m.is_claim_feature ? 'rgba(245, 158, 11, 0.08)' : undefined,
-                          }}
-                          title={`附图标记 ${m.mark}: ${m.name}${m.is_claim_feature ? ' 【权利要求法定保护特征】' : ''}`}
-                        >
-                          {m.is_claim_feature && (
-                            <span
-                              className="font-bold mr-xs"
-                              style={{
-                                color: '#b45309',
-                                backgroundColor: 'rgba(245, 158, 11, 0.2)',
-                                borderRadius: '2px',
-                                padding: '1px 3px',
-                                fontSize: '10px',
-                              }}
-                              title="权利要求核心保护特征"
-                            >
-                              权
-                            </span>
-                          )}
-                          <strong className="text-primary">{m.mark}</strong> {m.name}
-                        </span>
-                      ))}
-                      {filteredMarks.length === 0 && (
-                        <div className="text-xs text-muted py-md text-center w-full">
-                          未找到匹配的附图标记
-                        </div>
-                      )}
-                    </div>
                   </div>
-                )
-              })() : (
+                </div>
+              ) : (
                 <div className="text-xs text-muted py-md text-center">
                   本图暂无提取的附图标记
                 </div>

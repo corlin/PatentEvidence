@@ -1,15 +1,54 @@
-from __future__ import annotations
-
 import hashlib
 import io
 import mimetypes
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from typing import Any
 
 from docx import Document
 from pypdf import PdfReader
+
+
+FIG_REF_STOPWORDS = {
+    "权利要求", "说明书", "优先权", "申请号", "公布号", "实施例", "附图", "国家",
+    "知识产权", "公司", "根据", "参见", "本公开", "技术领域", "背景技术", "页",
+    "第", "至", "和", "中", "与", "该", "所述", "包括", "一种", "图", "参见图", "如图",
+    "表", "式", "书", "前", "例如", "特别地"
+}
+
+STRIP_PREFIXES = (
+    "并且围绕", "围绕", "被示出为", "示出为", "图中示出为", "示出", "定位在", "设置在", "相对于",
+    "耦接至", "枢转耦接", "连接至", "经由", "通过", "沿", "朝", "向", "从", "由", "在", "于",
+    "还包括多个", "及多个", "多个", "一对", "包括", "包含", "具有",
+    "以及被示出为", "以及", "与", "及", "和", "或", "的",
+    "该", "所述", "一种", "其", "此", "各", "每", "比", "至", "以使", "将"
+)
+
+
+def clean_component_name(raw: str) -> str:
+    """Normalize extracted component text by removing grammatical prefixes."""
+    cleaned = raw.strip()
+    changed = True
+    while changed:
+        changed = False
+        for p in STRIP_PREFIXES:
+            if cleaned.startswith(p):
+                cleaned = cleaned[len(p):].strip()
+                changed = True
+    return cleaned
+
+
+def fold_redundant_base_marks(marks_dict: dict[str, Any]) -> None:
+    """Fold bare numeric base marks when letter-subdivided child marks exist (e.g. drop 218 when 218A exists)."""
+    base_nums = {re.sub(r"[A-Za-z]+$", "", k) for k in marks_dict if re.search(r"[A-Za-z]$", k)}
+    for b in base_nums:
+        if b and b in marks_dict:
+            marks_dict.pop(b, None)
+
 
 
 @dataclass
@@ -233,68 +272,31 @@ class DrawingExtractor:
                         fig_captions[idx] = (f"图 {idx}", title_text)
 
         # 2. Extract reference marks dictionary: e.g. "偏转轴线102", "支架112", "101：输入模块"
-        fig_ref_stopwords = {
-            "权利要求", "说明书", "优先权", "申请号", "公布号", "实施例", "附图", "国家",
-            "知识产权", "公司", "根据", "参见", "本公开", "技术领域", "背景技术", "页",
-            "第", "至", "和", "中", "与", "该", "所述", "包括", "一种", "图", "参见图", "如图",
-            "表", "式", "书", "前", "例如", "特别地"
-        }
-
-        def clean_component_name(raw: str) -> str:
-            cleaned = raw.strip()
-            strip_prefixes = [
-                "并且围绕", "围绕", "被示出为", "示出为", "图中示出为", "示出", "定位在", "设置在", "相对于",
-                "耦接至", "枢转耦接", "连接至", "经由", "通过", "沿", "朝", "向", "从", "由", "在", "于",
-                "还包括多个", "及多个", "多个", "一对", "包括", "包含", "具有",
-                "以及被示出为", "以及", "与", "及", "和", "或", "的",
-                "该", "所述", "一种", "其", "此", "各", "每", "比", "至", "以使", "将"
-            ]
-            changed = True
-            while changed:
-                changed = False
-                for p in strip_prefixes:
-                    if cleaned.startswith(p):
-                        cleaned = cleaned[len(p):].strip()
-                        changed = True
-            return cleaned
-
         seen_marks: dict[str, str] = {}
+        mark_patterns = [
+            # Pattern A: 偏转轴线102 / 第一连杆114a / 线缆第一组218A
+            r"([\u4e00-\u9fa5]{1,16})\s*(?<![0-9])([0-9]{1,4}[A-Za-z]?)(?![0-9A-Za-z])",
+            # Pattern B: 101：输入模块 / 102-量化单元
+            r"(?<![0-9])([0-9]{1,4}[A-Za-z]?)\s*[、:：—\-]\s*([\u4e00-\u9fa5]{2,14})",
+            # Pattern C: Parenthesized: 前臂构件（12） / 控制线缆(174)
+            r"([\u4e00-\u9fa5]{1,16})\s*[（\(]\s*([0-9]{1,4}[A-Za-z]?)\s*[）\)]",
+        ]
 
-        # Pattern A: 偏转轴线102 / 第一连杆114a / 线缆第一组218A / 前臂12
-        for m in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*(?<![0-9])([0-9]{1,4}[A-Za-z]?)(?![0-9A-Za-z])", document_text):
-            raw_name = m.group(1).strip()
-            mark = m.group(2).strip()
-            # Ignore years (19xx, 20xx) and paragraph indices (00xx)
+        def _record_candidate(name_raw: str, mark_raw: str) -> None:
+            mark = mark_raw.strip()
             if mark.isdigit() and len(mark) == 4 and (mark.startswith("19") or mark.startswith("20") or mark.startswith("00")):
-                continue
-            if any(raw_name.endswith(sw) for sw in fig_ref_stopwords):
-                continue
-            cname = clean_component_name(raw_name)
-            if not cname or len(cname) < 1 or len(cname) > 12:
-                continue
-            if cname in fig_ref_stopwords:
-                continue
-            if mark not in seen_marks or len(cname) > len(seen_marks[mark]):
-                seen_marks[mark] = cname
+                return
+            cname = clean_component_name(name_raw)
+            if cname and 1 <= len(cname) <= 14 and cname not in FIG_REF_STOPWORDS:
+                if mark not in seen_marks or len(cname) > len(seen_marks[mark]):
+                    seen_marks[mark] = cname
 
-        # Pattern B: 101：输入模块 / 102-量化单元 / 218A-第一组
-        for m in re.finditer(r"(?<![0-9])([0-9]{1,4}[A-Za-z]?)\s*[、:：—\-]\s*([\u4e00-\u9fa5]{2,14})", document_text):
-            mark = m.group(1).strip()
-            if mark.isdigit() and len(mark) == 4 and (mark.startswith("19") or mark.startswith("20") or mark.startswith("00")):
-                continue
-            cname = clean_component_name(m.group(2).strip())
-            if cname and mark not in seen_marks:
-                seen_marks[mark] = cname
-
-        # Pattern C: Parenthesized marks, highly common in claims: 前臂构件（12） / 控制线缆(174)
-        for m in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*[（\(]\s*([0-9]{1,4}[A-Za-z]?)\s*[）\)]", document_text):
-            raw_name = m.group(1).strip()
-            mark = m.group(2).strip()
-            if mark.isdigit() and len(mark) == 4 and (mark.startswith("19") or mark.startswith("20") or mark.startswith("00")):
-                continue
-            cname = clean_component_name(raw_name)
-            if cname and len(cname) >= 1 and cname not in fig_ref_stopwords:
-                seen_marks[mark] = cname
+        for m in re.finditer(mark_patterns[0], document_text):
+            _record_candidate(m.group(1), m.group(2))
+        for m in re.finditer(mark_patterns[1], document_text):
+            _record_candidate(m.group(2), m.group(1))
+        for m in re.finditer(mark_patterns[2], document_text):
+            _record_candidate(m.group(1), m.group(2))
 
         # Locate Claims section to extract authoritative claim terminology and claim-linked features
         claims_text = ""
@@ -311,28 +313,28 @@ class DrawingExtractor:
 
         if claims_text:
             # 1. Explicit parenthesized marks in claims (highest legal authority)
-            for cm in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*[（\(]\s*([0-9]{1,4}[A-Za-z]?)\s*[）\)]", claims_text):
-                cname = clean_component_name(cm.group(1).strip())
+            for cm in re.finditer(mark_patterns[2], claims_text):
+                cname = clean_component_name(cm.group(1))
                 cmark = cm.group(2).strip()
                 if cname and cmark:
                     claim_marks[cmark] = cname
                     seen_marks[cmark] = cname  # Override with canonical claim name
 
             # 2. Direct marks in claims
-            for cm in re.finditer(r"([\u4e00-\u9fa5]{1,16})\s*(?<![0-9])([0-9]{1,4}[A-Za-z]?)(?![0-9A-Za-z])", claims_text):
-                cname = clean_component_name(cm.group(1).strip())
+            for cm in re.finditer(mark_patterns[0], claims_text):
+                cname = clean_component_name(cm.group(1))
                 cmark = cm.group(2).strip()
                 if cname and cmark and not (cmark.isdigit() and len(cmark) == 4 and (cmark.startswith("19") or cmark.startswith("20") or cmark.startswith("00"))):
                     claim_marks[cmark] = cname
                     seen_marks[cmark] = cname
 
-            # 3. Extract core technical feature terms from claims (for implicit mapping)
+            # 3. Core technical feature terms from claims (for implicit semantic mapping)
             raw_claim_terms = set(
                 re.findall(r"[\u4e00-\u9fa5]{2,10}(?:构件|组件|结构|关节|线缆|构造|区|轴线|通道|表面|电机|基部|端|装置|体)", claims_text)
             )
             for ct in raw_claim_terms:
                 cct = clean_component_name(ct)
-                if cct and len(cct) >= 2 and not any(cct.startswith(sw) for sw in fig_ref_stopwords):
+                if cct and len(cct) >= 2 and cct not in FIG_REF_STOPWORDS:
                     claim_terms.add(cct)
 
         all_extracted_marks: list[dict[str, Any]] = []
@@ -353,7 +355,6 @@ class DrawingExtractor:
             num_part = int(re.sub(r"[^0-9]", "", k)) if re.sub(r"[^0-9]", "", k) else 0
             return (num_part, k)
 
-        import shutil, subprocess, tempfile
         tesseract_bin = shutil.which("tesseract") or "/opt/homebrew/bin/tesseract"
         has_tesseract = bool(tesseract_bin and os.path.exists(tesseract_bin))
 
@@ -386,7 +387,6 @@ class DrawingExtractor:
                 return set()
 
         # 3. Associate with drawings based on text context and companion figure references
-        # Precompute paragraphs mentioning figures (splitting by patent paragraph tags or double newlines)
         paragraphs = [
             p.strip()
             for p in re.split(r"\n\s*(?=\[[0-9]{4}\])|\n\s*\n", document_text)
@@ -406,7 +406,6 @@ class DrawingExtractor:
                         d.figure_title = f"说明书附图 {fig_idx}"
 
             if d.figure_label == "摘要附图":
-                # Summary figure associates key primary components
                 summary_marks = [
                     m for m in all_extracted_marks
                     if mark_sort_key(m)[0] in (10, 12, 14, 16, 100, 102, 104, 118, 120) or mark_sort_key(m)[0] < 200
@@ -422,7 +421,6 @@ class DrawingExtractor:
             fig_pat = rf"图\s*{fig_idx}(?![0-9])|Figure\s*{fig_idx}\b"
             range_pat = r"图\s*([0-9]+)\s*(?:和|与|至|到|-)\s*(?:图\s*)?([0-9]+)"
 
-            # If figure title refers to another figure (e.g. "图1的机器人臂组件的俯视图"), also include companion figure
             referenced_fig_match = re.search(r"图\s*([0-9]+)", d.figure_title)
             referenced_fig = int(referenced_fig_match.group(1)) if referenced_fig_match else None
             
@@ -433,14 +431,13 @@ class DrawingExtractor:
                 if referenced_fig and re.search(rf"图\s*{referenced_fig}(?![0-9])|Figure\s*{referenced_fig}\b", para, re.IGNORECASE):
                     context_sentences.append(para)
                     continue
-                # Check range match (e.g. 图1和图2, 图6至图8)
                 for rm in re.finditer(range_pat, para):
                     start_f, end_f = int(rm.group(1)), int(rm.group(2))
                     if start_f <= fig_idx <= end_f:
                         context_sentences.append(para)
                         break
 
-            # If figure is a view of another figure (e.g. "图1的机器人臂组件的俯视图"), include related assembly paragraphs
+            # If figure is a companion view of another figure, include assembly paragraphs
             if fig_idx in (1, 2):
                 for para in paragraphs:
                     cleaned_p = para.strip()
@@ -449,48 +446,42 @@ class DrawingExtractor:
 
             combined_context = "\n".join(context_sentences)
 
-            # Match master marks
+            # Determine if this drawing represents a detail/sub-assembly view
+            is_detail_view = any(kw in d.figure_title for kw in ("布置", "透视", "局部", "放大", "剖面", "附肢", "构件")) and not any(kw in d.figure_title for kw in ("侧视", "俯视", "总装", "整体", "图1"))
+            macro_parent_marks = {"10", "12", "14", "16", "178", "222", "226"}
+
             matched_marks: dict[str, dict[str, Any]] = {}
 
-            # If OCR found marks, cross-verify: marks must appear in OCR AND in document
+            # Primary path: OCR visual validation
             if len(ocr_detected) >= 3:
                 for m in all_extracted_marks:
                     mk = m["mark"]
                     if mk in ocr_detected or mk.upper() in ocr_detected:
-                        # Exclude high-level assembly marks (10, 14, 16) if this is a detailed sub-component figure (like Fig 4, 5, 6, 7, 8)
-                        if fig_idx in (4, 5) and mk in ("10", "12", "14", "16", "178", "222", "226"):
+                        if is_detail_view and mk in macro_parent_marks and mk not in ocr_detected:
                             continue
                         matched_marks[mk] = dict(m)
-                
-                # If sub-marks like 218A exist, drop the bare parent prefix 218
-                if any(k.startswith("218") and len(k) > 3 for k in matched_marks):
-                    matched_marks.pop("218", None)
+                fold_redundant_base_marks(matched_marks)
 
-            # If OCR was empty or missed items, use context matching
+            # Secondary path: Context paragraph matching
             if len(matched_marks) < 3:
                 for m in all_extracted_marks:
                     mk = m["mark"]
-                    # Must appear as isolated token in figure context
                     if re.search(rf"(?<![0-9]){re.escape(mk)}(?![0-9A-Za-z])", combined_context):
-                        if fig_idx in (4, 5) and mk in ("10", "12", "14", "16", "178", "222", "226"):
+                        if is_detail_view and mk in macro_parent_marks:
                             continue
                         matched_marks[mk] = dict(m)
+                fold_redundant_base_marks(matched_marks)
 
-                if any(k.startswith("218") and len(k) > 3 for k in matched_marks):
-                    matched_marks.pop("218", None)
-
-            # Fallback: if context didn't catch enough, include marks sharing the figure's primary digit series
+            # Fallback path: Number series or all marks
             if len(matched_marks) < 3:
                 for m in all_extracted_marks:
                     mk = m["mark"]
                     if mk.startswith(str(fig_idx)) or (fig_idx == 1 and mark_sort_key(m)[0] < 200):
                         matched_marks[mk] = dict(m)
 
-            # If still empty, fall back to all marks
             if not matched_marks:
                 matched_marks = {m["mark"]: dict(m) for m in all_extracted_marks}
 
-            final_marks = list(matched_marks.values())
-            d.reference_marks = sorted(final_marks, key=mark_sort_key)
+            d.reference_marks = sorted(list(matched_marks.values()), key=mark_sort_key)
 
         return drawings
