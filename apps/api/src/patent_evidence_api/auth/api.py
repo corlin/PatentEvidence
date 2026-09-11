@@ -25,6 +25,8 @@ from patent_evidence_api.auth.session_authority import Principal, SessionAuthori
 from patent_evidence_api.core.database import (
     application_transaction,
     bind_session_token_hash,
+    bind_transaction_context,
+    platform_transaction,
 )
 from patent_evidence_api.platform.access import PlatformAccess
 
@@ -56,6 +58,7 @@ class MfaChallengeBody(BaseModel):
 def create_auth_router(
     session_factory: async_sessionmaker[AsyncSession],
     *,
+    platform_session_factory: async_sessionmaker[AsyncSession],
     clock: Callable[[], datetime],
     passwords: AsyncPasswordSecurity,
     totp: TotpSecurity,
@@ -69,6 +72,10 @@ def create_auth_router(
 
     async def database_session() -> AsyncIterator[AsyncSession]:
         async with application_transaction(session_factory) as session:
+            yield session
+
+    async def platform_database_session() -> AsyncIterator[AsyncSession]:
+        async with platform_transaction(platform_session_factory) as session:
             yield session
 
     def capacity_exhausted() -> HTTPException:
@@ -266,6 +273,84 @@ def create_auth_router(
             "email": principal.email,
             "expires_at": principal.expires_at.isoformat(),
             "mfa_recent": principal.has_recent_mfa(clock()),
+        }
+
+    @router.get("/me")
+    async def current_me(
+        request: Request,
+        session: AsyncSession = Depends(database_session),
+        platform_session: AsyncSession = Depends(platform_database_session),
+    ) -> dict[str, object]:
+        """当前身份的机构成员关系与平台管理员授权（只读，用于前端路由守卫与工作空间解析）。"""
+        principal = await session_authority.resolve(request, session)
+        # 成员关系查询按"本人"可见性策略放行：绑定 actor 上下文（跨机构，RLS self 策略）
+        await bind_transaction_context(
+            session,
+            organization_id=None,
+            actor_identity_id=principal.identity_id,
+        )
+        memberships = (
+            (
+                await session.execute(
+                    text(
+                        """SELECT membership.organization_id,
+                        organization.display_name AS organization_name,
+                        membership.role,membership.status
+                        FROM organization_memberships membership
+                        JOIN organizations organization
+                          ON organization.id=membership.organization_id
+                        WHERE membership.global_identity_id=:identity
+                          AND membership.status <> 'removed'
+                        ORDER BY organization.display_name,membership.id"""
+                    ),
+                    {"identity": principal.identity_id},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        # 平台管理员授权经 platform 角色（RLS 专用通道）判定，与 PlatformPrincipalGuard 一致
+        is_platform_admin = bool(
+            await platform_session.scalar(
+                text(
+                    """SELECT EXISTS(
+                    SELECT 1 FROM global_identities identity
+                    JOIN platform_operator_grants grant_record
+                      ON grant_record.global_identity_id=identity.id
+                    WHERE identity.id=:actor AND identity.status='active'
+                      AND identity.security_version=:security_version
+                      AND grant_record.role='platform_admin'
+                      AND grant_record.status='active'
+                      AND (
+                        grant_record.bootstrap_mfa_enrollment_expires_at IS NULL
+                        OR EXISTS(
+                          SELECT 1 FROM mfa_credentials factor
+                          WHERE factor.global_identity_id=identity.id
+                            AND factor.status='active'
+                            AND factor.confirmed_at IS NOT NULL
+                            AND factor.confirmed_at <= grant_record.bootstrap_mfa_enrollment_expires_at
+                        )
+                      ))"""
+                ),
+                {
+                    "actor": principal.identity_id,
+                    "security_version": principal.security_version,
+                },
+            )
+        )
+        return {
+            "identity_id": str(principal.identity_id),
+            "email": principal.email,
+            "is_platform_admin": is_platform_admin,
+            "memberships": [
+                {
+                    "organization_id": str(row["organization_id"]),
+                    "organization_name": row["organization_name"],
+                    "role": row["role"],
+                    "status": row["status"],
+                }
+                for row in memberships
+            ],
         }
 
     @router.post("/logout", status_code=204)

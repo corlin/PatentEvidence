@@ -129,6 +129,7 @@ def create_app(
     application.include_router(
         create_auth_router(
             session_factory,
+            platform_session_factory=platform_session_factory,
             clock=resolved_clock,
             passwords=resolved_passwords,
             totp=TotpSecurity(resolved_settings.mfa_encryption_key.get_secret_value()),
