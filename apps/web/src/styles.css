@@ -1,6 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* 品牌字体：Fira Sans（正文）+ Fira Code（数据/哈希/图号） */
+  --font-sans: 'Fira Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
@@ -10,9 +13,11 @@
   --color-text-secondary: #64748b;
   --color-text-muted: #94a3b8;
 
-  --color-primary: #0284c7;
-  --color-primary-hover: #0369a1;
-  --color-primary-bg: #e0f2fe;
+  /* 品牌色：权威蓝（主）+ 信任金（点缀），对齐 Trust & Authority */
+  --color-primary: #1e3a8a;
+  --color-primary-hover: #1e40af;
+  --color-primary-bg: #dbeafe;
+  --color-accent: #b45309;
 
   --color-success: #16a34a;
   --color-success-bg: #f0fdf4;
@@ -47,6 +52,42 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Accessibility: visible focus for keyboard users ---- */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ---- Accessibility: skip to main content ---- */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 9999;
+  background: var(--color-primary);
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 0 0 6px 0;
+  font-size: 14px;
+  text-decoration: none;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+/* ---- Motion: respect reduced-motion preference ---- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 a {
@@ -364,6 +405,21 @@ a:hover {
 .btn-xs {
   padding: 2px 6px;
   font-size: 11px;
+}
+/* 品牌点缀筛选按钮：信任金（如"权利要求特征"过滤） */
+.btn-gold {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(245, 158, 11, 0.1);
+}
+.btn-gold-active {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--color-accent);
+  color: #ffffff;
+  background: var(--color-accent);
 }
 .btn-block {
   width: 100%;
@@ -1158,6 +1214,89 @@ a:hover {
   opacity: 0.5;
   user-select: none;
   flex-shrink: 0;
+}
+
+/* ---- Dark mode (Trust & Authority dual mode) ---- */
+[data-theme='dark'] {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-border: #334155;
+  --color-border-hover: #475569;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
+
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-primary-bg: #1e3a8a;
+
+  --color-success-bg: #052e16;
+  --color-success-border: #166534;
+  --color-warning-bg: #451a03;
+  --color-warning-border: #92400e;
+  --color-danger-bg: #450a0a;
+  --color-danger-border: #7f1d1d;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-border: #334155;
+    --color-border-hover: #475569;
+    --color-text: #f1f5f9;
+    --color-text-secondary: #cbd5e1;
+    --color-text-muted: #94a3b8;
+
+    --color-primary: #3b82f6;
+    --color-primary-hover: #60a5fa;
+    --color-primary-bg: #1e3a8a;
+
+    --color-success-bg: #052e16;
+    --color-success-border: #166534;
+    --color-warning-bg: #451a03;
+    --color-warning-border: #92400e;
+    --color-danger-bg: #450a0a;
+    --color-danger-border: #7f1d1d;
+
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  }
+}
+
+/* ---- Responsive breakpoints (desktop-first degradation) ---- */
+@media (max-width: 1024px) {
+  .grid-3-cols {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .header-inner {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .workbench-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+@media (max-width: 768px) {
+  .grid-3-cols,
+  .grid-2-cols {
+    grid-template-columns: 1fr;
+  }
+  .modal-container {
+    width: 92vw;
+    max-width: none;
+  }
+  .header-nav {
+    flex-wrap: wrap;
+  }
+  .lightbox-container {
+    max-width: 96vw;
+  }
 }
 
 

@@ -82,7 +82,7 @@ describe('Search & Candidate Pool Web Surface', () => {
     })
 
     // Click Export Handoff Modal
-    const exportBtn = screen.getByRole('button', { name: '📦 导出 CNIPR 规范交接包' })
+    const exportBtn = screen.getByRole('button', { name: '导出 CNIPR 规范交接包' })
     fireEvent.click(exportBtn)
 
     await waitFor(() => {
@@ -105,7 +105,7 @@ describe('Search & Candidate Pool Web Surface', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('📋 检索规划与 CNIPR 交接包')).toBeDefined()
+      expect(screen.getByText('检索规划与 CNIPR 交接包')).toBeDefined()
     })
 
     // Switch Tab to candidates

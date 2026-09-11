@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { apiClient, ApiError } from '../services/apiClient'
+import { Icon } from '../components/Icon'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type {
   CaseDrawing,
   ClaimFeatureComparison,
@@ -37,6 +39,8 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
   const [editingCells, setEditingCells] = useState<Record<string, ClaimFeatureComparison>>({})
   const [savingCellId, setSavingCellId] = useState<string | null>(null)
   const [reviewFeedback, setReviewFeedback] = useState<Record<string, string>>({})
+  // P0：锁定确认比对矩阵（不可变）前，必须显式二次确认
+  const [showConfirmMatrix, setShowConfirmMatrix] = useState(false)
 
   const fetchDrawings = async () => {
     try {
@@ -70,7 +74,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 404) {
         setMatrixData(null)
-      } else if (err instanceof ApiError && err.status === 403) {
+      } else if (isMfaRequired(err)) {
         requestMfaStepUp(fetchMatrix)
       } else {
         setError(err.detail || '加载比对表失败')
@@ -132,6 +136,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
     try {
       const confirmed = await apiClient.confirmComparisonMatrix(orgId, caseId, matrixData.matrix.id)
       setMatrixData(confirmed)
+      setShowConfirmMatrix(false)
       setSuccess('比对矩阵已锁定确认！案件状态推进为【比对已确认】。')
     } catch (err: any) {
       setError(err.detail || '确认比对表失败')
@@ -181,12 +186,12 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                 onClick={handleGenerateMatrix}
                 disabled={actionLoading}
               >
-                🔄 重新智能比对
+                <Icon name="refresh" size={14} /> 重新智能比对
               </button>
               <button
                 type="button"
                 className="btn btn-success btn-sm font-bold"
-                onClick={handleConfirmMatrix}
+                onClick={() => setShowConfirmMatrix(true)}
                 disabled={actionLoading}
               >
                 ✓ 锁定确认比对表
@@ -197,7 +202,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
               to={`/organizations/${orgId}/cases/${caseId}/review`}
               className="btn btn-primary btn-sm"
             >
-              ⚖️ 提交复核审批 &rarr;
+              <Icon name="scales" size={14} /> 提交复核审批 &rarr;
             </Link>
           )}
           <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
@@ -231,9 +236,9 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                     }`}
                   >
                     {matrixData.evaluation.risk_level === 'high_novelty_risk'
-                      ? '⚠️ 新颖性高风险预警'
+                      ? '新颖性高风险预警'
                       : matrixData.evaluation.risk_level === 'inventiveness_risk'
-                      ? '⚡ 创造性审查重点关注'
+                      ? '创造性审查重点关注'
                       : '✓ 良好授权前景'}
                   </span>
                   <span className="text-xs text-secondary font-medium">
@@ -247,7 +252,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                     onClick={() => setShowAllDrawingsModal(true)}
                     className="btn btn-secondary btn-xs"
                   >
-                    🖼️ 查看全案说明书附图 ({drawings.length} 幅)
+                    <Icon name="image" size={14} /> 查看全案说明书附图 ({drawings.length} 幅)
                   </button>
                 )}
               </div>
@@ -264,7 +269,12 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                 const hasFeedback = reviewFeedback[feat.id]
 
                 return (
-                  <div key={feat.id} className="card p-md border rounded bg-surface shadow-sm">
+                  <div
+                    key={feat.id}
+                    className="card p-md border rounded bg-surface shadow-sm"
+                    role="region"
+                    aria-label={`技术特征 ${feat.feature_code}（${feat.feature_type === 'preamble' ? '前序特征' : feat.feature_type === 'characterizing' ? '表征特征' : '从属特征'}）的比对矩阵`}
+                  >
                     {/* Feature Card Header */}
                     <div className="flex-between align-center mb-sm border-b pb-xs">
                       <div className="flex-row gap-xs align-center">
@@ -295,7 +305,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                               onClick={() => setPreviewDrawing(d)}
                               title={`查看 ${d.figure_label}: ${d.figure_title}`}
                             >
-                              🖼️ {d.figure_label}
+                              <Icon name="image" size={14} /> {d.figure_label}
                             </button>
                           ))
                         ) : (
@@ -304,7 +314,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                             className="btn btn-link btn-xs text-secondary"
                             onClick={() => setShowAllDrawingsModal(true)}
                           >
-                            🖼️ 附图对照
+                            <Icon name="image" size={14} /> 附图对照
                           </button>
                         )}
                       </div>
@@ -318,7 +328,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                     {/* Review Feedback Warning if requested changes */}
                     {hasFeedback && (
                       <div className="p-sm bg-yellow-50 border border-yellow-300 rounded text-xs text-warning mb-md flex-row gap-xs align-center">
-                        <span>⚠️</span>
+                        <span><Icon name="warning" size={14} /></span>
                         <span>
                           <strong>独立复核专家修改意见：</strong> {hasFeedback}
                         </span>
@@ -345,6 +355,8 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                                 ? 'border-yellow-300 bg-yellow-50'
                                 : 'border-green-300 bg-green-50'
                             }`}
+                            role="region"
+                            aria-label={`特征 ${feat.feature_code} 对候选文献 D${cIdx + 1}（${cand.publication_number}）的判定`}
                           >
                             {/* Candidate Box Header */}
                             <div className="flex-between align-center border-b pb-xs">
@@ -371,9 +383,9 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                                     })
                                   }
                                 >
-                                  <option value="identical">🔴 相同 (完全公开)</option>
-                                  <option value="equivalent">🟡 等同 (手段替换)</option>
-                                  <option value="different">🟢 差异 (未公开)</option>
+                                  <option value="identical"><Icon name="x-circle" size={12} color="#dc2626" /> 相同 (完全公开)</option>
+                                  <option value="equivalent"><Icon name="warning" size={12} color="#d97706" /> 等同 (手段替换)</option>
+                                  <option value="different"><Icon name="check-circle" size={12} color="#16a34a" /> 差异 (未公开)</option>
                                 </select>
                               ) : (
                                 <span
@@ -386,10 +398,10 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                                   }`}
                                 >
                                   {comp.judgment === 'identical'
-                                    ? '🔴 相同公开'
+                                    ? '相同公开'
                                     : comp.judgment === 'equivalent'
-                                    ? '🟡 等同替代'
-                                    : '🟢 存在差异'}
+                                    ? '等同替代'
+                                    : '存在差异'}
                                 </span>
                               )}
                             </div>
@@ -397,7 +409,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                             {/* Citation Location */}
                             <div className="form-group">
                               <label className="text-xs text-secondary font-semibold">
-                                📍 对比文件引证位置 (Citation Location)
+                                <Icon name="pin" size={14} /> 对比文件引证位置 (Citation Location)
                               </label>
                               {!isConfirmed ? (
                                 <input
@@ -425,7 +437,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                             {/* Citation Quote */}
                             <div className="form-group">
                               <label className="text-xs text-secondary font-semibold">
-                                💬 对比文件引文摘录 (Citation Quote)
+                                <Icon name="chat" size={14} /> 对比文件引文摘录 (Citation Quote)
                               </label>
                               {!isConfirmed ? (
                                 <input
@@ -453,7 +465,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                             {/* Reasoning Analysis */}
                             <div className="form-group">
                               <label className="text-xs text-secondary font-semibold">
-                                ⚖️ 法律对比论述与技术特征差异 (Reasoning)
+                                <Icon name="scales" size={14} /> 法律对比论述与技术特征差异 (Reasoning)
                               </label>
                               {!isConfirmed ? (
                                 <textarea
@@ -511,7 +523,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
               onClick={handleGenerateMatrix}
               disabled={actionLoading}
             >
-              {actionLoading ? '正在比对生成中...' : '⚡ 立即执行智能比对生成 Claim Chart'}
+              {actionLoading ? '正在比对生成中...' : '立即执行智能比对生成 Claim Chart'}
             </button>
           </div>
         )}
@@ -520,7 +532,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
         {previewDrawing && (
           <Modal
             isOpen={!!previewDrawing}
-            title={`🖼️ 说明书附图图文对照: ${previewDrawing.figure_label}`}
+            title={`<Icon name="image" size={14} /> 说明书附图图文对照: ${previewDrawing.figure_label}`}
             onClose={() => setPreviewDrawing(null)}
           >
             <div className="flex-stack gap-md">
@@ -567,7 +579,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
         {showAllDrawingsModal && (
           <Modal
             isOpen={showAllDrawingsModal}
-            title={`🖼️ 全案说明书附图清单 (${drawings.length} 幅)`}
+            title={`<Icon name="image" size={14} /> 全案说明书附图清单 (${drawings.length} 幅)`}
             onClose={() => setShowAllDrawingsModal(false)}
           >
             <div className="flex-stack gap-md">
@@ -609,6 +621,24 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
             </div>
           </Modal>
         )}
+
+        {/* P0：锁定确认比对矩阵的不可变基准二次确认 */}
+        <ConfirmDialog
+          isOpen={showConfirmMatrix}
+          title="锁定确认比对矩阵为不可变基准？"
+          danger
+          confirmLabel="确认锁定比对表"
+          loading={actionLoading}
+          onCancel={() => setShowConfirmMatrix(false)}
+          onConfirm={handleConfirmMatrix}
+        >
+          <p>
+            确认后，当前 Claim Chart 比对矩阵将被锁定确认，案件状态推进为【比对已确认】。
+          </p>
+          <p className="text-xs text-secondary mt-xs">
+            此操作<b>不可撤销</b>：锁定的判定与论据将作为不可变证据参与后续封存，修改需通过复核退回流程。
+          </p>
+        </ConfirmDialog>
     </WorkbenchLayout>
   )
 }

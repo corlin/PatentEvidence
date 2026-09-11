@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
+import { Icon } from '../components/Icon'
 import { apiClient, ApiError } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { MarkdownViewer } from '../components/MarkdownViewer'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type {
   ComparisonMatrixDetail,
   EvidenceSnapshotDetail,
@@ -47,6 +49,8 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
   const [overallComments, setOverallComments] = useState('')
   const [itemizedFeedback, setItemizedFeedback] = useState<Record<string, string>>({})
   const [showSelfAuditModal, setShowSelfAuditModal] = useState(false)
+  // P0：复核签署产生不可变 SHA-256 决策签名，签署前必须显式二次确认
+  const [showDecisionConfirm, setShowDecisionConfirm] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -123,12 +127,13 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
 
       setSuccess(
         decisionType === 'approved'
-          ? '🎉 案件已终审批准！证据与分析报告已完成不可变签名封存。'
+          ? '案件已终审批准！证据与分析报告已完成不可变签名封存。'
           : decisionType === 'changes_requested'
-          ? '⚠️ 已退回代理师修改，逐项批注已同步至比对工作台。'
+          ? '已退回代理师修改，逐项批注已同步至比对工作台。'
           : '已拒绝该提审轮次。'
       )
       setShowSelfAuditModal(false)
+      setShowDecisionConfirm(false)
       setOverallComments('')
       setItemizedFeedback({})
       await loadData()
@@ -174,13 +179,13 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
             to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
             className="btn btn-secondary btn-sm"
           >
-            📊 特征对比表
+            <Icon name="chart" size={14} /> 特征对比表
           </Link>
           <Link
             to={`/organizations/${orgId}/cases/${caseId}/reports`}
             className="btn btn-secondary btn-sm"
           >
-            📄 证据与报告
+            <Icon name="file" size={14} /> 证据与报告
           </Link>
 
           {isApproved ? (
@@ -188,7 +193,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
               to={`/organizations/${orgId}/cases/${caseId}/delivery`}
               className="btn btn-primary btn-sm"
             >
-              📦 进入正式交付中心 →
+              <Icon name="package" size={14} /> 进入正式交付中心 →
             </Link>
           ) : (
             <button
@@ -196,7 +201,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
               onClick={() => setShowSubmitModal(true)}
               className="btn btn-primary btn-sm"
             >
-              {currentReview ? '🔄 重新发起提审 (下一轮)' : '🚀 提交复核申请'}
+              {currentReview ? '重新发起提审 (下一轮)' : '提交复核申请'}
             </button>
           )}
         </>
@@ -243,21 +248,21 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
             className={`btn btn-sm ${activeTab === 'claims' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('claims')}
           >
-            🔍 权利要求逐项复核与签署 (Claim Chart)
+            <Icon name="search" size={14} /> 权利要求逐项复核与签署 (Claim Chart)
           </button>
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'report' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('report')}
           >
-            📄 分析与预评估报告全文预览 (Report)
+            <Icon name="file" size={14} /> 分析与预评估报告全文预览 (Report)
           </button>
           <button
             type="button"
             className={`btn btn-sm ${activeTab === 'history' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('history')}
           >
-            📜 多轮复核历史追溯 (Audit Trail)
+            <Icon name="scroll" size={14} /> 多轮复核历史追溯 (Audit Trail)
           </button>
         </div>
 
@@ -268,7 +273,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
             <div className="flex-stack gap-md">
               <div className="card p-md">
                 <div className="flex-between align-center mb-sm">
-                  <h2 className="text-md font-bold">🔍 权利要求逐项比对与复核批注</h2>
+                  <h2 className="text-md font-bold"><Icon name="search" size={14} /> 权利要求逐项比对与复核批注</h2>
                   <span className="text-xs text-secondary">
                     共 {matrixData?.features.length || 0} 个特征项
                   </span>
@@ -328,7 +333,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                                     [f.id]: e.target.value,
                                   })
                                 }
-                                placeholder="✍️ 针对该特征输入复核意见（如：依据不足，建议补充说明书段落）..."
+                                placeholder="针对该特征输入复核意见（如：依据不足，建议补充说明书段落）..."
                                 className="form-input text-xs"
                               />
                             </div>
@@ -349,7 +354,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
             <div className="flex-stack gap-md sticky-top">
               {/* Decision Action Card */}
               <div className="card p-md">
-                <h2 className="text-md font-bold mb-xs">✍️ 复核结论签署 (Review Decision)</h2>
+                <h2 className="text-md font-bold mb-xs"><Icon name="sign" size={14} /> 复核结论签署 (Review Decision)</h2>
                 <p className="text-xs text-secondary mb-md">
                   独立复核确认后签署决定，系统将生成不可变 SHA-256 数字决策签名。
                 </p>
@@ -358,7 +363,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                   <div className="flex-stack gap-md">
                     {isSubmitter && (
                       <div className="p-sm bg-yellow-50 border border-yellow-300 rounded text-xs text-warning">
-                        <strong>⚠️ 职责分离提示：</strong> 您是本案提审人。单人执业允许自审通过，系统将在最终交付报告中记录自审标记。
+                        <strong><Icon name="warning" size={14} /> 职责分离提示：</strong> 您是本案提审人。单人执业允许自审通过，系统将在最终交付报告中记录自审标记。
                       </div>
                     )}
 
@@ -374,7 +379,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                             decisionType === 'approved' ? 'btn-primary' : 'btn-secondary'
                           }`}
                         >
-                          ✅ 终审批准通过
+                          <Icon name="check-circle" size={14} color="#16a34a" /> 终审批准通过
                         </button>
                         <button
                           type="button"
@@ -383,7 +388,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                             decisionType === 'changes_requested' ? 'btn-primary' : 'btn-secondary'
                           }`}
                         >
-                          ⚠️ 要求退回修改
+                          <Icon name="warning" size={14} /> 要求退回修改
                         </button>
                       </div>
                     </div>
@@ -403,7 +408,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => handleRecordDecision(false)}
+                      onClick={() => setShowDecisionConfirm(true)}
                       disabled={actionLoading}
                       className="btn btn-primary btn-sm w-full font-bold"
                     >
@@ -416,7 +421,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                   <div className="p-md text-center">
                     {isApproved ? (
                       <div className="p-sm bg-green-50 border border-green-300 rounded text-success text-xs font-semibold">
-                        🎉 本案已终审批准并完成数字封存
+                        <Icon name="sparkle" size={14} /> 本案已终审批准并完成数字封存
                       </div>
                     ) : (
                       <span className="text-secondary text-xs">
@@ -430,7 +435,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
               {/* Quick Report Link Card */}
               <div className="card p-md bg-subtle">
                 <div className="flex-between align-center mb-xs">
-                  <span className="font-bold text-xs text-text">📄 预评估报告预览</span>
+                  <span className="font-bold text-xs text-text"><Icon name="file" size={14} /> 预评估报告预览</span>
                   <button
                     type="button"
                     onClick={() => setActiveTab('report')}
@@ -466,7 +471,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                   className="btn btn-secondary btn-xs"
                   onClick={handleCopyMarkdown}
                 >
-                  {copiedMarkdown ? '✓ 已复制源码！' : '📋 复制 Markdown 源码'}
+                  {copiedMarkdown ? '✓ 已复制源码！' : '复制 Markdown 源码'}
                 </button>
               </div>
             </div>
@@ -482,7 +487,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
           <div className="card p-lg">
             <div className="flex-between align-center mb-md">
               <div>
-                <h2 className="text-lg font-bold">📜 多轮复核历史追溯 (Audit Trail)</h2>
+                <h2 className="text-lg font-bold"><Icon name="scroll" size={14} /> 多轮复核历史追溯 (Audit Trail)</h2>
                 <p className="text-xs text-secondary">
                   不可变历史审计链，记录历次提审说明、专家批注、增量差异与数字防伪签名。
                 </p>
@@ -553,7 +558,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
         {showSubmitModal && (
           <Modal
             isOpen={showSubmitModal}
-            title="🚀 提交案件复核申请"
+            title="提交案件复核申请"
             onClose={() => setShowSubmitModal(false)}
           >
             <div className="flex-stack gap-md">
@@ -597,7 +602,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
         {showSelfAuditModal && (
           <Modal
             isOpen={showSelfAuditModal}
-            title="⚠️ 单人自审确认提示"
+            title="单人自审确认提示"
             onClose={() => setShowSelfAuditModal(false)}
           >
             <div className="flex-stack gap-md">
@@ -624,6 +629,34 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
             </div>
           </Modal>
         )}
+
+        {/* P0：复核决策签署的不可变签名二次确认 */}
+        <ConfirmDialog
+          isOpen={showDecisionConfirm}
+          title="确认签署复核决定？"
+          danger={decisionType !== 'approved'}
+          confirmLabel={
+            decisionType === 'approved' ? '确认批准并封存' : '确认签署该决定'
+          }
+          loading={actionLoading}
+          onCancel={() => setShowDecisionConfirm(false)}
+          onConfirm={() => handleRecordDecision(false)}
+        >
+          <p>
+            确认后，本轮的复核决定
+            <strong>
+              {decisionType === 'approved'
+                ? '【终审批准】'
+                : decisionType === 'changes_requested'
+                ? '【要求退回修改】'
+                : '【拒绝】'}
+            </strong>
+            将生成不可变 SHA-256 数字决策签名并写入审计链。
+          </p>
+          <p className="text-xs text-secondary mt-xs">
+            此操作<b>不可撤销</b>：决策签名与审计记录将永久保留，后续调整需发起新一轮提审。
+          </p>
+        </ConfirmDialog>
     </WorkbenchLayout>
   )
 }

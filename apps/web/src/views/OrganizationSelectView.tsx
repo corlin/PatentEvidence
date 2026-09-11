@@ -1,17 +1,23 @@
 import React from 'react'
+import { Icon } from '../components/Icon'
 import { useSession } from '../context/SessionContext'
 import { Header } from '../components/Header'
 import { Link, useNavigate } from '../router/Router'
 
 export const OrganizationSelectView: React.FC = () => {
-  const { session, setActiveOrgId } = useSession()
+  const { memberships, meLoading, isPlatformAdmin, setActiveOrgId } = useSession()
   const navigate = useNavigate()
+
+  const enterOrganization = (orgId: string) => {
+    setActiveOrgId(orgId)
+    navigate(`/organizations/${orgId}/cases`)
+  }
 
   return (
     <div className="layout-container">
       <Header />
 
-      <main className="main-content max-w-xl mx-auto py-xl">
+      <main id="main-content" className="main-content max-w-xl mx-auto py-xl">
         <div className="card">
           <div className="card-header text-center mb-md">
             <h1 className="card-title text-xl font-bold">选择工作空间</h1>
@@ -21,67 +27,59 @@ export const OrganizationSelectView: React.FC = () => {
           </div>
 
           <div className="flex-stack gap-sm">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveOrgId('90000000-0000-4000-8000-000000000001')
-                navigate('/organizations/90000000-0000-4000-8000-000000000001/cases')
-              }}
-              className="org-select-card p-md border rounded hover-border-primary transition text-left cursor-pointer"
-            >
-              <div className="flex-between">
-                <div>
-                  <strong className="text-base text-primary">⚖️ 北京前沿知识产权代理事务所</strong>
-                  <p className="text-xs text-secondary mt-xs">
-                    标准知识产权代理机构工作空间（案件中心、技术特征建模、Claim Chart 与报告）
-                  </p>
-                </div>
-                <span className="badge badge-success text-xs">进入工作台 &rarr;</span>
+            {meLoading ? (
+              <div className="p-md text-center text-secondary text-sm">
+                正在加载您的机构列表...
               </div>
-            </button>
-
-            <Link
-              to="/platform/organizations"
-              className="org-select-card p-md border rounded hover-border-primary transition"
-            >
-              <div className="flex-between">
-                <div>
-                  <strong className="text-base text-primary">🏢 平台全局管理中心</strong>
-                  <p className="text-xs text-secondary mt-xs">
-                    开通机构、配额策略管理与全局生命周期维护（限超级管理员）
-                  </p>
-                </div>
-                <span className="badge badge-neutral text-xs">Platform</span>
+            ) : memberships.length > 0 ? (
+              memberships.map((membership) => (
+                <button
+                  key={membership.organization_id}
+                  type="button"
+                  onClick={() => enterOrganization(membership.organization_id)}
+                  className="org-select-card p-md border rounded hover-border-primary transition text-left cursor-pointer"
+                >
+                  <div className="flex-between">
+                    <div>
+                      <strong className="text-base text-primary">
+                        <Icon name="scales" size={14} /> {membership.organization_name}
+                      </strong>
+                      <p className="text-xs text-secondary mt-xs">
+                        角色：
+                        {membership.role === 'organization_admin'
+                          ? '机构管理员'
+                          : membership.role === 'reviewer'
+                          ? '复核专家'
+                          : '专利代理师'}
+                        {membership.status === 'suspended' && '（已暂停）'}
+                      </p>
+                    </div>
+                    <span className="badge badge-success text-xs">进入工作台 &rarr;</span>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="p-md text-center text-secondary text-sm">
+                您当前尚未加入任何机构。如需开通机构工作空间，请联系机构管理员发送邀请，或联系平台管理员。
               </div>
-            </Link>
+            )}
 
-            <div className="text-center py-sm text-xs text-secondary">
-              或输入特定机构 ID 直接访问：
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                const form = e.target as HTMLFormElement
-                const input = form.elements.namedItem('orgIdInput') as HTMLInputElement
-                if (input && input.value.trim()) {
-                  setActiveOrgId(input.value.trim())
-                  navigate(`/organizations/${input.value.trim()}/members`)
-                }
-              }}
-              className="flex-row gap-xs"
-            >
-              <input
-                name="orgIdInput"
-                type="text"
-                className="input-text text-sm"
-                placeholder="机构 UUID (如 00000000-0000-...)"
-                required
-              />
-              <button type="submit" className="btn btn-secondary text-sm">
-                进入
-              </button>
-            </form>
+            {isPlatformAdmin && (
+              <Link
+                to="/platform/organizations"
+                className="org-select-card p-md border rounded hover-border-primary transition"
+              >
+                <div className="flex-between">
+                  <div>
+                    <strong className="text-base text-primary"><Icon name="buildings" size={14} /> 平台全局管理中心</strong>
+                    <p className="text-xs text-secondary mt-xs">
+                      开通机构、配额策略管理与全局生命周期维护（限平台管理员）
+                    </p>
+                  </div>
+                  <span className="badge badge-neutral text-xs">Platform</span>
+                </div>
+              </Link>
+            )}
           </div>
         </div>
       </main>

@@ -24,6 +24,22 @@ export interface SessionInfo {
   mfa_recent: boolean
 }
 
+/** 当前身份在某机构内的成员关系（来自 GET /api/v1/auth/me）。 */
+export interface MyMembership {
+  organization_id: string
+  organization_name: string
+  role: OrganizationRole
+  status: MemberStatus
+}
+
+/** 当前身份信息：用于前端路由守卫与工作空间解析，只读。 */
+export interface MeInfo {
+  identity_id: string
+  email: string
+  is_platform_admin: boolean
+  memberships: MyMembership[]
+}
+
 export interface OrganizationMembership {
   id: string
   organization_id: string

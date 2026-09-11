@@ -115,8 +115,12 @@ describe('Cases and Document Web Surfaces', () => {
       expect(screen.getByRole('button', { name: '确认文档解析版本并推进' })).toBeDefined()
     })
 
-    // Confirm document version
+    // Confirm document version（P0：不可逆操作需在确认对话框中二次确认）
     fireEvent.click(screen.getByRole('button', { name: '确认文档解析版本并推进' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '确认锁定该版本' })).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '确认锁定该版本' }))
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledWith('org-1', mockCaseDetail.id, 'ver-1')
     })

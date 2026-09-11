@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { apiClient, ApiError } from '../services/apiClient'
+import { Icon } from '../components/Icon'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { Modal } from '../components/Modal'
@@ -65,7 +66,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 404) {
         setStrategy(null)
-      } else if (err instanceof ApiError && err.status === 403) {
+      } else if (isMfaRequired(err)) {
         requestMfaStepUp(fetchStrategy)
       } else {
         setError(err.detail || '加载检索策略失败')
@@ -82,7 +83,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
       )
       setCandidates(res.items)
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(fetchCandidates)
       } else {
         setError(err.detail || '加载候选专利池失败')
@@ -253,7 +254,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
               to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
               className="btn btn-primary btn-sm font-bold"
             >
-              📊 前往 Claim Chart 比对 &rarr;
+              <Icon name="chart" size={14} /> 前往 Claim Chart 比对 &rarr;
             </Link>
           )}
           <Link
@@ -278,7 +279,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
             }`}
             onClick={() => setActiveTab('strategy')}
           >
-            📋 检索规划与 CNIPR 交接包
+            <Icon name="clipboard" size={14} /> 检索规划与 CNIPR 交接包
           </button>
           <button
             type="button"
@@ -287,7 +288,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
             }`}
             onClick={() => setActiveTab('candidates')}
           >
-            🔍 多路检索与候选池初筛 ({candidates.length})
+            <Icon name="search" size={14} /> 多路检索与候选池初筛 ({candidates.length})
           </button>
         </div>
 
@@ -319,7 +320,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                       onClick={handleOpenHandoffModal}
                       disabled={actionLoading}
                     >
-                      📦 导出 CNIPR 规范交接包
+                      <Icon name="package" size={14} /> 导出 CNIPR 规范交接包
                     </button>
                     <div className="flex-row gap-xs align-center">
                       <button
@@ -329,7 +330,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                         disabled={actionLoading}
                         title="查询欧洲专利局官方 OPS API"
                       >
-                        🇪🇺 触发 EPO 官方检索
+                         触发 EPO 官方检索
                       </button>
                       <button
                         type="button"
@@ -339,8 +340,9 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                           setIsKeyConfigModalOpen(true)
                         }}
                         title="配置专属 EPO 官方凭证"
+                        aria-label="配置专属 EPO 官方凭证"
                       >
-                        ⚙️
+                        <Icon name="gear" size={14} />
                       </button>
                     </div>
 
@@ -352,7 +354,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                         disabled={actionLoading}
                         title="查询美国专利商标局官方 ODP API"
                       >
-                        🇺🇸 触发 USPTO 官方检索
+                        <Icon name="globe" size={14} /> 触发 USPTO 官方检索
                       </button>
                       <button
                         type="button"
@@ -362,8 +364,9 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                           setIsKeyConfigModalOpen(true)
                         }}
                         title="配置专属 USPTO 官方凭证"
+                        aria-label="配置专属 USPTO 官方凭证"
                       >
-                        ⚙️
+                        <Icon name="gear" size={14} />
                       </button>
                     </div>
 
@@ -374,7 +377,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                       disabled={actionLoading}
                       title="直连 OpenAlex 全球开放学术与专利技术成果"
                     >
-                      ⚡ 执行公开源检索
+                      <Icon name="lightning" size={14} /> 执行公开源检索
                     </button>
                   </div>
                 </div>
@@ -461,7 +464,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                   onClick={handleGenerateStrategy}
                   disabled={actionLoading}
                 >
-                  {actionLoading ? '正在智能规划...' : '⚡ 一键生成检索策略与 CNIPR 检索式'}
+                  {actionLoading ? '正在智能规划...' : '一键生成检索策略与 CNIPR 检索式'}
                 </button>
               </div>
             )}
@@ -500,7 +503,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                   className="btn btn-secondary btn-sm"
                   onClick={() => setIsImportModalOpen(true)}
                 >
-                  📥 导入 CNIPR 官方检索结果
+                  <Icon name="download" size={14} /> 导入 CNIPR 官方检索结果
                 </button>
                 <button
                   type="button"
@@ -508,7 +511,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                   onClick={() => handleExecutePublicSearch('google_patents')}
                   disabled={actionLoading}
                 >
-                  🌐 触发公网检索 (Google Patents)
+                  <Icon name="globe" size={14} /> 触发公网检索 (Google Patents)
                 </button>
               </div>
             </div>
@@ -536,12 +539,12 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                         </span>
                         <span className="badge badge-neutral text-xs">
                           {cand.source_type === 'cnipr_manual'
-                            ? '🇨🇳 CNIPR人工导入'
+                            ? 'CNIPR人工导入'
                             : cand.source_type === 'epo'
-                            ? '🇪🇺 EPO官方检索'
+                            ? ' EPO官方检索'
                             : cand.source_type === 'uspto'
-                            ? '🇺🇸 USPTO官方检索'
-                            : '🌐 公开源检索'}
+                            ? 'USPTO官方检索'
+                            : '公开源检索'}
                         </span>
                         {cand.publication_date && (
                           <span className="text-xs text-secondary">
@@ -564,7 +567,7 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                           className="btn btn-secondary btn-xs"
                           title="在 Google Patents 官方图文库查看真实公开专利"
                         >
-                          🔗 谷歌专利查验 ↗
+                          <Icon name="link" size={14} /> 谷歌专利查验 ↗
                         </a>
                         {cand.triage_status === 'pending' && (
                           <>
@@ -722,7 +725,7 @@ CN115830114A,一种端侧大模型混合精度量化推理加速方法与芯片,
               }}
               title="载入国知局真实 CSV 官方样例"
             >
-              💡 载入官方 CSV 样例
+              <Icon name="idea" size={14} /> 载入官方 CSV 样例
             </button>
           </div>
           <textarea

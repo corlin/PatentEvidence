@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
+import { Icon } from '../components/Icon'
 import QRCode from 'qrcode'
-import { apiClient, ApiError } from '../services/apiClient'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { Alert } from '../components/Alert'
 import { useNavigate } from '../router/Router'
@@ -56,7 +57,7 @@ export const MfaEnrollView: React.FC = () => {
         }
       } catch (err: any) {
         if (!unmounted) {
-          if (err instanceof ApiError && err.status === 403) {
+          if (isMfaRequired(err)) {
             setError('重新配置 MFA 需要近期身份授权。请先在登录界面完成一次验证。')
           } else {
             setError(err.detail || '初始化 MFA 设置失败。')
@@ -240,7 +241,7 @@ export const MfaEnrollView: React.FC = () => {
             {liveCode && (
               <div className="p-xs bg-surface border rounded flex-between align-center text-xs">
                 <div>
-                  <span className="text-secondary">💡 本机时钟当前动态码: </span>
+                  <span className="text-secondary"><Icon name="idea" size={14} /> 本机时钟当前动态码: </span>
                   <strong className="font-mono text-primary text-sm tracking-wider">{liveCode}</strong>
                   <span className="text-secondary text-xs ml-xs">({secondsRemaining}s)</span>
                 </div>

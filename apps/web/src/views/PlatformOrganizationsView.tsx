@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { apiClient, ApiError } from '../services/apiClient'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { Alert } from '../components/Alert'
 import { Header } from '../components/Header'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { CreateOrganizationPayload, OrganizationSummary } from '../types/api'
 import { Link } from '../router/Router'
 
@@ -14,6 +15,8 @@ export const PlatformOrganizationsView: React.FC = () => {
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Sprint 1：暂停机构的品牌确认对话框
+  const [suspendTarget, setSuspendTarget] = useState<OrganizationSummary | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
   // Modals
@@ -48,7 +51,7 @@ export const PlatformOrganizationsView: React.FC = () => {
       const res = await apiClient.listPlatformOrganizations()
       setOrganizations(res.items)
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(fetchOrganizations)
       } else {
         setError(err.detail || '获取机构列表失败')
@@ -85,7 +88,7 @@ export const PlatformOrganizationsView: React.FC = () => {
       })
       fetchOrganizations()
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(() => handleCreateSubmit(e))
       } else {
         setError(err.detail || '开通机构失败')
@@ -96,14 +99,14 @@ export const PlatformOrganizationsView: React.FC = () => {
   }
 
   const handleSuspend = async (org: OrganizationSummary) => {
-    if (!confirm(`确定要暂停机构“${org.display_name}”吗？其成员将无法访问案件与工作台。`)) return
+    setSuspendTarget(null)
     setError(null)
     try {
       await apiClient.suspendPlatformOrganization(org.id)
       setSuccess(`机构“${org.display_name}”已暂停。`)
       fetchOrganizations()
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(() => handleSuspend(org))
       } else {
         setError(err.detail || '暂停机构失败')
@@ -118,7 +121,7 @@ export const PlatformOrganizationsView: React.FC = () => {
       setSuccess(`机构“${org.display_name}”已恢复激活。`)
       fetchOrganizations()
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(() => handleReactivate(org))
       } else {
         setError(err.detail || '恢复机构失败')
@@ -140,7 +143,7 @@ export const PlatformOrganizationsView: React.FC = () => {
       setSuccess(`机构“${selectedOrg.display_name}”到期时间已更新。`)
       fetchOrganizations()
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(() => handleUpdateExpiry(e))
       } else {
         setError(err.detail || '更新到期时间失败')
@@ -152,7 +155,7 @@ export const PlatformOrganizationsView: React.FC = () => {
     <div className="layout-container">
       <Header />
 
-      <main className="main-content">
+      <main id="main-content" className="main-content">
         <div className="page-header flex-between mb-md">
           <div>
             <h1 className="page-title text-2xl font-bold">平台机构管理</h1>
@@ -160,16 +163,18 @@ export const PlatformOrganizationsView: React.FC = () => {
               管理多租户机构开通、配额策略与服务生命周期
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              setError(null)
-              setIsCreateModalOpen(true)
-            }}
-          >
-            + 开通新机构
-          </button>
+          {!loading && organizations.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setError(null)
+                setIsCreateModalOpen(true)
+              }}
+            >
+              + 开通新机构
+            </button>
+          )}
         </div>
 
         {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -264,7 +269,7 @@ export const PlatformOrganizationsView: React.FC = () => {
                           <button
                             type="button"
                             className="btn btn-danger btn-xs"
-                            onClick={() => handleSuspend(org)}
+                            onClick={() => setSuspendTarget(org)}
                           >
                             暂停
                           </button>
@@ -422,6 +427,24 @@ export const PlatformOrganizationsView: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Sprint 1：暂停机构的品牌确认对话框 */}
+      <ConfirmDialog
+        isOpen={suspendTarget !== null}
+        title="暂停该机构？"
+        danger
+        confirmLabel="确认暂停机构"
+        onCancel={() => setSuspendTarget(null)}
+        onConfirm={() => suspendTarget && handleSuspend(suspendTarget)}
+      >
+        <p>
+          将暂停机构 <strong>{suspendTarget?.display_name ?? ''}</strong>，
+          其成员将无法访问案件与工作台。
+        </p>
+        <p className="text-xs text-secondary mt-xs">
+          恢复需平台管理员重新激活。历史数据与审计记录保留。
+        </p>
+      </ConfirmDialog>
     </div>
   )
 }

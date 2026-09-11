@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
+import { Icon } from '../components/Icon'
 import { apiClient, ApiError } from '../services/apiClient'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { StatusBadge } from '../components/StatusBadge'
 import { MarkdownViewer } from '../components/MarkdownViewer'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { DeliveryRecord, EvidenceSnapshotDetail, CaseDetail } from '../types/api'
 import { Link } from '../router/Router'
 
@@ -24,6 +26,8 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  // P0：正式交付会锁定全案证据链并生成防伪凭证，执行前必须显式二次确认
+  const [showDeliverConfirm, setShowDeliverConfirm] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -61,10 +65,11 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
 
     setActionLoading(true)
     setError(null)
+    setShowDeliverConfirm(false)
     try {
       const res = await apiClient.deliverCase(orgId, caseId, clientRecipient.trim())
       setDeliveryRecord(res.delivery)
-      setSuccess('🎉 案件已正式完成客户交付！交付凭证与防伪下载口令已生成。')
+      setSuccess('案件已正式完成客户交付！交付凭证与防伪下载口令已生成。')
       await loadData()
     } catch (err) {
       if (err instanceof ApiError) setError(err.message)
@@ -95,7 +100,7 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
       caseStatus={currentCase?.status}
       orgId={orgId}
       caseId={caseId}
-      title={isDelivered ? '🏛️ 已交付合规证书 (Delivery Certificate)' : '📦 案件交付与归档准备'}
+      title={isDelivered ? '已交付合规证书 (Delivery Certificate)' : '案件交付与归档准备'}
       description={`案件：${currentCase?.title || ''} (${currentCase?.case_number || ''})`}
       breadcrumbCurrent="交付网关"
       error={error}
@@ -110,7 +115,7 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
             disabled={!reportDetail?.report}
             className="btn btn-primary btn-sm"
           >
-            📥 导出 Markdown 报告
+            <Icon name="download" size={14} /> 导出 Markdown 报告
           </button>
           <Link
             to={`/organizations/${orgId}/cases/${caseId}/review`}
@@ -127,7 +132,7 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
           <div className="flex-between align-center mb-sm">
             <div className="flex-row gap-sm align-center">
               <span className={`badge ${isDelivered ? 'badge-success' : 'badge-neutral'} font-bold`}>
-                {isDelivered ? '✓ 最终交付已锁定 (Delivered)' : '⏳ 待正式交付'}
+                {isDelivered ? '✓ 最终交付已锁定 (Delivered)' : '待正式交付'}
               </span>
               <span className="text-xs text-secondary">
                 {isDelivered
@@ -164,7 +169,7 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
         {/* Action Panel for Undelivered Cases */}
         {!isDelivered ? (
           <div className="card p-md mb-md">
-            <h2 className="text-md font-bold mb-xs">✍️ 登记客户接收信息并执行正式交付</h2>
+            <h2 className="text-md font-bold mb-xs"><Icon name="sign" size={14} /> 登记客户接收信息并执行正式交付</h2>
             <p className="text-xs text-secondary mb-md">
               正式交付后，系统将锁定全案证据链并生成专有的防伪交付凭证。
             </p>
@@ -185,18 +190,18 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
 
               <button
                 type="button"
-                onClick={handleDeliver}
+                onClick={() => setShowDeliverConfirm(true)}
                 disabled={actionLoading}
                 className="btn btn-primary btn-sm font-bold"
               >
-                {actionLoading ? '交付处理中...' : '📦 确认正式交付客户 (Mark as Delivered)'}
+                {actionLoading ? '交付处理中...' : '确认正式交付客户 (Mark as Delivered)'}
               </button>
             </div>
           </div>
         ) : (
           <div className="card p-md mb-md border-l-4 border-green-500 bg-green-50">
             <div className="flex-row gap-md align-center">
-              <span className="text-2xl">🎉</span>
+              <span className="text-2xl"><Icon name="sparkle" size={14} /></span>
               <div>
                 <h3 className="text-sm font-bold text-success mb-xs">
                   本案已正式交付向客户【{deliveryRecord?.client_recipient}】
@@ -212,14 +217,14 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
         {/* Final Report Full Preview */}
         <div className="card p-md">
           <div className="flex-between align-center mb-sm">
-            <h2 className="text-md font-bold">📜 正式交付报告全文 (Final Approved Report)</h2>
+            <h2 className="text-md font-bold"><Icon name="scroll" size={14} /> 正式交付报告全文 (Final Approved Report)</h2>
             <button
               type="button"
               onClick={handleDownloadReport}
               disabled={!reportDetail?.report}
               className="btn btn-secondary btn-xs"
             >
-              📥 导出报告 (.md)
+              <Icon name="download" size={14} /> 导出报告 (.md)
             </button>
           </div>
 
@@ -233,6 +238,25 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
             </div>
           )}
         </div>
+
+        {/* P0：正式交付锁定的不可逆二次确认 */}
+        <ConfirmDialog
+          isOpen={showDeliverConfirm}
+          title="确认正式交付并锁定全案？"
+          danger
+          confirmLabel="确认交付并生成凭证"
+          loading={actionLoading}
+          onCancel={() => setShowDeliverConfirm(false)}
+          onConfirm={handleDeliver}
+        >
+          <p>
+            正式交付后，系统将锁定全案证据链（技术交底、附图、检索策略、Claim Chart
+            与评估报告），并向客户【<strong>{clientRecipient.trim() || '未命名接收方'}</strong>】生成专属防伪交付凭证与下载口令。
+          </p>
+          <p className="text-xs text-secondary mt-xs">
+            此操作<b>不可撤销</b>：交付状态与凭证将永久记录，全案不可再退回修改。
+          </p>
+        </ConfirmDialog>
     </WorkbenchLayout>
   )
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { apiClient, ApiError } from '../services/apiClient'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { Alert } from '../components/Alert'
 import { Header } from '../components/Header'
@@ -17,6 +17,11 @@ export const CasesListView: React.FC<CasesListViewProps> = ({ orgId }) => {
   const navigate = useNavigate()
 
   const [cases, setCases] = useState<CaseSummary[]>([])
+  // Sprint 3：列表分页（前端切片，每页 20 条）
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 20
+  const pageCount = Math.max(1, Math.ceil(cases.length / PAGE_SIZE))
+  const pageCases = cases.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -38,7 +43,7 @@ export const CasesListView: React.FC<CasesListViewProps> = ({ orgId }) => {
       const res = await apiClient.listCases(orgId)
       setCases(res.items)
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(fetchCases)
       } else {
         setError(err.detail || '加载案件列表失败')
@@ -89,7 +94,7 @@ export const CasesListView: React.FC<CasesListViewProps> = ({ orgId }) => {
     <div className="layout-container">
       <Header />
 
-      <main className="main-content">
+      <main id="main-content" className="main-content">
         <div className="page-header flex-between mb-md">
           <div>
             <div className="breadcrumb text-xs text-secondary mb-xs">
@@ -100,16 +105,18 @@ export const CasesListView: React.FC<CasesListViewProps> = ({ orgId }) => {
               管理技术交底书导入、文档结构化解析与可专利性预评估报告
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              setError(null)
-              setIsCreateModalOpen(true)
-            }}
-          >
-            + 新建评估案件
-          </button>
+          {!loading && cases.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setError(null)
+                setIsCreateModalOpen(true)
+              }}
+            >
+              + 新建评估案件
+            </button>
+          )}
         </div>
 
         {error && <Alert type="error" message={error} onClose={() => setError(null)} />}
@@ -142,7 +149,7 @@ export const CasesListView: React.FC<CasesListViewProps> = ({ orgId }) => {
                 </tr>
               </thead>
               <tbody>
-                {cases.map((c) => (
+                {pageCases.map((c) => (
                   <tr key={c.id}>
                     <td>
                       <div className="case-title-block">
@@ -181,6 +188,31 @@ export const CasesListView: React.FC<CasesListViewProps> = ({ orgId }) => {
                 ))}
               </tbody>
             </table>
+          )}
+          {cases.length > PAGE_SIZE && (
+            <div className="flex-between align-center mt-md pt-sm border-t">
+              <span className="text-xs text-secondary">
+                共 {cases.length} 件案件 · 第 {page + 1}/{pageCount} 页
+              </span>
+              <div className="flex-row gap-xs">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                >
+                  上一页
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-xs"
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  disabled={page >= pageCount - 1}
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </main>

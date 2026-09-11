@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { apiClient, ApiError } from '../services/apiClient'
+import { Icon } from '../components/Icon'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { MarkdownViewer } from '../components/MarkdownViewer'
@@ -35,7 +36,7 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 404) {
         setSnapshotDetail(null)
-      } else if (err instanceof ApiError && err.status === 403) {
+      } else if (isMfaRequired(err)) {
         requestMfaStepUp(fetchSnapshot)
       } else {
         setError(err.detail || '加载证据快照失败')
@@ -131,7 +132,7 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
               to={`/organizations/${orgId}/cases/${caseId}/review`}
               className="btn btn-primary btn-sm font-bold"
             >
-              ⚖️ 前往独立复核 &rarr;
+              <Icon name="scales" size={14} /> 前往独立复核 &rarr;
             </Link>
           )}
           <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
@@ -172,14 +173,14 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
                     className="btn btn-secondary btn-xs"
                     onClick={handleDownloadMarkdown}
                   >
-                    📥 导出 Markdown 报告
+                    <Icon name="download" size={14} /> 导出 Markdown 报告
                   </button>
                   <button
                     type="button"
                     className="btn btn-secondary btn-xs"
                     onClick={handleDownloadJson}
                   >
-                    📥 导出 JSON 证据全集
+                    <Icon name="download" size={14} /> 导出 JSON 证据全集
                   </button>
                 </div>
               </div>
@@ -192,14 +193,14 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
                 className={`btn btn-sm ${activeTab === 'report' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setActiveTab('report')}
               >
-                📄 专业分析报告在线预览
+                <Icon name="file" size={14} /> 专业分析报告在线预览
               </button>
               <button
                 type="button"
                 className={`btn btn-sm ${activeTab === 'timeline' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setActiveTab('timeline')}
               >
-                🔒 全流程证据审计时序链
+                <Icon name="lock" size={14} /> 全流程证据审计时序链
               </button>
             </div>
 
@@ -215,7 +216,7 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
                     className="btn btn-primary btn-xs"
                     onClick={handleCopyMarkdown}
                   >
-                    {copiedMarkdown ? '✓ 已复制 Markdown 源码！' : '📋 复制报告 Markdown 源码'}
+                    {copiedMarkdown ? '✓ 已复制 Markdown 源码！' : '复制报告 Markdown 源码'}
                   </button>
                 </div>
 
@@ -333,7 +334,7 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
               onClick={handleSealSnapshot}
               disabled={actionLoading}
             >
-              {actionLoading ? '正在封存证据并生成报告...' : '📦 立即封存不可变证据包并生成报告'}
+              {actionLoading ? '正在封存证据并生成报告...' : '立即封存不可变证据包并生成报告'}
             </button>
           </div>
         )}

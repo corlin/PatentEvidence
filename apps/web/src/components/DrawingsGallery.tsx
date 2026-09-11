@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { Icon } from './Icon'
 import { apiClient } from '../services/apiClient'
 import type { CaseDrawing, ReferenceMark } from '../types/api'
 import { Modal } from './Modal'
 import { Alert } from './Alert'
+import { ConfirmDialog } from './ConfirmDialog'
 
 export function naturalSortMarks(marks: ReferenceMark[]): ReferenceMark[] {
   return [...marks].sort((a, b) => {
@@ -122,6 +124,8 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
 
   // Edit metadata modal state
   const [editingDrawing, setEditingDrawing] = useState<CaseDrawing | null>(null)
+  // Sprint 1：删除附图改用品牌确认对话框
+  const [deleteTarget, setDeleteTarget] = useState<CaseDrawing | null>(null)
   const [editForm, setEditForm] = useState<{
     figure_label: string
     figure_title: string
@@ -217,7 +221,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
   }
 
   const handleDelete = async (drawing: CaseDrawing) => {
-    if (!confirm(`确定要删除 ${drawing.figure_label} 吗？`)) return
+    setDeleteTarget(null)
     try {
       await apiClient.deleteCaseDrawing(orgId, caseId, drawing.id)
       setDrawings(drawings.filter((d) => d.id !== drawing.id))
@@ -269,7 +273,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
       <div className="flex-between mb-md">
         <div>
           <h3 className="text-lg font-bold flex-row items-center gap-xs">
-            <span>🖼️ 说明书附图资产库</span>
+            <span><Icon name="image" size={14} /> 说明书附图资产库</span>
             <span className="badge badge-primary text-xs">{drawings.length} 张附图</span>
           </h3>
           <p className="text-xs text-secondary mt-xs">
@@ -285,7 +289,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
               onClick={handleReExtract}
               disabled={reExtracting}
             >
-              {reExtracting ? '正在深度提取附图...' : '🔄 重新提取附图'}
+              {reExtracting ? '正在深度提取附图...' : '重新提取附图'}
             </button>
             <button
               type="button"
@@ -311,7 +315,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
               title="点击展开/收起审查合规建议"
             >
               <span>
-                <strong>⚠️ 附图规范体检提示</strong>：检测到 {linterIssues.length} 处跨图用词或标记一致性建议
+                <strong><Icon name="warning" size={14} /> 附图规范体检提示</strong>：检测到 {linterIssues.length} 处跨图用词或标记一致性建议
               </span>
               <button
                 type="button"
@@ -348,7 +352,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
         <div className="p-xl text-center border-dashed rounded text-secondary bg-subtle">
           <p className="text-sm">暂未提取到附图资产</p>
           <p className="text-xs mt-xs">
-            点击上方【🔄 重新提取附图】或【+ 手动添加附图】即可收录专利图元
+            点击上方【<Icon name="refresh" size={14} /> 重新提取附图】或【+ 手动添加附图】即可收录专利图元
           </p>
         </div>
       ) : (
@@ -426,7 +430,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                         setMarkFilter('')
                       }}
                     >
-                      🔍 查看大图
+                      <Icon name="search" size={14} /> 查看大图
                     </button>
                     <div className="flex-row gap-xs">
                       <button
@@ -435,15 +439,16 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                         onClick={() => handleOpenEdit(drawing)}
                         title="编辑图名与附图标记"
                       >
-                        ✏️ 编辑
+                        <Icon name="edit" size={14} /> 编辑
                       </button>
                       <button
                         type="button"
                         className="btn-link text-xs text-danger"
-                        onClick={() => handleDelete(drawing)}
+                        onClick={() => setDeleteTarget(drawing)}
                         title="删除该附图"
+                        aria-label="删除该附图"
                       >
-                        🗑️
+                        <Icon name="trash" size={14} />
                       </button>
                     </div>
                   </div>
@@ -501,7 +506,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                   download={`${selectedDrawing.figure_label}.png`}
                   className="btn btn-primary btn-xs"
                 >
-                  ⬇️ 下载图纸
+                  <Icon name="arrow-down" size={14} /> 下载图纸
                 </a>
               </div>
 
@@ -554,24 +559,16 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                       <button
                         type="button"
                         className={`btn btn-xs ${!onlyClaims ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ fontSize: '11px', padding: '2px 8px' }}
                         onClick={() => setOnlyClaims(false)}
                       >
                         全部 ({sortedMarks.length})
                       </button>
                       <button
                         type="button"
-                        className={`btn btn-xs ${onlyClaims ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{
-                          fontSize: '11px',
-                          padding: '2px 8px',
-                          borderColor: '#f59e0b',
-                          color: onlyClaims ? '#fff' : '#b45309',
-                          backgroundColor: onlyClaims ? '#d97706' : 'rgba(245, 158, 11, 0.1)',
-                        }}
+                        className={`btn btn-xs ${onlyClaims ? 'btn-gold-active' : 'btn-gold'}`}
                         onClick={() => setOnlyClaims(true)}
                       >
-                        ⭐ 权利要求特征 ({claimMarksCount})
+                        <Icon name="star" size={14} /> 权利要求特征 ({claimMarksCount})
                       </button>
                     </div>
                   )}
@@ -579,7 +576,7 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                   <input
                     type="text"
                     className="form-input text-xs py-xs px-sm w-full"
-                    placeholder="🔍 快速搜索部件或标号..."
+                    placeholder="快速搜索部件或标号..."
                     value={markFilter}
                     onChange={e => setMarkFilter(e.target.value)}
                   />
@@ -673,8 +670,9 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
                         const updated = editForm.reference_marks.filter((_, i) => i !== idx)
                         setEditForm({ ...editForm, reference_marks: updated })
                       }}
+                      aria-label="移除该标记"
                     >
-                      ✕
+                      <Icon name="close" size={14} />
                     </button>
                   </div>
                 ))}
@@ -785,6 +783,23 @@ export const DrawingsGallery: React.FC<DrawingsGalleryProps> = ({
           </form>
         </Modal>
       )}
+
+      {/* Sprint 1：删除附图的品牌确认对话框 */}
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        title="删除该附图？"
+        danger
+        confirmLabel="确认删除"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+      >
+        <p>
+          将删除附图 <strong>{deleteTarget?.figure_label ?? ''}</strong>（{deleteTarget?.figure_title ?? ''}）。
+        </p>
+        <p className="text-xs text-secondary mt-xs">
+          此操作<b>不可撤销</b>：若该附图已参与解析版本基准，删除将导致哈希校验不一致。
+        </p>
+      </ConfirmDialog>
     </div>
   )
 }

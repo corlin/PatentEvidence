@@ -83,7 +83,7 @@ describe('Platform Organizations Administration', () => {
       expect(screen.getByText('平台机构管理')).toBeDefined()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /\+ 开通新机构/i }))
+    fireEvent.click(screen.getByRole('button', { name: /立即开通首家机构/i }))
 
     fireEvent.change(screen.getByPlaceholderText(/例如：北京华智知识产权代理事务所/i), {
       target: { value: '上海专利代理事务所' },

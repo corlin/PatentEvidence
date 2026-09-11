@@ -40,7 +40,7 @@ export const WorkbenchLayout: React.FC<WorkbenchLayoutProps> = ({
     <div className="layout-container">
       <Header />
 
-      <main className="main-content">
+      <main id="main-content" className="main-content">
         <div className="breadcrumb text-xs text-secondary mb-xs">
           <Link to={`/organizations/${orgId}/cases`}>案件列表</Link> &gt;{' '}
           <Link to={`/organizations/${orgId}/cases/${caseId}`}>案件详情</Link> &gt; {breadcrumbCurrent}

@@ -88,7 +88,7 @@ describe('Comparison Matrix Web Surface', () => {
 
     await waitFor(() => {
       expect(screen.getByText('权利要求特征深度比对表 (Claim Chart)')).toBeDefined()
-      expect(screen.getByText('⚠️ 新颖性高风险预警')).toBeDefined()
+      expect(screen.getByText('新颖性高风险预警')).toBeDefined()
       expect(screen.getByText('F1')).toBeDefined()
       expect(screen.getByText(/D1: CN117283912A/)).toBeDefined()
       expect(screen.getByRole('button', { name: '✓ 锁定确认比对表' })).toBeDefined()

@@ -85,8 +85,12 @@ describe('Features Workbench Web Surface', () => {
       expect(screen.getByRole('button', { name: '✓ 确认并锁定特征版本' })).toBeDefined()
     })
 
-    // Click Confirm
+    // Click Confirm（P0：不可逆操作需在确认对话框中二次确认）
     fireEvent.click(screen.getByRole('button', { name: '✓ 确认并锁定特征版本' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '确认锁定该版本' })).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '确认锁定该版本' }))
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledWith('org-1', 'case-1', 'fsv-1')
     })

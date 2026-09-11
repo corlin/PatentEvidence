@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { apiClient, ApiError } from '../services/apiClient'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { Alert } from '../components/Alert'
 import { Header } from '../components/Header'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { OrganizationMembership, OrganizationRole } from '../types/api'
 import { Link, useRouter } from '../router/Router'
 
@@ -35,6 +36,10 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
     token: string
   } | null>(null)
 
+  // Sprint 1：破坏性成员操作改用品牌确认对话框
+  const [suspendTarget, setSuspendTarget] = useState<OrganizationMembership | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<OrganizationMembership | null>(null)
+
   const fetchMembers = async () => {
     setLoading(true)
     setError(null)
@@ -43,7 +48,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
       setMembers(res.items)
     } catch (err: any) {
       if (err instanceof ApiError) {
-        if (err.status === 403) {
+        if (isMfaRequired(err)) {
           requestMfaStepUp(fetchMembers)
           return
         }
@@ -81,7 +86,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
       setInviteEmail('')
       fetchMembers()
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(() => handleInviteSubmit(e))
       } else {
         setError(err.detail || '发送邀请失败')
@@ -103,7 +108,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
       fetchMembers()
     } catch (err: any) {
       if (err instanceof ApiError) {
-        if (err.status === 403) {
+        if (isMfaRequired(err)) {
           requestMfaStepUp(() => handleRoleChangeSubmit(e))
           return
         }
@@ -117,7 +122,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
   }
 
   const handleSuspendMember = async (member: OrganizationMembership) => {
-    if (!confirm(`确定要暂停成员 ${member.email} 的权限吗？`)) return
+    setSuspendTarget(null)
     setError(null)
 
     try {
@@ -126,7 +131,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
       fetchMembers()
     } catch (err: any) {
       if (err instanceof ApiError) {
-        if (err.status === 403) {
+        if (isMfaRequired(err)) {
           requestMfaStepUp(() => handleSuspendMember(member))
           return
         }
@@ -146,7 +151,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
       setSuccess(`成员 ${member.email} 已重新激活。`)
       fetchMembers()
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(() => handleReactivateMember(member))
       } else {
         setError(err.detail || '恢复成员失败')
@@ -155,7 +160,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
   }
 
   const handleRemoveMember = async (member: OrganizationMembership) => {
-    if (!confirm(`确定要从机构中移除成员 ${member.email} 吗？此操作将作废其当前权限。`)) return
+    setRemoveTarget(null)
     setError(null)
 
     try {
@@ -164,7 +169,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
       fetchMembers()
     } catch (err: any) {
       if (err instanceof ApiError) {
-        if (err.status === 403) {
+        if (isMfaRequired(err)) {
           requestMfaStepUp(() => handleRemoveMember(member))
           return
         }
@@ -181,7 +186,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
     <div className="layout-container">
       <Header />
 
-      <main className="main-content">
+      <main id="main-content" className="main-content">
         <div className="page-header flex-between mb-md">
           <div>
             <div className="breadcrumb text-xs text-secondary mb-xs">
@@ -275,7 +280,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
                           <button
                             type="button"
                             className="btn btn-secondary btn-xs"
-                            onClick={() => handleSuspendMember(m)}
+                            onClick={() => setSuspendTarget(m)}
                           >
                             暂停
                           </button>
@@ -291,7 +296,7 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
                         <button
                           type="button"
                           className="btn btn-danger btn-xs"
-                          onClick={() => handleRemoveMember(m)}
+                          onClick={() => setRemoveTarget(m)}
                         >
                           移除
                         </button>
@@ -388,6 +393,42 @@ export const OrganizationMembersView: React.FC<OrganizationMembersViewProps> = (
           </div>
         </form>
       </Modal>
+
+      {/* Sprint 1：暂停成员的品牌确认对话框 */}
+      <ConfirmDialog
+        isOpen={suspendTarget !== null}
+        title="暂停该成员的权限？"
+        danger
+        confirmLabel="确认暂停"
+        onCancel={() => setSuspendTarget(null)}
+        onConfirm={() => suspendTarget && handleSuspendMember(suspendTarget)}
+      >
+        <p>
+          将暂停成员 <strong>{suspendTarget?.email ?? ''}</strong> 的机构访问权限，
+          其会话将立即失效，但成员关系与历史审计记录保留。
+        </p>
+        <p className="text-xs text-secondary mt-xs">
+          恢复权限需由机构管理员手动操作。
+        </p>
+      </ConfirmDialog>
+
+      {/* Sprint 1：移除成员的品牌确认对话框 */}
+      <ConfirmDialog
+        isOpen={removeTarget !== null}
+        title="从机构中移除该成员？"
+        danger
+        confirmLabel="确认移除"
+        onCancel={() => setRemoveTarget(null)}
+        onConfirm={() => removeTarget && handleRemoveMember(removeTarget)}
+      >
+        <p>
+          将成员 <strong>{removeTarget?.email ?? ''}</strong> 从机构中移除，
+          其当前权限将立即作废。
+        </p>
+        <p className="text-xs text-secondary mt-xs">
+          此操作<b>不可撤销</b>：如需重新加入需重新发送邀请。
+        </p>
+      </ConfirmDialog>
     </div>
   )
 }

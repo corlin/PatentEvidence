@@ -120,6 +120,7 @@ describe('Organization Members & Administration', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: '移除' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认移除' }))
 
     await waitFor(() => {
       expect(

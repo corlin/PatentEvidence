@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { apiClient, ApiError } from '../services/apiClient'
+import { Icon } from '../components/Icon'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { Alert } from '../components/Alert'
 import { Header } from '../components/Header'
 import { StatusBadge } from '../components/StatusBadge'
 import { DrawingsGallery } from '../components/DrawingsGallery'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { CaseDetail, ParagraphBlock } from '../types/api'
 import { Link } from '../router/Router'
 
@@ -28,13 +30,15 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
 
   // Confirming state
   const [confirming, setConfirming] = useState(false)
+  // P0：确认文档解析版本为不可变基准前，必须显式二次确认
+  const [confirmVersionId, setConfirmVersionId] = useState<string | null>(null)
 
   const fetchCaseDetail = async () => {
     try {
       const data = await apiClient.getCase(orgId, caseId)
       setCaseData(data)
     } catch (err: any) {
-      if (err instanceof ApiError && err.status === 403) {
+      if (isMfaRequired(err)) {
         requestMfaStepUp(fetchCaseDetail)
       } else {
         setError(err.detail || '加载案件详情失败')
@@ -93,6 +97,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
     try {
       await apiClient.confirmDocumentVersion(orgId, caseId, versionId)
       setSuccess('已成功确认文档解析版本！案件状态已推进为【文档就绪】。')
+      setConfirmVersionId(null)
       fetchCaseDetail()
     } catch (err: any) {
       if (err instanceof ApiError) {
@@ -109,7 +114,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
     return (
       <div className="layout-container">
         <Header currentOrgName="案件详情" />
-        <main className="main-content p-xl text-center text-secondary">正在加载案件详情...</main>
+        <main id="main-content" className="main-content p-xl text-center text-secondary">正在加载案件详情...</main>
       </div>
     )
   }
@@ -118,7 +123,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
     return (
       <div className="layout-container">
         <Header currentOrgName="案件详情" />
-        <main className="main-content p-xl">
+        <main id="main-content" className="main-content p-xl">
           <Alert type="error" message={error || '案件不存在或您无权访问'} />
           <Link to={`/organizations/${orgId}/cases`} className="btn btn-secondary mt-md">
             &larr; 返回案件列表
@@ -162,35 +167,35 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
               to={`/organizations/${orgId}/cases/${caseId}/features`}
               className="btn btn-primary btn-sm font-bold"
             >
-              ⚡ 进入技术特征建模 &rarr;
+              <Icon name="lightning" size={14} /> 进入技术特征建模 &rarr;
             </Link>
           ) : caseData.status === 'evidence_ready' ? (
             <Link
               to={`/organizations/${orgId}/cases/${caseId}/search`}
               className="btn btn-primary btn-sm font-bold"
             >
-              🔍 前往检索与候选初筛 &rarr;
+              <Icon name="search" size={14} /> 前往检索与候选初筛 &rarr;
             </Link>
           ) : caseData.status === 'assessment_ready' ? (
             <Link
               to={`/organizations/${orgId}/cases/${caseId}/comparisons`}
               className="btn btn-primary btn-sm font-bold"
             >
-              📊 进入 Claim Chart 深度比对 &rarr;
+              <Icon name="chart" size={14} /> 进入 Claim Chart 深度比对 &rarr;
             </Link>
           ) : caseData.status === 'in_review' || caseData.status === 'changes_requested' ? (
             <Link
               to={`/organizations/${orgId}/cases/${caseId}/review`}
               className="btn btn-primary btn-sm font-bold"
             >
-              ⚖️ 独立复核审批 &rarr;
+              <Icon name="scales" size={14} /> 独立复核审批 &rarr;
             </Link>
           ) : (
             <Link
               to={`/organizations/${orgId}/cases/${caseId}/delivery`}
               className="btn btn-primary btn-sm font-bold"
             >
-              📦 客户交付与证书网关 &rarr;
+              <Icon name="package" size={14} /> 客户交付与证书网关 &rarr;
             </Link>
           )}
 
@@ -288,7 +293,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
                   <button
                     type="button"
                     className="btn btn-success btn-sm"
-                    onClick={() => handleConfirmVersion(caseData.document_version!.id)}
+                    onClick={() => setConfirmVersionId(caseData.document_version!.id)}
                     disabled={confirming}
                   >
                     {confirming ? '正在确认...' : '确认文档解析版本并推进'}
@@ -320,6 +325,25 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
 
         {/* Patent Drawings Gallery */}
         <DrawingsGallery orgId={orgId} caseId={caseId} />
+
+        {/* P0：确认文档解析版本的不可变基准二次确认 */}
+        <ConfirmDialog
+          isOpen={confirmVersionId !== null}
+          title="确认文档解析版本为不可变基准？"
+          danger
+          confirmLabel="确认锁定该版本"
+          loading={confirming}
+          onCancel={() => setConfirmVersionId(null)}
+          onConfirm={() => confirmVersionId && handleConfirmVersion(confirmVersionId)}
+        >
+          <p>
+            确认后，当前解析版本 <strong>v{caseData.document_version?.version_number}</strong>{' '}
+            将被锁定为不可变基准版本，并推进案件状态为【文档就绪】。
+          </p>
+          <p className="text-xs text-secondary mt-xs">
+            此操作<b>不可撤销</b>：后续修改需创建新版本，原有 SHA-256 哈希记录将永久保留。
+          </p>
+        </ConfirmDialog>
     </WorkbenchLayout>
   )
 }

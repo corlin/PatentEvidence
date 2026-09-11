@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "@vitejs/plugin-react": "^5.0.0",
     "qrcode": "^1.5.4",
     "react": "^19.1.1",

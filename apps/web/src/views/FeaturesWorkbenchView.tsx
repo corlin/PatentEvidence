@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { apiClient, ApiError } from '../services/apiClient'
+import { Icon } from '../components/Icon'
+import { apiClient, ApiError, isMfaRequired } from '../services/apiClient'
 import { useSession } from '../context/SessionContext'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { ClaimFeature, FeatureSetDetail, FeatureType } from '../types/api'
 import { Link, useNavigate } from '../router/Router'
 
@@ -45,6 +47,10 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
   const [mergedStatement, setMergedStatement] = useState('')
 
   const [actionLoading, setActionLoading] = useState(false)
+  // P0：确认特征版本为不可变基准前，必须显式二次确认
+  const [showConfirmVersion, setShowConfirmVersion] = useState(false)
+  // Sprint 1：删除特征改用品牌确认对话框
+  const [deleteFeatureTarget, setDeleteFeatureTarget] = useState<ClaimFeature | null>(null)
 
   const fetchActiveFeatures = async () => {
     setLoading(true)
@@ -60,7 +66,7 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 404) {
         setFeatureSet(null)
-      } else if (err instanceof ApiError && err.status === 403) {
+      } else if (isMfaRequired(err)) {
         requestMfaStepUp(fetchActiveFeatures)
       } else {
         setError(err.detail || '加载技术特征失败')
@@ -97,6 +103,7 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
     try {
       const res = await apiClient.confirmFeatureVersion(orgId, caseId, featureSet.version.id)
       setFeatureSet(res)
+      setShowConfirmVersion(false)
       setSuccess('技术特征版本已确认并锁定为不可变基准！案件状态已推进为【特征已确认】。')
     } catch (err: any) {
       setError(err.detail || '确认特征版本失败')
@@ -146,7 +153,6 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
 
   const handleDeleteFeature = async (featureId: string) => {
     if (!featureSet) return
-    if (!window.confirm('确定要删除该技术特征吗？')) return
 
     setActionLoading(true)
     try {
@@ -255,7 +261,7 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
               to={`/organizations/${orgId}/cases/${caseId}/search`}
               className="btn btn-primary btn-sm font-bold"
             >
-              🔍 前往检索工作台 &rarr;
+              <Icon name="search" size={14} /> 前往检索工作台 &rarr;
             </Link>
           )}
           <Link to={`/organizations/${orgId}/cases/${caseId}`} className="btn btn-secondary btn-sm">
@@ -301,7 +307,7 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
                   <button
                     type="button"
                     className="btn btn-success btn-sm"
-                    onClick={handleConfirmVersion}
+                    onClick={() => setShowConfirmVersion(true)}
                     disabled={actionLoading || featureSet.features.length === 0}
                   >
                     ✓ 确认并锁定特征版本
@@ -331,7 +337,7 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
               onClick={handleExtractDraft}
               disabled={actionLoading}
             >
-              {actionLoading ? '正在提取特征...' : '⚡ 自动提取技术特征草稿'}
+              {actionLoading ? '正在提取特征...' : '自动提取技术特征草稿'}
             </button>
           </div>
         )}
@@ -430,7 +436,7 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
                           <button
                             type="button"
                             className="btn btn-danger btn-xs"
-                            onClick={() => handleDeleteFeature(f.id)}
+                            onClick={() => setDeleteFeatureTarget(f)}
                           >
                             删除
                           </button>
@@ -659,6 +665,44 @@ export const FeaturesWorkbenchView: React.FC<FeaturesWorkbenchViewProps> = ({ or
           </div>
         </form>
       </Modal>
+
+      {/* P0：删除特征的品牌确认对话框 */}
+      <ConfirmDialog
+        isOpen={deleteFeatureTarget !== null}
+        title="删除该技术特征？"
+        danger
+        confirmLabel="确认删除"
+        loading={actionLoading}
+        onCancel={() => setDeleteFeatureTarget(null)}
+        onConfirm={() => deleteFeatureTarget && handleDeleteFeature(deleteFeatureTarget.id)}
+      >
+        <p>
+          将从当前版本中删除特征
+          <strong> {deleteFeatureTarget?.feature_code ?? ''} </strong>
+          （{deleteFeatureTarget?.feature_statement?.slice(0, 60) ?? ''}
+          {deleteFeatureTarget?.feature_statement && deleteFeatureTarget.feature_statement.length > 60 ? '…' : ''}
+          ）。此操作不可撤销。
+        </p>
+      </ConfirmDialog>
+
+      {/* P0：确认特征版本的不可变基准二次确认 */}
+      <ConfirmDialog
+        isOpen={showConfirmVersion}
+        title="确认并锁定特征版本为不可变基准？"
+        danger
+        confirmLabel="确认锁定该版本"
+        loading={actionLoading}
+        onCancel={() => setShowConfirmVersion(false)}
+        onConfirm={handleConfirmVersion}
+      >
+        <p>
+          确认后，特征版本 <strong>v{featureSet?.version.version_number}</strong>{' '}
+          将被锁定为不可变基准版本，案件状态推进为【特征已确认】。
+        </p>
+        <p className="text-xs text-secondary mt-xs">
+          此操作<b>不可撤销</b>：后续修改需创建新修订版，原版本的 SHA-256 哈希记录将永久保留。
+        </p>
+      </ConfirmDialog>
     </WorkbenchLayout>
   )
 }

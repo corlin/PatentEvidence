@@ -72,11 +72,11 @@ describe('Reports & Evidence Snapshots Web Surface', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('📄 专业分析报告在线预览')).toBeDefined()
+      expect(screen.getByText('专业分析报告在线预览')).toBeDefined()
     })
 
     // Click Timeline tab
-    const timelineBtn = screen.getByRole('button', { name: '🔒 全流程证据审计时序链' })
+    const timelineBtn = screen.getByRole('button', { name: '全流程证据审计时序链' })
     fireEvent.click(timelineBtn)
 
     await waitFor(() => {

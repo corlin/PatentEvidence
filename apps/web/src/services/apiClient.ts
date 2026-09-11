@@ -20,6 +20,7 @@ import type {
   InvitationInspection,
   ItemizedFeedback,
   JudgmentType,
+  MeInfo,
   OrganizationDetail,
   OrganizationMembership,
   OrganizationRole,
@@ -43,6 +44,15 @@ export class ApiError extends Error {
     super(message || detail || `API request failed with status ${status}`)
     this.name = 'ApiError'
   }
+}
+
+/**
+ * 是否为"需要近期 MFA 验证"的 403（后端 detail='mfa_required'）。
+ * 仅此类 403 应触发 MFA Step-Up 弹窗；权限拒绝（detail='forbidden'）等其他 403
+ * 必须按普通错误展示，否则会陷入"验证→仍 403→再验证"的死循环。
+ */
+export function isMfaRequired(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 403 && err.detail === 'mfa_required'
 }
 
 function generateIdempotencyKey(): string {
@@ -104,6 +114,10 @@ export const apiClient = {
 
   async getSession(): Promise<SessionInfo> {
     return request<SessionInfo>('/api/v1/auth/session')
+  },
+
+  async getMe(): Promise<MeInfo> {
+    return request<MeInfo>('/api/v1/auth/me')
   },
 
   async logout(): Promise<void> {
