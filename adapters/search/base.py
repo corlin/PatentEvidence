@@ -15,6 +15,7 @@ class SearchResultItem:
     ipc_classification: str | None = None
     source_type: str = "google_patents"
     raw_metadata: dict[str, Any] | None = None
+    provider_record: dict[str, Any] | None = None
 
 
 class BaseSearchAdapter(ABC):

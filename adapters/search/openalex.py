@@ -102,6 +102,7 @@ class OpenAlexSearchAdapter(BaseSearchAdapter):
                 "google_patents_url": google_patents_url,
                 "cited_by_count": work.get("cited_by_count", 0),
             },
+            provider_record=work,
         )
 
     async def search(self, query: str, limit: int = 20) -> list[SearchResultItem]:

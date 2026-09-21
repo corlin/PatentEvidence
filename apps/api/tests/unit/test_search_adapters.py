@@ -154,6 +154,7 @@ async def test_openalex_adapter_abstract_reconstruction_and_parsing() -> None:
         assert items[0].raw_metadata["primary_topic"] == "Machine Learning"
         assert items[0].raw_metadata["work_type"] == "article"
         assert items[0].raw_metadata["source_url"] == "https://doi.org/10.1145/12345.67890"
+        assert items[0].provider_record == fake_resp.json.return_value["results"][0]
 
 
 @pytest.mark.asyncio

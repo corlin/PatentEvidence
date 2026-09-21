@@ -287,6 +287,8 @@ class SearchExecutionService:
             )
             raise HTTPException(status_code=502, detail=f"search_adapter_failed: {exc}") from exc
 
+        retrieved_at = self.clock()
+
         kw_matrix = strategy.get("keywords_matrix", {})
         ipc_classes = strategy.get("ipc_classes", [])
 
@@ -328,10 +330,43 @@ class SearchExecutionService:
                     "src": item.source_type,
                     "meta": json.dumps(item.raw_metadata or {}),
                     "score": score,
-                    "now": now,
+                    "now": retrieved_at,
                 },
             )
             actual_cand_id = res_cand.scalar_one()
+
+            if item.provider_record is not None:
+                canonical_payload = json.dumps(
+                    item.provider_record,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                await session.execute(
+                    text(
+                        """INSERT INTO source_result_snapshots
+                        (id, organization_id, case_id, search_job_id, candidate_id,
+                         source_type, source_identifier, source_url, payload,
+                         payload_sha256, retrieved_at)
+                        VALUES
+                        (:id, :org_id, :case_id, :job_id, :candidate_id,
+                         :source_type, :source_identifier, :source_url, CAST(:payload AS jsonb),
+                         encode(sha256(convert_to(CAST(:payload AS jsonb)::text, 'UTF8')), 'hex'),
+                         :retrieved_at)"""
+                    ),
+                    {
+                        "id": uuid4(),
+                        "org_id": organization_id,
+                        "case_id": case_id,
+                        "job_id": job_id,
+                        "candidate_id": actual_cand_id,
+                        "source_type": item.source_type,
+                        "source_identifier": item.publication_number,
+                        "source_url": (item.raw_metadata or {}).get("source_url"),
+                        "payload": canonical_payload,
+                        "retrieved_at": retrieved_at,
+                    },
+                )
 
             # Initialize triage record if none exists
             await session.execute(
@@ -348,7 +383,7 @@ class SearchExecutionService:
                     "case_id": case_id,
                     "cand_id": actual_cand_id,
                     "actor_id": actor_identity_id,
-                    "now": now,
+                    "now": retrieved_at,
                 },
             )
             imported_count += 1
@@ -358,7 +393,7 @@ class SearchExecutionService:
             text(
                 "UPDATE search_jobs SET status = 'completed', results_count = :cnt, finished_at = :now WHERE id = :id"
             ),
-            {"id": job_id, "cnt": imported_count, "now": now},
+            {"id": job_id, "cnt": imported_count, "now": self.clock()},
         )
 
         return {

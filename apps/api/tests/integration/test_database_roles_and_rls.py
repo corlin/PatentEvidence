@@ -120,6 +120,7 @@ def test_fresh_migration_creates_expected_tables_roles_and_forced_rls(
         "mfa_recovery_codes",
         "audit_events",
         "platform_audit_events",
+        "source_result_snapshots",
     }
     tables = {
         row[0]
@@ -168,6 +169,124 @@ def test_fresh_migration_creates_expected_tables_roles_and_forced_rls(
             (table,),
         ).fetchone()
         assert row == (True, True, "patent_evidence_migration")
+
+
+def test_source_result_snapshots_are_tenant_scoped_and_append_only(
+    migration_connection: psycopg.Connection[tuple[object, ...]],
+) -> None:
+    row = migration_connection.execute(
+        """SELECT c.relrowsecurity, c.relforcerowsecurity, owner.rolname
+        FROM pg_class c JOIN pg_roles owner ON owner.oid = c.relowner
+        WHERE c.oid = 'source_result_snapshots'::regclass"""
+    ).fetchone()
+    assert row == (True, True, "patent_evidence_migration")
+
+    privileges = migration_connection.execute(
+        """SELECT grantee, privilege_type
+        FROM information_schema.role_table_grants
+        WHERE table_schema = 'public'
+          AND table_name = 'source_result_snapshots'
+          AND grantee IN ('patent_evidence_app', 'patent_evidence_worker')
+        ORDER BY grantee, privilege_type"""
+    ).fetchall()
+    assert privileges == [
+        ("patent_evidence_app", "INSERT"),
+        ("patent_evidence_app", "SELECT"),
+        ("patent_evidence_worker", "INSERT"),
+        ("patent_evidence_worker", "SELECT"),
+    ]
+
+
+def test_source_result_snapshot_runtime_immutability_and_tenant_binding(
+    migration_connection: psycopg.Connection[tuple[object, ...]],
+) -> None:
+    case_a = UUID("60000000-0000-4000-8000-000000000001")
+    case_b = UUID("60000000-0000-4000-8000-000000000002")
+    job_a = UUID("61000000-0000-4000-8000-000000000001")
+    candidate_a = UUID("62000000-0000-4000-8000-000000000001")
+    snapshot_a = UUID("63000000-0000-4000-8000-000000000001")
+    now = datetime.now(UTC)
+
+    migration_connection.execute(
+        """INSERT INTO cases
+        (id, organization_id, case_number, title, technical_field, status,
+         created_by_identity_id, created_at, updated_at)
+        VALUES (%s,%s,'RLS-SNAPSHOT-A','Snapshot A','Evidence','draft',%s,%s,%s),
+               (%s,%s,'RLS-SNAPSHOT-B','Snapshot B','Evidence','draft',%s,%s,%s)""",
+        (case_a, ORG_A, IDENTITY_A, now, now, case_b, ORG_B, IDENTITY_B, now, now),
+    )
+    migration_connection.execute(
+        """INSERT INTO search_jobs
+        (id, organization_id, case_id, source_type, query_text, status,
+         results_count, created_at)
+        VALUES (%s,%s,%s,'openalex','SoftHand','completed',1,%s)""",
+        (job_a, ORG_A, case_a, now),
+    )
+    migration_connection.execute(
+        """INSERT INTO search_candidates
+        (id, organization_id, case_id, publication_number,
+         publication_number_normalized, title, abstract, source_type,
+         raw_metadata, relevance_score, created_at)
+        VALUES (%s,%s,%s,'DOI:10.1/example','DOI101EXAMPLE','Example','Abstract',
+                'openalex','{}'::jsonb,1,%s)""",
+        (candidate_a, ORG_A, case_a, now),
+    )
+
+    with _runtime_connection(
+        "PE_TEST_APPLICATION_DATABASE_URL", "patent_evidence_app"
+    ) as app:
+        _set_tenant(app, ORG_A)
+        app.execute(
+            """INSERT INTO source_result_snapshots
+            (id, organization_id, case_id, search_job_id, candidate_id,
+             source_type, source_identifier, source_url, payload,
+             payload_sha256, retrieved_at)
+            VALUES (%s,%s,%s,%s,%s,'openalex','DOI:10.1/example',
+                    'https://openalex.org/W1','{}'::jsonb,
+                    encode(sha256(convert_to('{}'::jsonb::text,'UTF8')),'hex'),%s)""",
+            (snapshot_a, ORG_A, case_a, job_a, candidate_a, now),
+        )
+        assert app.execute(
+            "SELECT id FROM source_result_snapshots"
+        ).fetchall() == [(snapshot_a,)]
+
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            app.execute(
+                "UPDATE source_result_snapshots SET source_identifier='changed' WHERE id=%s",
+                (snapshot_a,),
+            )
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            app.execute(
+                "DELETE FROM source_result_snapshots WHERE id=%s", (snapshot_a,)
+            )
+        with pytest.raises(psycopg.errors.ForeignKeyViolation):
+            app.execute("DELETE FROM search_candidates WHERE id=%s", (candidate_a,))
+        with pytest.raises(psycopg.errors.CheckViolation):
+            app.execute(
+                """INSERT INTO source_result_snapshots
+                (id, organization_id, case_id, search_job_id, candidate_id,
+                 source_type, source_identifier, payload, payload_sha256,
+                 retrieved_at)
+                VALUES (gen_random_uuid(),%s,%s,%s,%s,'openalex','bad-hash',
+                        '{}'::jsonb,%s,%s)""",
+                (ORG_A, case_a, job_a, candidate_a, "f" * 64, now),
+            )
+
+        _set_tenant(app, ORG_B)
+        assert app.execute(
+            "SELECT id FROM source_result_snapshots"
+        ).fetchall() == []
+        with pytest.raises(psycopg.errors.ForeignKeyViolation):
+            app.execute(
+                """INSERT INTO source_result_snapshots
+                (id, organization_id, case_id, search_job_id, candidate_id,
+                 source_type, source_identifier, payload, payload_sha256,
+                 retrieved_at)
+                VALUES (gen_random_uuid(),%s,%s,%s,%s,'openalex','cross-tenant',
+                        '{}'::jsonb,
+                        encode(sha256(convert_to('{}'::jsonb::text,'UTF8')),'hex'),%s)""",
+                (ORG_B, case_b, job_a, candidate_a, now),
+            )
 
 
 def test_application_role_cannot_select_or_mutate_another_organization() -> None:
