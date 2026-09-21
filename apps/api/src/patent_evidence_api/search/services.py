@@ -287,7 +287,7 @@ class SearchExecutionService:
             )
             raise HTTPException(status_code=502, detail=f"search_adapter_failed: {exc}") from exc
 
-        retrieved_at = self.clock()
+        results_received_at = self.clock()
 
         kw_matrix = strategy.get("keywords_matrix", {})
         ipc_classes = strategy.get("ipc_classes", [])
@@ -328,20 +328,15 @@ class SearchExecutionService:
                     "app": item.applicant,
                     "ipc": item.ipc_classification,
                     "src": item.source_type,
-                    "meta": json.dumps(item.raw_metadata or {}),
+                    "meta": json.dumps(dict(item.raw_metadata or {})),
                     "score": score,
-                    "now": retrieved_at,
+                    "now": results_received_at,
                 },
             )
             actual_cand_id = res_cand.scalar_one()
 
-            if item.provider_record is not None:
-                canonical_payload = json.dumps(
-                    item.provider_record,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
+            if item.provider_snapshot is not None:
+                snapshot = item.provider_snapshot
                 await session.execute(
                     text(
                         """INSERT INTO source_result_snapshots
@@ -360,11 +355,11 @@ class SearchExecutionService:
                         "case_id": case_id,
                         "job_id": job_id,
                         "candidate_id": actual_cand_id,
-                        "source_type": item.source_type,
-                        "source_identifier": item.publication_number,
-                        "source_url": (item.raw_metadata or {}).get("source_url"),
-                        "payload": canonical_payload,
-                        "retrieved_at": retrieved_at,
+                        "source_type": snapshot.source_type,
+                        "source_identifier": snapshot.source_identifier,
+                        "source_url": snapshot.source_url,
+                        "payload": snapshot.payload_json,
+                        "retrieved_at": snapshot.retrieved_at,
                     },
                 )
 
@@ -383,7 +378,7 @@ class SearchExecutionService:
                     "case_id": case_id,
                     "cand_id": actual_cand_id,
                     "actor_id": actor_identity_id,
-                    "now": retrieved_at,
+                    "now": results_received_at,
                 },
             )
             imported_count += 1
@@ -463,7 +458,7 @@ class CandidateTriageService:
                     "app": item.applicant,
                     "ipc": item.ipc_classification,
                     "src": item.source_type,
-                    "meta": json.dumps(item.raw_metadata or {}),
+                    "meta": json.dumps(dict(item.raw_metadata or {})),
                     "score": score,
                     "now": now,
                 },

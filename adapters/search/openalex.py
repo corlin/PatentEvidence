@@ -3,13 +3,24 @@ from __future__ import annotations
 import logging
 import re
 import urllib.parse
+from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
-from adapters.search.base import BaseSearchAdapter, SearchResultItem
+from adapters.search.base import (
+    BaseSearchAdapter,
+    ProviderRecordSnapshot,
+    SearchResultItem,
+)
 
 logger = logging.getLogger(__name__)
+Clock = Callable[[], datetime]
+
+
+def default_clock() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class OpenAlexSearchAdapter(BaseSearchAdapter):
@@ -17,8 +28,13 @@ class OpenAlexSearchAdapter(BaseSearchAdapter):
 
     OPENALEX_API_URL = "https://api.openalex.org/works"
 
-    def __init__(self, timeout_seconds: float = 30.0) -> None:
+    def __init__(
+        self,
+        timeout_seconds: float = 30.0,
+        clock: Clock = default_clock,
+    ) -> None:
         self.timeout_seconds = timeout_seconds
+        self.clock = clock
 
     def _reconstruct_abstract(self, inverted_index: dict[str, list[int]] | None) -> str:
         if not inverted_index:
@@ -50,7 +66,9 @@ class OpenAlexSearchAdapter(BaseSearchAdapter):
     def _unique_names(values: list[str]) -> list[str]:
         return list(dict.fromkeys(value for value in values if value))
 
-    def _parse_work(self, work: dict[str, Any]) -> SearchResultItem:
+    def _parse_work(
+        self, work: dict[str, Any], retrieved_at: datetime
+    ) -> SearchResultItem:
         doi = work.get("doi")
         openalex_id = work.get("id")
         identifier = doi or openalex_id or ""
@@ -102,7 +120,13 @@ class OpenAlexSearchAdapter(BaseSearchAdapter):
                 "google_patents_url": google_patents_url,
                 "cited_by_count": work.get("cited_by_count", 0),
             },
-            provider_record=work,
+            provider_snapshot=ProviderRecordSnapshot.from_record(
+                source_type="openalex",
+                source_identifier=publication_number,
+                source_url=source_url,
+                retrieved_at=retrieved_at,
+                record=work,
+            ),
         )
 
     async def search(self, query: str, limit: int = 20) -> list[SearchResultItem]:
@@ -136,8 +160,9 @@ class OpenAlexSearchAdapter(BaseSearchAdapter):
                 )
                 if resp.status_code == 200:
                     data = resp.json()
+                    retrieved_at = self.clock()
                     works = [data] if direct_lookup else data.get("results", [])
-                    return [self._parse_work(work) for work in works]
+                    return [self._parse_work(work, retrieved_at) for work in works]
                 if direct_lookup and resp.status_code == 404:
                     return []
                 resp.raise_for_status()

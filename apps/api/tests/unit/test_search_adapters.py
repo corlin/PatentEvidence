@@ -106,7 +106,8 @@ async def test_uspto_adapter_fixture_fallback_and_key_override() -> None:
 
 @pytest.mark.asyncio
 async def test_openalex_adapter_abstract_reconstruction_and_parsing() -> None:
-    adapter = OpenAlexSearchAdapter()
+    retrieved_at = datetime(2026, 9, 21, 2, 25, tzinfo=timezone.utc)
+    adapter = OpenAlexSearchAdapter(clock=lambda: retrieved_at)
     inv_index = {"A": [0], "quantized": [1], "model": [2], "method.": [3]}
     abstract = adapter._reconstruct_abstract(inv_index)
     assert abstract == "A quantized model method."
@@ -154,7 +155,13 @@ async def test_openalex_adapter_abstract_reconstruction_and_parsing() -> None:
         assert items[0].raw_metadata["primary_topic"] == "Machine Learning"
         assert items[0].raw_metadata["work_type"] == "article"
         assert items[0].raw_metadata["source_url"] == "https://doi.org/10.1145/12345.67890"
-        assert items[0].provider_record == fake_resp.json.return_value["results"][0]
+        snapshot = items[0].provider_snapshot
+        assert snapshot is not None
+        assert snapshot.source_type == "openalex"
+        assert snapshot.source_identifier == "DOI:10.1145/12345.67890"
+        assert snapshot.source_url == "https://doi.org/10.1145/12345.67890"
+        assert snapshot.retrieved_at == retrieved_at
+        assert json.loads(snapshot.payload_json) == fake_resp.json.return_value["results"][0]
 
 
 @pytest.mark.asyncio
