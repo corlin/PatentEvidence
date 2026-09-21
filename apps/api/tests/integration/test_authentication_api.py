@@ -413,6 +413,102 @@ async def test_login_cookie_session_expiration_and_logout() -> None:
 
 
 @pytest.mark.asyncio
+async def test_source_snapshot_api_enforces_authorization_and_tenant_rls() -> None:
+    case_id = UUID("60000000-0000-4000-8000-000000000101")
+    search_job_id = UUID("61000000-0000-4000-8000-000000000101")
+    candidate_id = UUID("62000000-0000-4000-8000-000000000101")
+    snapshot_id = UUID("63000000-0000-4000-8000-000000000101")
+    payload_hash_input = '{"id": "https://openalex.org/W1"}'
+    migration_url = _url(
+        "PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration"
+    )
+    with psycopg.connect(migration_url, autocommit=True) as connection:
+        connection.execute(
+            """INSERT INTO organization_memberships
+            (id,organization_id,global_identity_id,role,status,created_at,updated_at)
+            VALUES ('20000000-0000-4000-8000-000000000103',%s,%s,
+                    'organization_admin','active',now(),now())""",
+            (OTHER_ORGANIZATION, IDENTITY),
+        )
+        connection.execute(
+            """INSERT INTO cases
+            (id,organization_id,case_number,title,technical_field,status,
+             created_by_identity_id,created_at,updated_at)
+            VALUES (%s,%s,'SNAPSHOT-API-1','Snapshot API','Evidence','draft',
+                    %s,now(),now())""",
+            (case_id, ORGANIZATION, ADMIN),
+        )
+        connection.execute(
+            """INSERT INTO search_jobs
+            (id,organization_id,case_id,source_type,query_text,status,
+             results_count,created_at,finished_at)
+            VALUES (%s,%s,%s,'openalex','OPENALEX:W1','completed',1,now(),now())""",
+            (search_job_id, ORGANIZATION, case_id),
+        )
+        connection.execute(
+            """INSERT INTO search_candidates
+            (id,organization_id,case_id,publication_number,
+             publication_number_normalized,title,abstract,source_type,
+             raw_metadata,relevance_score,created_at)
+            VALUES (%s,%s,%s,'OPENALEX:W1','OPENALEXW1','Provider record',
+                    'Provider abstract','openalex','{}'::jsonb,1,now())""",
+            (candidate_id, ORGANIZATION, case_id),
+        )
+        connection.execute(
+            """INSERT INTO source_result_snapshots
+            (id,organization_id,case_id,search_job_id,candidate_id,source_type,
+             source_identifier,source_url,payload,payload_sha256,retrieved_at)
+            VALUES (%s,%s,%s,%s,%s,'openalex','OPENALEX:W1',
+                    'https://openalex.org/W1',
+                    '{"id":"https://openalex.org/W1"}'::jsonb,
+                    encode(sha256(convert_to(
+                        '{"id":"https://openalex.org/W1"}'::jsonb::text,
+                        'UTF8')), 'hex'),now())""",
+            (snapshot_id, ORGANIZATION, case_id, search_job_id, candidate_id),
+        )
+
+    clock = MutableClock()
+    app = create_app(settings=_settings(), clock=clock)
+    owned_url = (
+        f"/api/v1/organizations/{ORGANIZATION}/cases/{case_id}/search/candidates/"
+        f"{candidate_id}/source-snapshots"
+    )
+    hidden_url = (
+        f"/api/v1/organizations/{OTHER_ORGANIZATION}/cases/{case_id}/search/"
+        f"candidates/{candidate_id}/source-snapshots"
+    )
+    async with (
+        AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as owner,
+        AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as other_tenant,
+    ):
+        assert (await _login(owner, "admin@example.test")).status_code == 200
+        await _confirm_totp(owner, clock)
+        owned = await owner.get(owned_url)
+
+        assert (await _login(other_tenant)).status_code == 200
+        await _confirm_totp(other_tenant, clock)
+        forbidden = await other_tenant.get(owned_url)
+        hidden = await other_tenant.get(hidden_url)
+
+    assert owned.status_code == 200, owned.text
+    assert len(owned.json()["items"]) == 1
+    snapshot = owned.json()["items"][0]
+    assert snapshot["id"] == str(snapshot_id)
+    assert snapshot["payload"] == {"id": "https://openalex.org/W1"}
+    assert snapshot["payload_hash_input"] == payload_hash_input
+    assert snapshot["payload_sha256"] == hashlib.sha256(
+        payload_hash_input.encode("utf-8")
+    ).hexdigest()
+    assert forbidden.status_code == 404
+    assert hidden.status_code == 200
+    assert hidden.json() == {"items": []}
+
+
+@pytest.mark.asyncio
 async def test_successful_password_login_rotates_presented_session() -> None:
     app = create_app(settings=_settings())
     async with AsyncClient(

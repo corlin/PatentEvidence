@@ -543,6 +543,51 @@ class CandidateTriageService:
             )
         return results
 
+    async def list_source_snapshots(
+        self,
+        session: AsyncSession,
+        organization_id: UUID,
+        case_id: UUID,
+        candidate_id: UUID,
+    ) -> list[dict[str, Any]]:
+        result = await session.execute(
+            text(
+                """SELECT id, search_job_id, source_type, source_identifier,
+                          source_url, payload, payload::text AS payload_hash_input,
+                          payload_sha256, retrieved_at
+                FROM source_result_snapshots
+                WHERE organization_id = :org_id
+                  AND case_id = :case_id
+                  AND candidate_id = :candidate_id
+                ORDER BY retrieved_at DESC, id DESC"""
+            ),
+            {
+                "org_id": organization_id,
+                "case_id": case_id,
+                "candidate_id": candidate_id,
+            },
+        )
+
+        snapshots: list[dict[str, Any]] = []
+        for row in result.fetchall():
+            payload = row.payload
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            snapshots.append(
+                {
+                    "id": str(row.id),
+                    "search_job_id": str(row.search_job_id),
+                    "source_type": row.source_type,
+                    "source_identifier": row.source_identifier,
+                    "source_url": row.source_url,
+                    "payload": payload,
+                    "payload_hash_input": row.payload_hash_input,
+                    "payload_sha256": row.payload_sha256,
+                    "retrieved_at": row.retrieved_at.isoformat(),
+                }
+            )
+        return snapshots
+
     async def update_triage(
         self,
         session: AsyncSession,

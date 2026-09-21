@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from hashlib import sha256
 from uuid import UUID
 
 import psycopg
@@ -249,6 +250,13 @@ def test_source_result_snapshot_runtime_immutability_and_tenant_binding(
         assert app.execute(
             "SELECT id FROM source_result_snapshots"
         ).fetchall() == [(snapshot_a,)]
+        snapshot_row = app.execute(
+            """SELECT id, payload::text, payload_sha256
+            FROM source_result_snapshots
+            WHERE organization_id=%s AND case_id=%s AND candidate_id=%s""",
+            (ORG_A, case_a, candidate_a),
+        ).fetchone()
+        assert snapshot_row == (snapshot_a, "{}", sha256(b"{}").hexdigest())
 
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             app.execute(
@@ -275,6 +283,11 @@ def test_source_result_snapshot_runtime_immutability_and_tenant_binding(
         _set_tenant(app, ORG_B)
         assert app.execute(
             "SELECT id FROM source_result_snapshots"
+        ).fetchall() == []
+        assert app.execute(
+            """SELECT id FROM source_result_snapshots
+            WHERE organization_id=%s AND case_id=%s AND candidate_id=%s""",
+            (ORG_A, case_a, candidate_a),
         ).fetchall() == []
         with pytest.raises(psycopg.errors.ForeignKeyViolation):
             app.execute(

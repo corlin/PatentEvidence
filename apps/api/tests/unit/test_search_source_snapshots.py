@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -10,13 +11,20 @@ from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 from adapters.search.base import (
     BaseSearchAdapter,
     ProviderRecordSnapshot,
     SearchResultItem,
 )
-from patent_evidence_api.search.services import SearchExecutionService, SearchStrategyService
+from patent_evidence_api.search.api import create_search_router
+from patent_evidence_api.search.services import (
+    CandidateTriageService,
+    SearchExecutionService,
+    SearchStrategyService,
+)
 
 
 class ProviderRecordAdapter(BaseSearchAdapter):
@@ -87,6 +95,29 @@ class StrategySession:
         return next(self.results)
 
 
+class SnapshotReadSession:
+    def __init__(self, rows: list[SimpleNamespace]) -> None:
+        self.rows = rows
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def execute(
+        self, statement: Any, params: dict[str, Any] | None = None
+    ) -> SimpleNamespace:
+        self.calls.append((str(statement), params or {}))
+        return SimpleNamespace(fetchall=lambda: self.rows)
+
+
+class SnapshotReadAccess:
+    def __init__(self, session: SnapshotReadSession) -> None:
+        self.session = session
+        self.organization_id: UUID | None = None
+
+    @asynccontextmanager
+    async def authorized(self, request: Any, organization_id: UUID) -> Any:
+        self.organization_id = organization_id
+        yield self.session, SimpleNamespace()
+
+
 @pytest.mark.asyncio
 async def test_search_strategy_returns_its_persisted_timestamp() -> None:
     now = datetime(2026, 9, 21, 2, 20, tzinfo=timezone.utc)
@@ -147,6 +178,96 @@ async def test_public_search_appends_hashed_raw_source_snapshot() -> None:
     assert "payload_sha256" not in params
     assert "encode(sha256" in snapshot_calls[0][0]
     assert params["retrieved_at"] == provider_retrieved_at
+
+
+@pytest.mark.asyncio
+async def test_list_source_snapshots_is_tenant_case_and_candidate_scoped() -> None:
+    organization_id = uuid4()
+    case_id = uuid4()
+    candidate_id = uuid4()
+    snapshot_id = uuid4()
+    search_job_id = uuid4()
+    retrieved_at = datetime(2026, 9, 21, 3, 0, tzinfo=timezone.utc)
+    session = SnapshotReadSession(
+        [
+            SimpleNamespace(
+                id=snapshot_id,
+                search_job_id=search_job_id,
+                source_type="openalex",
+                source_identifier="OPENALEX:W1",
+                source_url="https://openalex.org/W1",
+                payload={"id": "https://openalex.org/W1"},
+                payload_hash_input='{"id": "https://openalex.org/W1"}',
+                payload_sha256="a" * 64,
+                retrieved_at=retrieved_at,
+            )
+        ]
+    )
+
+    items = await CandidateTriageService().list_source_snapshots(
+        session,  # type: ignore[arg-type]
+        organization_id=organization_id,
+        case_id=case_id,
+        candidate_id=candidate_id,
+    )
+
+    assert items == [
+        {
+            "id": str(snapshot_id),
+            "search_job_id": str(search_job_id),
+            "source_type": "openalex",
+            "source_identifier": "OPENALEX:W1",
+            "source_url": "https://openalex.org/W1",
+            "payload": {"id": "https://openalex.org/W1"},
+            "payload_hash_input": '{"id": "https://openalex.org/W1"}',
+            "payload_sha256": "a" * 64,
+            "retrieved_at": retrieved_at.isoformat(),
+        }
+    ]
+    sql, params = session.calls[0]
+    assert "organization_id = :org_id" in sql
+    assert "case_id = :case_id" in sql
+    assert "candidate_id = :candidate_id" in sql
+    assert params == {
+        "org_id": organization_id,
+        "case_id": case_id,
+        "candidate_id": candidate_id,
+    }
+
+
+@pytest.mark.asyncio
+async def test_source_snapshot_route_uses_authorized_organization_scope() -> None:
+    organization_id = uuid4()
+    case_id = uuid4()
+    candidate_id = uuid4()
+    session = SnapshotReadSession([])
+    access = SnapshotReadAccess(session)
+    app = FastAPI()
+    app.include_router(
+        create_search_router(
+            access,  # type: ignore[arg-type]
+            SearchStrategyService(),
+            SearchExecutionService(),
+            CandidateTriageService(),
+        )
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        response = await client.get(
+            f"/api/v1/organizations/{organization_id}/cases/{case_id}"
+            f"/search/candidates/{candidate_id}/source-snapshots"
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"items": []}
+    assert access.organization_id == organization_id
+    assert session.calls[0][1] == {
+        "org_id": organization_id,
+        "case_id": case_id,
+        "candidate_id": candidate_id,
+    }
 
 
 def test_provider_record_snapshot_is_canonical_and_rejects_naive_time() -> None:

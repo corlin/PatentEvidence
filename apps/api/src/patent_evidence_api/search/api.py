@@ -291,4 +291,25 @@ def create_search_router(
             )
             return result
 
+    @router.get(
+        "/{organization_id}/cases/{case_id}/search/candidates/{candidate_id}/source-snapshots"
+    )
+    async def list_candidate_source_snapshots(
+        organization_id: str,
+        case_id: str,
+        candidate_id: str,
+        request: Request,
+    ) -> dict[str, Any]:
+        org_uuid = parse_uuid_or_404(organization_id)
+        c_uuid = parse_uuid_or_404(case_id)
+        cand_uuid = parse_uuid_or_404(candidate_id)
+        async with access.authorized(request, org_uuid) as (session, _):
+            items = await triage_service.list_source_snapshots(
+                session,
+                organization_id=org_uuid,
+                case_id=c_uuid,
+                candidate_id=cand_uuid,
+            )
+            return {"items": items}
+
     return router
