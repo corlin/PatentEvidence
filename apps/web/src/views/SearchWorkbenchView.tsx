@@ -561,13 +561,18 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                       {/* Triage Status & Actions */}
                       <div className="flex-row gap-xs align-center">
                         <a
-                          href={cand.raw_metadata?.google_patents_url || `https://patents.google.com/?q=${encodeURIComponent(cand.publication_number)}`}
+                          href={
+                            cand.raw_metadata?.source_url ||
+                            cand.raw_metadata?.google_patents_url ||
+                            `https://patents.google.com/?q=${encodeURIComponent(cand.publication_number)}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn btn-secondary btn-xs"
-                          title="在 Google Patents 官方图文库查看真实公开专利"
+                          title="打开候选记录的原始来源"
                         >
-                          <Icon name="link" size={14} /> 谷歌专利查验 ↗
+                          <Icon name="link" size={14} />
+                          {cand.raw_metadata?.source_url ? '来源记录查验 ↗' : '谷歌专利查验 ↗'}
                         </a>
                         {cand.triage_status === 'pending' && (
                           <>
@@ -625,8 +630,16 @@ export const SearchWorkbenchView: React.FC<SearchWorkbenchViewProps> = ({ orgId,
                     {/* Title & Abstract */}
                     <h3 className="text-sm font-bold text-text mb-xs">{cand.title}</h3>
                     <p className="text-xs text-secondary mb-xs line-clamp-3">{cand.abstract}</p>
-                    {cand.applicant && (
-                      <p className="text-xs text-secondary">申请人/专利权人：{cand.applicant}</p>
+                    {cand.source_type === 'openalex' && cand.raw_metadata?.authors?.length ? (
+                      <p className="text-xs text-secondary">
+                        作者：{cand.raw_metadata.authors.join(', ')}
+                      </p>
+                    ) : cand.applicant ? (
+                      <p className="text-xs text-secondary">
+                        申请人/专利权人：{cand.applicant}
+                      </p>
+                    ) : (
+                      null
                     )}
 
                     {/* Exclude notes if any */}

@@ -466,7 +466,8 @@ class CandidateTriageService:
     ) -> list[dict[str, Any]]:
         query_sql = """
             SELECT c.id, c.publication_number, c.publication_number_normalized, c.title, c.abstract,
-                   c.publication_date, c.applicant, c.ipc_classification, c.source_type, c.relevance_score,
+                   c.publication_date, c.applicant, c.ipc_classification, c.source_type, c.raw_metadata,
+                   c.relevance_score,
                    c.created_at,
                    COALESCE(t.triage_status, 'pending') AS triage_status,
                    t.exclusion_reason, t.notes, t.triaged_at
@@ -487,6 +488,9 @@ class CandidateTriageService:
 
         results: list[dict[str, Any]] = []
         for r in rows:
+            raw_metadata = r.raw_metadata
+            if isinstance(raw_metadata, str):
+                raw_metadata = json.loads(raw_metadata)
             results.append(
                 {
                     "id": str(r.id),
@@ -498,6 +502,7 @@ class CandidateTriageService:
                     "applicant": r.applicant,
                     "ipc_classification": r.ipc_classification,
                     "source_type": r.source_type,
+                    "raw_metadata": raw_metadata,
                     "relevance_score": r.relevance_score,
                     "created_at": r.created_at.isoformat(),
                     "triage_status": r.triage_status,

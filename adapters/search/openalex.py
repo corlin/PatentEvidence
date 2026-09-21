@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import urllib.parse
 from typing import Any
 
@@ -21,13 +22,87 @@ class OpenAlexSearchAdapter(BaseSearchAdapter):
 
     def _reconstruct_abstract(self, inverted_index: dict[str, list[int]] | None) -> str:
         if not inverted_index:
-            return "No abstract provided in official OpenAlex record."
+            return ""
         words: list[tuple[int, str]] = []
         for word, positions in inverted_index.items():
             for pos in positions:
                 words.append((pos, word))
         words.sort(key=lambda x: x[0])
         return " ".join(w[1] for w in words)
+
+    def _extract_doi(self, query: str) -> str | None:
+        match = re.fullmatch(
+            r"\s*(?:(?:https?://(?:dx\.)?doi\.org/)|(?:doi:\s*))?(10\.\d{4,9}/\S+)\s*",
+            query,
+            flags=re.IGNORECASE,
+        )
+        return match.group(1) if match else None
+
+    def _extract_openalex_id(self, query: str) -> str | None:
+        match = re.fullmatch(
+            r"\s*(?:https?://openalex\.org/)?(W\d+)\s*",
+            query,
+            flags=re.IGNORECASE,
+        )
+        return match.group(1).upper() if match else None
+
+    @staticmethod
+    def _unique_names(values: list[str]) -> list[str]:
+        return list(dict.fromkeys(value for value in values if value))
+
+    def _parse_work(self, work: dict[str, Any]) -> SearchResultItem:
+        doi = work.get("doi")
+        openalex_id = work.get("id")
+        identifier = doi or openalex_id or ""
+        publication_number = identifier.replace("https://doi.org/", "DOI:").replace(
+            "https://openalex.org/", "OPENALEX:"
+        )
+        title = work.get("title") or work.get("display_name") or "Untitled OpenAlex work"
+        abstract = self._reconstruct_abstract(work.get("abstract_inverted_index"))
+        publication_date = work.get("publication_date")
+        if not publication_date and work.get("publication_year"):
+            publication_date = str(work["publication_year"])
+
+        authorships = work.get("authorships") or []
+        authors = self._unique_names(
+            [authorship.get("author", {}).get("display_name", "") for authorship in authorships]
+        )
+        institutions = self._unique_names(
+            [
+                institution.get("display_name", "")
+                for authorship in authorships
+                for institution in (authorship.get("institutions") or [])
+            ]
+        )
+        primary_topic = work.get("primary_topic") or {}
+        topic = primary_topic.get("display_name")
+        primary_location = work.get("primary_location") or {}
+        source = primary_location.get("source") or {}
+        source_url = primary_location.get("landing_page_url") or openalex_id
+        google_patents_url = f"https://patents.google.com/?q={urllib.parse.quote_plus(title)}"
+
+        return SearchResultItem(
+            publication_number=publication_number,
+            title=title,
+            abstract=abstract,
+            publication_date=publication_date,
+            applicant=None,
+            ipc_classification=None,
+            source_type="openalex",
+            raw_metadata={
+                "doi": doi,
+                "openalex_id": openalex_id,
+                "authors": authors,
+                "institutions": institutions,
+                "primary_topic": topic,
+                "journal": source.get("display_name"),
+                "work_type": work.get("type"),
+                "publication_date": publication_date,
+                "source_url": source_url,
+                "google_patents_url": google_patents_url,
+                "cited_by_count": work.get("cited_by_count", 0),
+            },
+        )
 
     async def search(self, query: str, limit: int = 20) -> list[SearchResultItem]:
         # Extract meaningful search keywords
@@ -38,81 +113,34 @@ class OpenAlexSearchAdapter(BaseSearchAdapter):
             "User-Agent": "PatentEvidence-Search/1.0 (mailto:admin@patent.com)",
             "Accept": "application/json",
         }
-        params = {
-            "search": clean_query,
-            "per_page": min(limit, 25),
-        }
+        doi = self._extract_doi(query)
+        openalex_id = self._extract_openalex_id(query)
+        url = self.OPENALEX_API_URL
+        params: dict[str, Any] = {"search": clean_query, "per_page": min(limit, 25)}
+        if doi:
+            url = f"{self.OPENALEX_API_URL}/https://doi.org/{doi}"
+            params = {}
+        elif openalex_id:
+            url = f"{self.OPENALEX_API_URL}/{openalex_id}"
+            params = {}
+        direct_lookup = doi is not None or openalex_id is not None
 
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
-                    self.OPENALEX_API_URL,
+                    url,
                     headers=headers,
                     params=params,
                     timeout=self.timeout_seconds,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    works = data.get("results", [])
-                    items: list[SearchResultItem] = []
-                    for w in works:
-                        doi = w.get("doi") or w.get("id") or "https://openalex.org"
-                        # Clean publication identifier
-                        pub_no = doi.replace("https://doi.org/", "DOI:").replace("https://openalex.org/", "OPENALEX:")
-                        title = w.get("title") or w.get("display_name") or "Public Prior Art Document"
-                        abstract = self._reconstruct_abstract(w.get("abstract_inverted_index"))
-                        pub_date = w.get("publication_date") or str(w.get("publication_year", "2023"))
-
-                        # Extract institution / authors
-                        applicant = "Global Research Institution"
-                        authorships = w.get("authorships") or []
-                        if authorships:
-                            insts = authorships[0].get("institutions") or []
-                            if insts and insts[0].get("display_name"):
-                                applicant = insts[0]["display_name"]
-                            elif authorships[0].get("author", {}).get("display_name"):
-                                applicant = authorships[0]["author"]["display_name"]
-
-                        primary_top = w.get("primary_topic") or {}
-                        topic = primary_top.get("display_name") or "Computer Science / Artificial Intelligence"
-                        google_patents_url = f"https://patents.google.com/?q={urllib.parse.quote_plus(title)}"
-
-                        items.append(
-                            SearchResultItem(
-                                publication_number=pub_no,
-                                title=title,
-                                abstract=abstract[:500] + ("..." if len(abstract) > 500 else ""),
-                                publication_date=pub_date,
-                                applicant=applicant,
-                                ipc_classification=topic,
-                                source_type="openalex",
-                                raw_metadata={
-                                    "doi": doi,
-                                    "openalex_id": w.get("id"),
-                                    "google_patents_url": google_patents_url,
-                                    "cited_by_count": w.get("cited_by_count", 0),
-                                },
-                            )
-                        )
-                    if items:
-                        return items
+                    works = [data] if direct_lookup else data.get("results", [])
+                    return [self._parse_work(work) for work in works]
+                if direct_lookup and resp.status_code == 404:
+                    return []
+                resp.raise_for_status()
         except Exception as exc:
-            logger.warning("OpenAlex live search request failed: %r; falling back to offline prior art", exc)
-
-        # Fallback to deterministic offline prior art
-        fallback_token = tokens[0] if tokens else "Deep Learning"
-        return [
-            SearchResultItem(
-                publication_number="DOI:10.48550/arXiv.2309.00123",
-                title=f"Quantization and Sparsity for {fallback_token} in Prior Art",
-                abstract="An empirical study on mixed-precision quantization algorithms achieving efficient throughput and low latency inference.",
-                publication_date="2023-09-15",
-                applicant="Stanford AI Laboratory",
-                ipc_classification="Computer Science - Machine Learning",
-                source_type="openalex",
-                raw_metadata={
-                    "doi": "https://doi.org/10.48550/arXiv.2309.00123",
-                    "google_patents_url": f"https://patents.google.com/?q={urllib.parse.quote_plus(fallback_token)}",
-                },
-            )
-        ]
+            logger.warning("OpenAlex live search request failed: %r", exc)
+            raise
+        return []

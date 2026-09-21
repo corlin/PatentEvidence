@@ -127,4 +127,38 @@ describe('Search & Candidate Pool Web Surface', () => {
       })
     })
   })
+
+  it('links OpenAlex candidates to their original source record', async () => {
+    vi.spyOn(apiClient, 'listSearchCandidates').mockResolvedValue({
+      items: [
+        {
+          ...mockCandidates[0],
+          id: 'openalex-1',
+          publication_number: 'DOI:10.1109/lra.2022.3187876',
+          publication_number_normalized: 'DOI101109LRA20223187876',
+          source_type: 'openalex',
+          raw_metadata: {
+            source_url: 'https://openalex.org/W4283693873',
+            authors: ['Cosimo Della Santina', 'Manuel G. Catalano'],
+          },
+        },
+      ],
+    })
+
+    render(
+      <Router>
+        <SessionProvider>
+          <SearchWorkbenchView orgId="org-1" caseId="case-1" />
+        </SessionProvider>
+      </Router>
+    )
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /多路检索与候选池初筛/ })
+    )
+
+    const sourceLink = await screen.findByRole('link', { name: '来源记录查验 ↗' })
+    expect(sourceLink.getAttribute('href')).toBe('https://openalex.org/W4283693873')
+    expect(screen.getByText('作者：Cosimo Della Santina, Manuel G. Catalano')).toBeDefined()
+  })
 })
