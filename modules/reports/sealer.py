@@ -14,6 +14,7 @@ class SealedEvidencePayload:
     search: dict[str, Any]
     candidates: list[dict[str, Any]]
     comparison: dict[str, Any]
+    assessment: dict[str, Any]
     sealed_at: str
     sealed_by: str
 
@@ -34,6 +35,7 @@ class EvidenceSealer:
         comparison_data: dict[str, Any],
         sealed_at_iso: str,
         sealed_by_email: str,
+        assessment_data: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str]:
         payload_obj = SealedEvidencePayload(
             case={
@@ -64,6 +66,16 @@ class EvidenceSealer:
                 "risk_level": comparison_data.get("risk_level", ""),
                 "summary": comparison_data.get("summary", ""),
                 "comparisons": comparison_data.get("comparisons", []),
+            },
+            # Sealed alongside the evidence so the root hash binds the assessment
+            # facts that gate section 5. An older snapshot without this block
+            # simply has no version, and the gate then refuses to publish.
+            assessment={
+                "has_version": bool((assessment_data or {}).get("has_version")),
+                "version_number": (assessment_data or {}).get("version_number"),
+                "status": (assessment_data or {}).get("status"),
+                "blockers": list((assessment_data or {}).get("blockers") or []),
+                "payload_sha256": (assessment_data or {}).get("payload_sha256"),
             },
             sealed_at=sealed_at_iso,
             sealed_by=sealed_by_email,

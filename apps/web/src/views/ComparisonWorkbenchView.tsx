@@ -214,14 +214,14 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
 
         {matrixData ? (
           <div className="flex-stack gap-md">
-            {/* Global Risk Banner */}
+            {/* Global Risk Banner — 计数结果是候选提示，不是结论 */}
             <div
               className={`card p-md border-l-4 ${
                 matrixData.evaluation.risk_level === 'high_novelty_risk'
                   ? 'border-red-500 bg-red-50'
                   : matrixData.evaluation.risk_level === 'inventiveness_risk'
                   ? 'border-yellow-500 bg-yellow-50'
-                  : 'border-green-500 bg-green-50'
+                  : 'border-gray-300 bg-gray-50'
               }`}
             >
               <div className="flex-between align-center mb-xs">
@@ -232,14 +232,14 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                         ? 'badge-danger'
                         : matrixData.evaluation.risk_level === 'inventiveness_risk'
                         ? 'badge-warning'
-                        : 'badge-success'
+                        : 'badge-neutral'
                     }`}
                   >
                     {matrixData.evaluation.risk_level === 'high_novelty_risk'
-                      ? '新颖性高风险预警'
+                      ? '⚠️ 候选提示：新颖性需重点核查'
                       : matrixData.evaluation.risk_level === 'inventiveness_risk'
-                      ? '创造性审查重点关注'
-                      : '✓ 良好授权前景'}
+                      ? '⚡ 候选提示：创造性需重点论证'
+                      : '○ 候选提示：未发现全覆盖的对比文件'}
                   </span>
                   <span className="text-xs text-secondary font-medium">
                     特征项: <strong>{matrixData.features.length}</strong> | 纳入对比文献: <strong>{matrixData.candidates.length}</strong>
@@ -259,6 +259,10 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
 
               <p className="text-xs font-semibold text-text mt-xs leading-relaxed">
                 {matrixData.evaluation.summary}
+              </p>
+              <p className="text-xs text-secondary mt-xs leading-relaxed">
+                以上为基于比对矩阵公开/等同计数的候选提示，未经过日期门禁、优先权核验与引文核验，
+                不构成专利性结论或授权前景意见。
               </p>
             </div>
 

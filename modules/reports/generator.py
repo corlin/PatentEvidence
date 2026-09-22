@@ -2,11 +2,27 @@ from __future__ import annotations
 
 from typing import Any
 
+from modules.reports.conclusion import (
+    PUBLICATION_DISCLAIMER,
+    evaluate_conclusion_eligibility,
+)
+
+# Candidate readings only. Deliberately no "授权前景" / "good prospects" wording:
+# the underlying count does not know whether a document is prior art.
+RISK_BADGE = {
+    "high_novelty_risk": "⚠️ 候选提示：新颖性需重点核查",
+    "inventiveness_risk": "⚡ 候选提示：创造性需重点论证",
+    "clear_difference": "○ 候选提示：未发现全覆盖的对比文件",
+    "unknown": "— 无可用计数",
+}
+
 
 class MarkdownReportGenerator:
     """Generates a structured, client-ready Markdown patent evidence analysis report."""
 
     def generate(self, snapshot_payload: dict[str, Any], root_sha256: str) -> str:
+        assessment = snapshot_payload.get("assessment")
+        eligibility = evaluate_conclusion_eligibility(assessment)
         case = snapshot_payload.get("case", {})
         doc = snapshot_payload.get("document", {})
         features = snapshot_payload.get("features", {}).get("items", [])
@@ -96,18 +112,52 @@ class MarkdownReportGenerator:
             )
 
         risk_str = comparison.get("risk_level", "unknown")
-        risk_badge = "⚠️ 新颖性高风险预警" if risk_str == "high_novelty_risk" else ("⚡ 创造性审查关注" if risk_str == "inventiveness_risk" else "✓ 良好授权前景")
+        risk_badge = RISK_BADGE.get(risk_str, RISK_BADGE["unknown"])
+
+        lines.extend([f"", f"---", f"", f"## 5. 专利性与法律风险论证（候选判断）", f""])
+
+        if not eligibility.eligible:
+            lines.extend(
+                [
+                    f"> **本节不输出任何倾向性判断。**",
+                    f"",
+                    f"比对矩阵本身可用于核对事实，但将其计数结果作为专利性判断发布，"
+                    f"需要先通过预评估门禁。当前未通过，原因：",
+                    f"",
+                ]
+            )
+            for reason in eligibility.reasons:
+                lines.append(f"- {reason}")
+            lines.extend(
+                [
+                    f"",
+                    f"因此本节仅陈述：该计数尚未与日期门禁、优先权核验、引文核验及三步法论证的结果对齐，"
+                    f"不能作为新颖性或创造性的结论使用。",
+                    f"",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    f"> **全案候选评级**：**{risk_badge}**",
+                    f"",
+                    f"{comparison.get('summary', '暂无全案综合评述。')}",
+                    f"",
+                    f"> {PUBLICATION_DISCLAIMER}",
+                    f"",
+                    f"对应预评估版本：v{eligibility.version_number}"
+                    + (
+                        f"（内容摘要 `{eligibility.payload_sha256}`）"
+                        if eligibility.payload_sha256
+                        else ""
+                    )
+                    + f"，门禁版本 `{eligibility.gate_version}`。",
+                    f"",
+                ]
+            )
 
         lines.extend(
             [
-                f"",
-                f"---",
-                f"",
-                f"## 5. 专利性与法律风险综合论证",
-                f"",
-                f"> **全案风险评级**：**{risk_badge}**",
-                f"",
-                f"{comparison.get('summary', '暂无全案综合评述。')}",
                 f"",
                 f"---",
                 f"",

@@ -56,3 +56,20 @@ def test_risk_assessment_prompt_generation():
         itemized_summary=[{"feature_code": "F1", "judgment": "identical", "citation_location": "[0012]", "reasoning": "全公开"}]
     )
     assert "相同公开=2" in user_prompt
+
+
+def test_risk_assessment_prompt_produces_candidates_not_conclusions():
+    """提示词不得让模型出具结论——授权与否由人判断。"""
+    assert "出具全案可专利性预评估结论" not in RISK_ASSESSMENT_SYSTEM_PROMPT
+    assert "具备充分可专利性前景" not in RISK_ASSESSMENT_SYSTEM_PROMPT
+    assert "候选" in RISK_ASSESSMENT_SYSTEM_PROMPT
+    # 模型没有申请日与优先权日，不得自行判定现有技术资格
+    assert "待日期门禁核验" in RISK_ASSESSMENT_SYSTEM_PROMPT
+    assert "不得给出授权结论" in build_risk_assessment_user_prompt(
+        "测试专利",
+        feature_count=1,
+        identical_count=0,
+        equivalent_count=0,
+        different_count=1,
+        itemized_summary=[],
+    )

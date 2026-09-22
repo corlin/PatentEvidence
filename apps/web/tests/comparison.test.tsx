@@ -14,7 +14,8 @@ const mockMatrixData: ComparisonMatrixDetail = {
     feature_set_version_id: 'v-1',
     name: '权利要求特征比对表',
     status: 'draft',
-    summary: '【新颖性高风险预警】：对比文件 CN117283912A 已经全面公开了本申请权利要求的全部技术特征。',
+    summary:
+      '【候选提示·新颖性需重点核查】：按当前矩阵计数，对比文件 CN117283912A (全部特征完全公开) 覆盖了本申请权利要求的全部技术特征。',
     confirmed_at: null,
     confirmed_by_identity_id: null,
     created_at: new Date().toISOString(),
@@ -22,7 +23,8 @@ const mockMatrixData: ComparisonMatrixDetail = {
   },
   evaluation: {
     risk_level: 'high_novelty_risk',
-    summary: '【新颖性高风险预警】：对比文件 CN117283912A 已经全面公开了本申请权利要求的全部技术特征。',
+    summary:
+      '【候选提示·新颖性需重点核查】：按当前矩阵计数，对比文件 CN117283912A (全部特征完全公开) 覆盖了本申请权利要求的全部技术特征。',
     high_risk_candidates: ['CN117283912A'],
     partial_risk_candidates: [],
     total_features_count: 1,
@@ -88,11 +90,18 @@ describe('Comparison Matrix Web Surface', () => {
 
     await waitFor(() => {
       expect(screen.getByText('权利要求特征深度比对表 (Claim Chart)')).toBeDefined()
-      expect(screen.getByText('新颖性高风险预警')).toBeDefined()
+      expect(screen.getByText('⚠️ 候选提示：新颖性需重点核查')).toBeDefined()
       expect(screen.getByText('F1')).toBeDefined()
       expect(screen.getByText(/D1: CN117283912A/)).toBeDefined()
       expect(screen.getByRole('button', { name: '✓ 锁定确认比对表' })).toBeDefined()
     })
+
+    // 计数结果在该页不得被读成结论
+    expect(screen.queryByText('新颖性高风险预警')).toBeNull()
+    expect(screen.queryByText(/良好授权前景/)).toBeNull()
+    expect(
+      screen.getByText(/不构成专利性结论或授权前景意见/)
+    ).toBeDefined()
   })
 
   it('allows editing comparison judgment and saving changes', async () => {

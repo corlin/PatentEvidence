@@ -298,7 +298,7 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
                       <span className="badge badge-success text-xs">已锁定确认</span>
                     </div>
                     <p className="text-xs text-secondary">
-                      比对项总数: <strong>{payload.comparison?.comparisons?.length || 0}</strong> 条 | 评级: <strong>{payload.comparison?.risk_level}</strong>
+                      比对项总数: <strong>{payload.comparison?.comparisons?.length || 0}</strong> 条 | 候选评级: <strong>{payload.comparison?.risk_level}</strong>（计数结果，非专利性结论）
                     </p>
                   </div>
 

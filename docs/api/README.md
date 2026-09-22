@@ -156,3 +156,34 @@ reported as a caveat, since the difference may come from the rules rather than
 the data. Vanished blockers are labelled "no longer present", never "resolved"
 — a blocker can stop being triggered, or reappear in other words — and that
 note is part of the response, not a UI flourish.
+
+### The report-side conclusion gate
+
+Reports are the only artifact that reaches a client directly, and section 5
+("专利性与法律风险论证（候选判断）") is the only place a forward-looking reading
+could appear. It is gated by `modules/reports/conclusion.py`.
+
+A candidate reading may be published only when a pre-assessment version exists,
+has passed internal review, and carries no open blockers. Anything missing
+resolves to refusal with a reason, never to an optimistic default. When the
+gate refuses, the section says so and names what is missing; no badge and no
+summary are rendered.
+
+Passing the gate licenses a **candidate reading**, not a conclusion: no open
+blockers means nothing was found to block, not that patentability was
+established. The published text therefore always carries the qualifier, the
+version number and the gate version.
+
+The comparison evaluator itself was demoted at the same time. Its output is
+arithmetic over chart cells — it does not know whether a document is prior art,
+whether a priority claim holds, or whether a citation was verified — so its
+wording is now candidate phrasing and it no longer uses any "授权前景" /
+"良好授权前景" language. The same applies to `prompts/risk_assessment.py`, which
+asks the model for candidate reasoning and explicitly forbids conclusion
+wording, since the model has no filing or priority dates and cannot judge prior
+art eligibility either.
+
+Sealing records the assessment **facts** (version, status, blockers, payload
+hash) rather than a cached verdict, so an older snapshot can be re-evaluated by
+today's rules. A snapshot sealed before this gate existed simply has no version,
+and the gate therefore refuses to publish — which is the correct outcome.

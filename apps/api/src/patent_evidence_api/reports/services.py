@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from modules.assessment.approval import derive_status
 from modules.reports.generator import MarkdownReportGenerator
 from modules.reports.sealer import EvidenceSealer
 
@@ -18,6 +19,23 @@ Clock = Callable[[], datetime]
 
 def default_clock() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _as_list(value: Any) -> list[str]:
+    """blockers/flags 存成 JSONB，驱动层可能回传字符串。"""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, (str, bytes, bytearray)):
+        import json
+
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return []
+        return [str(item) for item in parsed] if isinstance(parsed, list) else []
+    return []
 
 
 class EvidenceReportService:
@@ -205,6 +223,11 @@ class EvidenceReportService:
             "comparisons": comps_list,
         }
 
+        # 6.5 Latest pre-assessment facts — what gates section 5 of the report.
+        assessment_data = await self._latest_assessment_facts(
+            session, organization_id, case_id
+        )
+
         # 7. Seal Payload and compute Root SHA-256
         dict_payload, root_sha256 = self.sealer.seal(
             case_data=case_data,
@@ -215,6 +238,7 @@ class EvidenceReportService:
             comparison_data=comparison_data,
             sealed_at_iso=now.isoformat(),
             sealed_by_email=actor_email,
+            assessment_data=assessment_data,
         )
 
         # Count existing snapshots for this case
@@ -274,6 +298,52 @@ class EvidenceReportService:
         )
 
         return await self.get_active_snapshot(session, organization_id, case_id)  # type: ignore
+
+    async def _latest_assessment_facts(
+        self,
+        session: AsyncSession,
+        organization_id: UUID,
+        case_id: UUID,
+    ) -> dict[str, Any]:
+        """最新预评估版本的事实——报告第 5 节的门禁依据。
+
+        返回的是事实而非判定：门禁在渲染时复算，封存时只固化事实，
+        这样一份旧快照也能被今天的规则重新判一遍。
+        """
+        row = (
+            await session.execute(
+                text(
+                    """SELECT id, version_number, payload_sha256, blockers
+                    FROM assessment_versions
+                    WHERE organization_id = :org_id AND case_id = :case_id
+                    ORDER BY version_number DESC
+                    LIMIT 1"""
+                ),
+                {"org_id": organization_id, "case_id": case_id},
+            )
+        ).fetchone()
+
+        if row is None:
+            return {"has_version": False}
+
+        decisions = (
+            await session.execute(
+                text(
+                    """SELECT decision FROM assessment_version_reviews
+                    WHERE organization_id = :org_id AND version_id = :version_id
+                    ORDER BY decided_at, id"""
+                ),
+                {"org_id": organization_id, "version_id": row.id},
+            )
+        ).fetchall()
+
+        return {
+            "has_version": True,
+            "version_number": int(row.version_number),
+            "status": derive_status([str(d.decision) for d in decisions]),
+            "blockers": _as_list(row.blockers),
+            "payload_sha256": row.payload_sha256,
+        }
 
     async def get_active_snapshot(
         self,

@@ -57,7 +57,8 @@ def test_matrix_evaluator_risk_levels() -> None:
     ]
     res_high = evaluator.evaluate_matrix(features, candidates, comparisons_high)
     assert res_high["risk_level"] == "high_novelty_risk"
-    assert "新颖性高风险预警" in res_high["summary"]
+    assert "候选提示" in res_high["summary"]
+    assert res_high["candidate_nature"] is True
 
     # Partial -> inventiveness risk
     comparisons_part = [
@@ -66,4 +67,36 @@ def test_matrix_evaluator_risk_levels() -> None:
     ]
     res_part = evaluator.evaluate_matrix(features, candidates, comparisons_part)
     assert res_part["risk_level"] == "inventiveness_risk"
-    assert "创造性审查重点关注" in res_part["summary"]
+    assert "候选提示" in res_part["summary"]
+
+    # 全覆盖也不得倒向结论：计数不知道对比文件是否构成现有技术
+    assert res_high["summary"].startswith("【候选提示")
+    assert "不构成专利性结论" in res_high["disclaimer"]
+
+
+def test_matrix_evaluator_never_claims_patentability() -> None:
+    """计数结果不得出现授权前景类措辞——它没跑日期门禁、优先权核验与引文核验。"""
+    evaluator = MatrixEvaluator()
+    features = [{"id": "f1"}, {"id": "f2"}]
+    candidates = [{"id": "c1", "publication_number": "D1"}]
+
+    # 无任何 identical / equivalent —— 正是旧文案会输出「良好授权前景」的分支
+    comparisons_clear = [
+        {"claim_feature_id": "f1", "candidate_id": "c1", "judgment": "different"},
+        {"claim_feature_id": "f2", "candidate_id": "c1", "judgment": "different"},
+    ]
+    res = evaluator.evaluate_matrix(features, candidates, comparisons_clear)
+    assert res["risk_level"] == "clear_difference"
+
+    # 只禁肯定式表述；否定式声明（「不构成…授权前景意见」）是必需的，不该被误伤
+    banned = ["良好授权前景", "具备清晰的技术创新高度", "具备良好的", "✓"]
+    text = res["summary"] + res["disclaimer"]
+    for phrase in banned:
+        assert phrase not in text
+    assert res["summary"].startswith("【候选提示")
+
+    # 空数据分支同样不许给倾向性判断
+    empty = evaluator.evaluate_matrix([], [], [])
+    assert empty["risk_level"] == "unknown"
+    assert empty["candidate_nature"] is True
+    assert "无法评估全案风险" not in empty["summary"]
