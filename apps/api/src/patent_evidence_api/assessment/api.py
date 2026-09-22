@@ -19,6 +19,7 @@ from patent_evidence_api.core.http import parse_json_body, parse_uuid_or_404
 from patent_evidence_api.organization.access import OrganizationAccess
 from patent_evidence_api.assessment.assembly import AssessmentAssemblyService
 from patent_evidence_api.assessment.schemas import (
+    DISCLAIMER,
     AssessmentCreateBody,
     AssessmentDecideBody,
     render_decision,
@@ -146,6 +147,34 @@ def create_assessment_router(
                 version_number=version_number,
             )
             return {"version": render_version(record, status=status)}
+
+    @router.get(
+        "/{organization_id}/cases/{case_id}/assessments/{version_number}/diff/{other_version_number}"
+    )
+    async def diff_assessment_versions(
+        organization_id: str,
+        case_id: str,
+        version_number: int,
+        other_version_number: int,
+        request: Request,
+    ) -> dict[str, Any]:
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.authorized(request, org_uuid) as (session, _):
+            diff = await assessment_service.diff_versions(
+                session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+                from_version=version_number,
+                to_version=other_version_number,
+            )
+            rendered = diff.to_dict()
+            # 差异同样不是结论：带上人工确认标记与免责声明，避免 diff 被当成
+            # 「阻塞项消失了所以可以出结论」的依据。
+            rendered["requires_human_confirmation"] = diff.requires_human_confirmation
+            rendered["disclaimer"] = DISCLAIMER
+            return {"diff": rendered}
 
     @router.post("/{organization_id}/cases/{case_id}/assessments/{version_number}/submit")
     async def submit_assessment_version(

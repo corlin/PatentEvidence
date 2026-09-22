@@ -63,3 +63,22 @@ substitute is never presumed to be a 惯用手段.
 
 Nothing here emits a patentability conclusion: outputs are candidate findings
 that a patent agent must confirm and a reviewer must approve.
+
+- `diff.py` — `diff_payloads` / `diff_packages` compare two **frozen**
+  versions (`assessment-diff-v1`) and return added / removed / retained sets
+  for blockers, flags, findings and entity observations, plus deltas for
+  evidence completeness, the three-step scaffold and the rules version.
+
+  It compares payloads only, and that is a correctness constraint rather than
+  a shortcut. The input profiles that produced a version are mutable and
+  unversioned, so the inputs behind an older version cannot be reconstructed;
+  presenting today's profile values as "what changed in the input" would
+  fabricate a causal chain. Every diff therefore carries a note saying it does
+  not infer input changes.
+
+  Two more discipline rules live here: a rules-version change is reported as a
+  caveat (the difference may come from the rules, not the data), and vanished
+  blockers are reported as 「不再出现」 with a note that this does not mean
+  resolved — a blocker can stop being triggered, or reappear in other words.
+  Findings are keyed by content, not by rules version, so a rule bump does not
+  turn an unchanged finding into an add plus a remove.

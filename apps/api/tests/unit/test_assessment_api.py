@@ -67,12 +67,12 @@ class FakeAccess:
         yield operation
 
 
-def _version(*, blockers: list[str] | None = None) -> AssessmentVersionRecord:
+def _version(*, blockers: list[str] | None = None, version_number: int = 1) -> AssessmentVersionRecord:
     return AssessmentVersionRecord(
         id=uuid4(),
         organization_id=ORG,
         case_id=CASE,
-        version_number=1,
+        version_number=version_number,
         rules_version="assessment-rules-v3",
         prompt_versions={"novelty": "novelty-v2"},
         payload={"findings": [], "blockers": blockers or []},
@@ -112,7 +112,8 @@ class FakeService(AssessmentService):
 
     async def get_version(self, session: Any, **kwargs: Any) -> AssessmentVersionRecord:
         self.calls.append({"method": "get_version", **kwargs})
-        return _version()
+        # 回显请求的版本号，diff 路由据此确定基准方向
+        return _version(version_number=kwargs.get("version_number", 1))
 
     async def list_versions(self, session: Any, **kwargs: Any) -> list[AssessmentVersionRecord]:
         self.calls.append({"method": "list_versions", **kwargs})
@@ -351,3 +352,36 @@ def test_assemble_route_is_absent_without_assembly_service() -> None:
     app.include_router(create_assessment_router(FakeAccess(), FakeService()))  # type: ignore[arg-type]
     paths = [getattr(route, "path", "") for route in app.routes]
     assert not any(p.endswith("/assessments/from-case") for p in paths)
+
+
+def test_diff_route_carries_the_disclaimer_and_needs_no_direction() -> None:
+    """diff 是只读的，且必须带免责声明——它不能被当成「阻塞项消失就能出结论」。"""
+    client, access, service = _client()
+    response = client.get(f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/2/diff/1")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["diff"]["from_version"] == 1
+    assert body["diff"]["to_version"] == 2
+    assert body["diff"]["disclaimer"] == DISCLAIMER
+    assert body["diff"]["requires_human_confirmation"] is True
+    assert not access.actions
+
+
+def test_diff_route_stays_read_only() -> None:
+    client, _, service = _client()
+    client.get(f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/1/diff/2")
+
+    assert all(call["method"] in {"get_version"} for call in service.calls)
+
+
+def test_diff_route_surfaces_a_missing_version_as_404() -> None:
+    class MissingService(FakeService):
+        async def get_version(self, session: Any, **kwargs: Any) -> AssessmentVersionRecord:
+            raise HTTPException(status_code=404, detail="assessment_version_not_found")
+
+    client, _, _ = _client(MissingService())
+    response = client.get(f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/1/diff/2")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "assessment_version_not_found"

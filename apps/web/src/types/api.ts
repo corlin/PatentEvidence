@@ -533,6 +533,43 @@ export interface AssessmentCandidateProfile {
   has_profile: boolean
 }
 
+export interface AssessmentVersionDiff {
+  from_version: number
+  to_version: number
+  from_payload_sha256: string
+  to_payload_sha256: string
+  rules_version: { from: string; to: string }
+  rules_version_changed: boolean
+  prompt_changes: Array<{ name: string; from: string; to: string }>
+  blockers: { added: string[]; removed: string[]; retained: string[] }
+  flags: { added: string[]; removed: string[]; retained: string[] }
+  findings: {
+    added: AssessmentFinding[]
+    removed: AssessmentFinding[]
+    retained: AssessmentFinding[]
+  }
+  evidence: {
+    scalars: Record<string, { from: unknown; to: unknown }>
+    lists: Record<string, { added: string[]; removed: string[]; retained: string[] }>
+  }
+  three_step: {
+    closest_prior_art: { from: string | null; to: string | null } | null
+    actual_technical_problem: { from: string | null; to: string | null } | null
+    distinguishing_features: { added: string[]; removed: string[]; retained: string[] }
+    present_in_both: boolean
+  }
+  entity_observations: {
+    added: Array<Record<string, unknown>>
+    removed: Array<Record<string, unknown>>
+    retained: Array<Record<string, unknown>>
+  }
+  priority_changed: boolean
+  requires_human_confirmation: boolean
+  diff_rules_version: string
+  notes: string[]
+  disclaimer?: string
+}
+
 export interface AssessmentDecisionRecord {
   version_id: string
   version_number: number

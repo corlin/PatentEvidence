@@ -4,6 +4,7 @@ import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { StatusBadge } from '../components/StatusBadge'
 import { AssessmentInputPanel } from '../components/AssessmentInputPanel'
 import { AssessmentReviewPanel } from '../components/AssessmentReviewPanel'
+import { AssessmentDiffPanel } from '../components/AssessmentDiffPanel'
 import type {
   AssessmentVersionDetail,
   AssessmentVersionStatus,
@@ -254,6 +255,13 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
                 </div>
                 <p className="text-sm text-secondary mt-sm">{statusMeta(detail.status).note}</p>
               </div>
+
+              <AssessmentDiffPanel
+                orgId={orgId}
+                caseId={caseId}
+                versionNumber={detail.version_number}
+                versionNumbers={versions.map((item) => item.version_number)}
+              />
 
               {/* 阻塞项：标题必须说清「因此当前没有结论」 */}
               <div className="card p-md mb-md">

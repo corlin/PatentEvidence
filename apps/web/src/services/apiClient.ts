@@ -4,6 +4,7 @@ import type {
   AssessmentCandidateProfile,
   AssessmentDecisionRecord,
   AssessmentVersionDetail,
+  AssessmentVersionDiff,
   AssessmentVersionSummary,
   CaseDetail,
   CaseDrawing,
@@ -805,6 +806,18 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({}),
     })
+  },
+
+  /** 对比两个已冻结版本；方向由版本号决定，调用方不必关心先后。 */
+  async diffAssessmentVersions(
+    orgId: string,
+    caseId: string,
+    fromVersion: number,
+    toVersion: number
+  ): Promise<{ diff: AssessmentVersionDiff }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${fromVersion}/diff/${toVersion}`
+    )
   },
 
   // 预评估复核动作（追加决策记录，不改写版本）

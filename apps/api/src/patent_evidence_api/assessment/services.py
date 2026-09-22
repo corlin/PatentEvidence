@@ -25,6 +25,7 @@ from modules.assessment.approval import (
     AssessmentVersionStatus,
     derive_status,
 )
+from modules.assessment.diff import diff_packages
 from modules.assessment.package import AssessmentInput, AssessmentPackage, assess_case
 from modules.assessment.records import AssessmentVersionRecord, build_assessment_version_record
 
@@ -147,6 +148,41 @@ class AssessmentService:
             )
         ).fetchall()
         return [self._row_to_record(row) for row in rows]
+
+    async def diff_versions(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+        from_version: int,
+        to_version: int,
+    ) -> Any:
+        """对比两个已冻结版本的 payload。
+
+        只对比内容，不推断输入档案的变化：档案可变且未版本化，无法忠实重建
+        生成各版本时的输入。方向由版本号决定，调用方不必关心先后。
+        """
+        older = await self.get_version(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=min(from_version, to_version),
+        )
+        newer = await self.get_version(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=max(from_version, to_version),
+        )
+        return diff_packages(
+            older.payload,
+            newer.payload,
+            from_version=older.version_number,
+            to_version=newer.version_number,
+            from_payload_sha256=older.payload_sha256,
+            to_payload_sha256=newer.payload_sha256,
+        )
 
     @staticmethod
     def _row_to_record(row: Any) -> AssessmentVersionRecord:

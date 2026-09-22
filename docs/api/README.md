@@ -140,3 +140,19 @@ declaration naming the blocker count and writing a reason; until both are
 done the button stays disabled, mirroring the state machine's
 `accepts_insufficient_evidence` requirement rather than leaving it to the
 server to reject after the fact.
+
+### Comparing two versions
+
+`GET .../assessments/{a}/diff/{b}` compares two frozen versions. Direction is
+normalised by version number, so callers never have to order the arguments.
+The response carries `requires_human_confirmation` and the disclaimer like
+every other assessment response: a diff is not an argument that a conclusion
+is now available just because a blocker stopped appearing.
+
+The diff is payload-only. Input profiles are mutable and unversioned, so the
+inputs behind an older version cannot be reconstructed; every response
+therefore says it does not infer input changes. A rules-version change is
+reported as a caveat, since the difference may come from the rules rather than
+the data. Vanished blockers are labelled "no longer present", never "resolved"
+— a blocker can stop being triggered, or reappear in other words — and that
+note is part of the response, not a UI flourish.
