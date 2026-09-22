@@ -4,7 +4,7 @@ from typing import Any
 
 
 class MatrixEvaluator:
-    """Evaluates full matrix results and generates overall patentability risk conclusions."""
+    """Deterministic novelty gate and three-step inventiveness scaffold."""
 
     def evaluate_matrix(
         self,
@@ -18,55 +18,93 @@ class MatrixEvaluator:
                 "summary": "尚未生成完整的对比数据，无法评估全案风险。",
                 "covered_features_count": 0,
                 "total_features_count": len(features),
+                "three_step_analysis": None,
+                "high_risk_candidates": [],
+                "partial_risk_candidates": [],
+                "total_candidates_count": len(candidates),
             }
 
-        total_features = len(features)
+        feature_ids = [str(feature.get("id")) for feature in features]
         cand_map: dict[str, list[dict[str, Any]]] = {}
-        for comp in comparisons:
-            cid = str(comp.get("candidate_id"))
-            cand_map.setdefault(cid, []).append(comp)
+        for comparison in comparisons:
+            cand_map.setdefault(str(comparison.get("candidate_id")), []).append(comparison)
+
+        def verified_disclosures(candidate_id: str) -> list[dict[str, Any]]:
+            return [
+                item
+                for item in cand_map.get(candidate_id, [])
+                if item.get("evidence_status") == "verified"
+                and item.get("judgment") in {"identical", "equivalent"}
+            ]
+
+        ranked = sorted(
+            candidates,
+            key=lambda candidate: len(verified_disclosures(str(candidate.get("id")))),
+            reverse=True,
+        )
+        closest = ranked[0]
+        closest_id = str(closest.get("id"))
+        closest_items = cand_map.get(closest_id, [])
+        directly_disclosed = {
+            str(item.get("claim_feature_id"))
+            for item in closest_items
+            if item.get("judgment") == "identical" and item.get("evidence_status") == "verified"
+        }
+        covered = {
+            str(item.get("claim_feature_id"))
+            for item in verified_disclosures(closest_id)
+        }
+        distinguishing = [feature_id for feature_id in feature_ids if feature_id not in covered]
+        three_step = {
+            "step_1_closest_prior_art": {
+                "candidate_id": closest_id,
+                "publication_number": closest.get("publication_number", "未知文献"),
+                "verified_covered_features": len(covered),
+            },
+            "step_2_distinguishing_features": distinguishing,
+            "step_3_motivation_and_effect": "not_assessed",
+        }
 
         high_risk_candidates: list[str] = []
         partial_risk_candidates: list[str] = []
-
-        for cand in candidates:
-            cid = str(cand.get("id"))
-            pub = cand.get("publication_number", "未知文献")
-            cand_comps = cand_map.get(cid, [])
-            identical_count = sum(1 for c in cand_comps if c.get("judgment") == "identical")
-            equiv_count = sum(1 for c in cand_comps if c.get("judgment") == "equivalent")
-
-            if identical_count == total_features:
-                high_risk_candidates.append(f"{pub} (全部特征完全公开)")
-            elif (identical_count + equiv_count) == total_features:
-                high_risk_candidates.append(f"{pub} (等同覆盖全部特征)")
-            elif (identical_count + equiv_count) > 0:
-                partial_risk_candidates.append(f"{pub} (公开 {identical_count + equiv_count}/{total_features} 项特征)")
+        for candidate in candidates:
+            candidate_id = str(candidate.get("id"))
+            publication_number = candidate.get("publication_number", "未知文献")
+            items = cand_map.get(candidate_id, [])
+            identical = {
+                str(item.get("claim_feature_id"))
+                for item in items
+                if item.get("judgment") == "identical" and item.get("evidence_status") == "verified"
+            }
+            verified = verified_disclosures(candidate_id)
+            if set(feature_ids) == identical:
+                high_risk_candidates.append(f"{publication_number} (单篇文献逐项原文核验后完全公开)")
+            elif verified:
+                partial_risk_candidates.append(f"{publication_number} (已核验公开 {len(verified)}/{len(feature_ids)} 项特征)")
 
         if high_risk_candidates:
             risk_level = "high_novelty_risk"
             summary = (
-                f"【新颖性高风险预警】：对比文件 {', '.join(high_risk_candidates)} 已经全面公开/等同覆盖了本申请权利要求的全部技术特征。"
-                f"建议代理师重点针对未被充分公开的细化实施步骤进行权利要求重构与特征补充。"
-            )
-        elif partial_risk_candidates:
-            risk_level = "inventiveness_risk"
-            summary = (
-                f"【创造性审查重点关注】：现有技术对比文件 {', '.join(partial_risk_candidates[:3])} 分别公开了部分技术特征。"
-                f"虽无单篇文献完全破坏新颖性，但需重点论证多篇对比文件结合时是否存在技术启示及是否产生预料不到的技术效果。"
+                f"【新颖性高风险预警】：{', '.join(high_risk_candidates)}。"
+                "该结论仅基于同一篇文献中逐项通过原文锚定的相同公开。"
             )
         else:
-            risk_level = "clear_difference"
-            summary = (
-                f"【良好授权前景】：检索到的现有技术对比文件与本申请全部核心特征均存在实质性显著差异，"
-                f"独立权利要求具备清晰的技术创新高度与良好的新颖性/创造性授权前景。"
-            )
+            risk_level = "human_review_required"
+            if distinguishing:
+                summary = (
+                    f"【证据不足，需人工复核】：已按三步法选出最接近现有技术并识别 {len(distinguishing)} 项区别特征；"
+                    "尚未完成客观技术问题、组合动机与预料不到技术效果判断，不自动给出创造性结论。"
+                )
+            else:
+                summary = "【需人工复核】：存在等同覆盖或不完整证据，但不满足单篇文献逐项相同公开的新颖性门禁。"
 
         return {
             "risk_level": risk_level,
             "summary": summary,
             "high_risk_candidates": high_risk_candidates,
             "partial_risk_candidates": partial_risk_candidates,
-            "total_features_count": total_features,
+            "total_features_count": len(features),
             "total_candidates_count": len(candidates),
+            "covered_features_count": len(directly_disclosed),
+            "three_step_analysis": three_step,
         }

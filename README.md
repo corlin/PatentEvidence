@@ -115,13 +115,13 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run API unit tests (47/47 passed)
+# Run API unit tests (78/78 passed)
 .venv/bin/pytest apps/api/tests/unit/
 
 # Run PostgreSQL RLS integration tests (81/81 passed)
 ./scripts/test-postgres.sh
 
-# Run frontend Vitest suite (22/22 passed)
+# Run frontend Vitest suite (23/23 passed)
 pnpm test:web
 
 # Build production frontend bundle
@@ -136,6 +136,32 @@ pnpm build:web
 # Verify Docker Compose configuration
 docker compose config > /dev/null
 ```
+
+### Optional Jev evidence judgments
+
+Set `PATENT_EVIDENCE_JEV_API_KEY` only in the server environment to enable
+TypeSafe/Jev judgments in the claim-comparison workflow. The default model alias
+is `jev-latest`; override it with `PATENT_EVIDENCE_JEV_MODEL` when a validated,
+pinned model is required. Without a key, comparisons are explicitly labelled as
+`deterministic_baseline` and `insufficient_evidence`; the application does not
+present heuristic title/abstract matching as a live Jev result.
+
+Jev returns typed Choice, Noul, and Score probabilities. PatentEvidence keeps
+the legal workflow deterministic: exact source-anchor validation, novelty's
+single-reference/all-elements gate, the three-step inventiveness sequence, and
+human approval remain application-controlled.
+
+The same boundary now extends into the pre-assessment stage
+(`modules/assessment/rules.py`, version-pinned `assessment-rules-v1`):
+novelty single-reference/all-elements and combination-coverage gates,
+evidence-completeness findings, and the three-step scaffold stay deterministic,
+while `adapters/jev/motivation.py` contributes typed combination-motivation
+signals (same field, same problem, motivation grade, technical prejudice) as
+non-authoritative metadata — `requires_human_confirmation` is always true for
+system-suggested combinations. Versioned assessment prompts
+(`prompts/assessment/`: `novelty-v1`, `inventive-step-v1`, `originality-v1`)
+pin the reviewed prompt that produced each result; `originality-v1` covers
+copyright originality (独立完成 + 最低限度创造性, idea/expression dichotomy).
 
 ### 4. Starting the Development Stack
 
