@@ -429,6 +429,84 @@ export interface ReviewSubmission {
   decision?: ReviewDecision | null
 }
 
+// Pre-assessment Types
+// 预评估版本只承载候选发现与阻塞项，不含任何专利性结论。
+// UI 必须保留 disclaimer 与 requires_human_confirmation 的显著性，
+// 不得把候选发现渲染成已确认结论。
+export type AssessmentVersionStatus = 'draft' | 'submitted' | 'approved' | 'rejected'
+
+export interface AssessmentFinding {
+  risk_kind: string
+  level: string
+  basis: Record<string, string>[]
+  requires_human_confirmation: boolean
+  reasoning: string
+  rules_version: string
+}
+
+export interface AssessmentThreeStep {
+  closest_prior_art: string
+  closest_prior_art_identical: number
+  distinguishing_features: string[]
+  actual_technical_problem: string
+  rules_version: string
+}
+
+export interface AssessmentEvidence {
+  source_coverage: number
+  verified_citations: number
+  total_citations: number
+  missing_anchors: string[]
+  unverified_citations: string[]
+  abstract_only_citations: string[]
+  failed_sources: string[]
+  partial_sources: string[]
+  documents_without_legal_status_timepoint: string[]
+  blocking_gaps: string[]
+  flags: string[]
+  blocks_conclusion: boolean
+  level: string
+  rules_version: string
+}
+
+export interface AssessmentPayload {
+  rules_version: string
+  reference_kinds: Record<string, string>
+  priority: Record<string, any> | null
+  entity_observations: Record<string, any>[]
+  findings: AssessmentFinding[]
+  three_step: AssessmentThreeStep | null
+  motivation: Record<string, any> | null
+  auxiliary: Record<string, any>
+  hindsight: Record<string, any> | null
+  evidence: AssessmentEvidence
+  blockers: string[]
+  flags: string[]
+  requires_human_confirmation: boolean
+  prompt_versions: Record<string, string>
+}
+
+export interface AssessmentVersionSummary {
+  id: string
+  version_number: number
+  rules_version: string
+  prompt_versions: Record<string, string>
+  payload_sha256: string
+  blockers: string[]
+  flags: string[]
+  requires_human_confirmation: boolean
+  created_at: string
+  disclaimer: string
+}
+
+export interface AssessmentVersionDetail extends AssessmentVersionSummary {
+  organization_id: string
+  case_id: string
+  status: AssessmentVersionStatus | null
+  payload: AssessmentPayload
+  created_by_identity_id: string | null
+}
+
 // Delivery Types
 export interface DeliveryRecord {
   id: string

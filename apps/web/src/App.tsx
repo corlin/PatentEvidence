@@ -47,6 +47,9 @@ const ReviewWorkbenchView = lazy(() =>
 const DeliveryWorkbenchView = lazy(() =>
   import('./views/DeliveryWorkbenchView').then((m) => ({ default: m.DeliveryWorkbenchView }))
 )
+const AssessmentWorkbenchView = lazy(() =>
+  import('./views/AssessmentWorkbenchView').then((m) => ({ default: m.AssessmentWorkbenchView }))
+)
 
 const RouteFallback: React.FC = () => (
   <div className="layout-container">
@@ -210,6 +213,17 @@ const AppRoutes: React.FC = () => {
       ],
       render: (p: Record<string, string>) => (
         <ComparisonWorkbenchView orgId={p.orgId || activeOrgId!} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: [
+        '/organizations/:orgId/cases/:caseId/assessments',
+        '/organizations/:orgId/cases/:caseId/assessment',
+        '/cases/:caseId/assessments',
+        '/cases/:caseId/assessment',
+      ],
+      render: (p: Record<string, string>) => (
+        <AssessmentWorkbenchView orgId={p.orgId || activeOrgId!} caseId={p.caseId} />
       ),
     },
     {

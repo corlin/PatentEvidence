@@ -1,4 +1,6 @@
 import type {
+  AssessmentVersionDetail,
+  AssessmentVersionSummary,
   CaseDetail,
   CaseDrawing,
   CaseSummary,
@@ -771,5 +773,23 @@ export const apiClient = {
     caseId: string
   ): Promise<{ delivery: DeliveryRecord | null }> {
     return request(`/api/v1/organizations/${orgId}/cases/${caseId}/delivery/record`)
+  },
+
+  // Pre-assessment（只读）
+  async listAssessmentVersions(
+    orgId: string,
+    caseId: string
+  ): Promise<{ items: AssessmentVersionSummary[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/assessments`)
+  },
+
+  async getAssessmentVersion(
+    orgId: string,
+    caseId: string,
+    versionNumber: number
+  ): Promise<{ version: AssessmentVersionDetail }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${versionNumber}`
+    )
   },
 }

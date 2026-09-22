@@ -199,6 +199,16 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
             </Link>
           )}
 
+          {/* 预评估只在已有比对结果之后才有意义，最早的两种状态不暴露入口 */}
+          {!['draft', 'document_ready'].includes(caseData.status) && (
+            <Link
+              to={`/organizations/${orgId}/cases/${caseId}/assessments`}
+              className="btn btn-secondary btn-sm"
+            >
+              <Icon name="scales" size={14} /> 可专利性预评估
+            </Link>
+          )}
+
           <Link to={`/organizations/${orgId}/cases`} className="btn btn-secondary btn-sm">
             &larr; 返回案件列表
           </Link>

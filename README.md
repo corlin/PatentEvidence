@@ -131,7 +131,7 @@ pnpm install
 # Run PostgreSQL RLS integration tests (81/81 passed)
 ./scripts/test-postgres.sh
 
-# Run frontend Vitest suite (23/23 passed)
+# Run frontend Vitest suite (30/30 passed)
 pnpm test:web
 
 # Build production frontend bundle
