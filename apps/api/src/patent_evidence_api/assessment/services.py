@@ -18,6 +18,12 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from modules.assessment.approval import (
+    AssessmentApprovalEngine,
+    AssessmentDecisionRecord,
+    AssessmentVersionStatus,
+    derive_status,
+)
 from modules.assessment.package import AssessmentInput, AssessmentPackage, assess_case
 from modules.assessment.records import AssessmentVersionRecord, build_assessment_version_record
 
@@ -152,6 +158,174 @@ class AssessmentService:
             created_by_identity_id=row.created_by_identity_id,
             created_at=row.created_at,
         )
+
+    async def submit_version(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+        version_number: int,
+        actor_identity_id: UUID | None = None,
+    ) -> AssessmentDecisionRecord:
+        """提交评估版本进入待复核。状态以追加事件记录，不改写版本行。"""
+        version = await self.get_version(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=version_number,
+        )
+        decisions = await self._decision_sequence(
+            session, organization_id=organization_id, version_id=version.id
+        )
+        AssessmentApprovalEngine.assert_transition(
+            derive_status(decisions), AssessmentVersionStatus.SUBMITTED
+        )
+        record = AssessmentApprovalEngine.generate_submission_record(
+            version_id=str(version.id),
+            version_number=version.version_number,
+            payload_sha256=version.payload_sha256,
+            submitter_identity_id=str(actor_identity_id) if actor_identity_id else None,
+            submitted_at=self._clock(),
+        )
+        await self._insert_decision(session, organization_id, case_id, record)
+        return record
+
+    async def decide_version(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+        version_number: int,
+        decision: str,
+        reviewer_identity_id: UUID | None = None,
+        comments: str = "",
+        accepts_insufficient_evidence: bool = False,
+    ) -> AssessmentDecisionRecord:
+        """对评估版本作出复核决定。
+
+        状态由既有决策流推导，任何决定都只是追加一条记录；已批准版本会被
+        状态机直接拒绝。
+        """
+        version = await self.get_version(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=version_number,
+        )
+        decisions = await self._decision_sequence(
+            session, organization_id=organization_id, version_id=version.id
+        )
+        current = derive_status(decisions)
+
+        if decision == "approved":
+            record = AssessmentApprovalEngine.approve(
+                version_id=str(version.id),
+                version_number=version.version_number,
+                current_status=current,
+                payload_sha256=version.payload_sha256,
+                blockers=list(version.blockers),
+                reviewer_identity_id=str(reviewer_identity_id) if reviewer_identity_id else None,
+                comments=comments,
+                accepts_insufficient_evidence=accepts_insufficient_evidence,
+                decided_at=self._clock(),
+            )
+        elif decision == "rejected":
+            record = AssessmentApprovalEngine.reject(
+                version_id=str(version.id),
+                version_number=version.version_number,
+                current_status=current,
+                payload_sha256=version.payload_sha256,
+                reviewer_identity_id=str(reviewer_identity_id) if reviewer_identity_id else None,
+                comments=comments,
+                decided_at=self._clock(),
+            )
+        elif decision == "changes_requested":
+            record = AssessmentApprovalEngine.request_changes(
+                version_id=str(version.id),
+                version_number=version.version_number,
+                current_status=current,
+                payload_sha256=version.payload_sha256,
+                reviewer_identity_id=str(reviewer_identity_id) if reviewer_identity_id else None,
+                comments=comments,
+                decided_at=self._clock(),
+            )
+        else:
+            raise HTTPException(status_code=422, detail="unsupported_decision")
+
+        await self._insert_decision(session, organization_id, case_id, record)
+        return record
+
+    async def current_status(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+        version_number: int,
+    ) -> str:
+        version = await self.get_version(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=version_number,
+        )
+        decisions = await self._decision_sequence(
+            session, organization_id=organization_id, version_id=version.id
+        )
+        return derive_status(decisions)
+
+    async def _insert_decision(
+        self,
+        session: AsyncSession,
+        organization_id: UUID,
+        case_id: UUID,
+        record: AssessmentDecisionRecord,
+    ) -> None:
+        await session.execute(
+            text(
+                """INSERT INTO assessment_version_reviews
+                (id, organization_id, case_id, assessment_version_id, version_number,
+                 payload_sha256, decision, reviewer_identity_id, comments, open_blockers,
+                 accepts_insufficient_evidence, decision_signature, decided_at)
+                VALUES
+                (:id, :org_id, :case_id, :version_id, :version_number,
+                 :payload_sha256, :decision, :reviewer, :comments, :open_blockers,
+                 :accepts_insufficient, :signature, :decided_at)"""
+            ),
+            {
+                "id": uuid4(),
+                "org_id": organization_id,
+                "case_id": case_id,
+                "version_id": UUID(record.version_id),
+                "version_number": record.version_number,
+                "payload_sha256": record.payload_sha256,
+                "decision": record.decision,
+                "reviewer": UUID(record.reviewer_identity_id) if record.reviewer_identity_id else None,
+                "comments": record.comments,
+                "open_blockers": json.dumps(list(record.open_blockers), ensure_ascii=False),
+                "accepts_insufficient": record.accepts_insufficient_evidence,
+                "signature": record.decision_signature,
+                "decided_at": record.decided_at,
+            },
+        )
+
+    @staticmethod
+    async def _decision_sequence(
+        session: AsyncSession, organization_id: UUID, version_id: UUID
+    ) -> list[str]:
+        rows = (
+            await session.execute(
+                text(
+                    """SELECT decision FROM assessment_version_reviews
+                    WHERE organization_id=:org_id AND assessment_version_id=:version_id
+                    ORDER BY decided_at, created_at"""
+                ),
+                {"org_id": organization_id, "version_id": version_id},
+            )
+        ).fetchall()
+        return [row.decision for row in rows]
 
     @staticmethod
     async def _assert_case(session: AsyncSession, organization_id: UUID, case_id: UUID) -> None:

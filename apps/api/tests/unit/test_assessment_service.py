@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from modules.assessment.approval import AssessmentApprovalError
 from modules.assessment.package import AssessmentInput, assess_case
 from modules.assessment.records import (
     assessment_payload_sha256,
@@ -244,3 +245,131 @@ def test_record_requires_human_confirmation_follows_package() -> None:
     assert record.requires_human_confirmation == package.requires_human_confirmation
     assert isinstance(record.blockers, list)
     assert isinstance(record.flags, list)
+
+
+class Row:
+    def __init__(self, **kwargs: Any) -> None:
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class FakeAssessmentSession(FakeSession):
+    """带版本行与决策事件流的假 session。"""
+
+    def __init__(
+        self,
+        *,
+        version_row: Row | None = None,
+        decisions: list[str] | None = None,
+        case_exists: bool = True,
+        max_version: int | None = None,
+    ) -> None:
+        super().__init__(case_exists=case_exists, max_version=max_version)
+        self._version_row = version_row
+        self._decisions = decisions or []
+
+    async def execute(self, statement: Any, params: Any = None) -> FakeResult:
+        sql = str(statement)
+        if "FROM assessment_versions" in sql and "version_number=:version_number" in sql:
+            return FakeResult(rows=[self._version_row] if self._version_row else [])
+        if "FROM assessment_version_reviews" in sql and "ORDER BY decided_at" in sql:
+            return FakeResult(rows=[Row(decision=d) for d in self._decisions])
+        return await super().execute(statement, params)
+
+
+def _version_row(*, blockers: list[str], version_number: int = 1) -> Row:
+    return Row(
+        id=uuid4(),
+        organization_id=uuid4(),
+        case_id=uuid4(),
+        version_number=version_number,
+        rules_version="assessment-rules-v3",
+        prompt_versions=json.dumps({"assessment/novelty": "novelty-v2"}),
+        payload=json.dumps({"rules_version": "assessment-rules-v3"}),
+        payload_sha256="a" * 64,
+        blockers=json.dumps(blockers),
+        flags=json.dumps([]),
+        requires_human_confirmation=bool(blockers),
+        created_by_identity_id=None,
+        created_at=datetime(2026, 9, 22, tzinfo=UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_submit_then_approve_appends_two_events() -> None:
+    session = FakeAssessmentSession(version_row=_version_row(blockers=[]))
+    service = _service()
+
+    await service.submit_version(
+        session, organization_id=uuid4(), case_id=uuid4(), version_number=1,
+        actor_identity_id=uuid4(),
+    )
+    session._decisions = ["submitted"]
+    record = await service.decide_version(
+        session, organization_id=uuid4(), case_id=uuid4(), version_number=1,
+        decision="approved", reviewer_identity_id=uuid4(),
+    )
+
+    assert record.decision == "approved"
+    inserts = [s for s in session.statements if "INSERT INTO assessment_version_reviews" in s]
+    assert len(inserts) == 2
+
+
+@pytest.mark.asyncio
+async def test_approve_blocked_version_raises_and_writes_nothing() -> None:
+    session = FakeAssessmentSession(
+        version_row=_version_row(blockers=["引证未定位：D1/F2"]), decisions=["submitted"]
+    )
+    before = len(session.statements)
+    with pytest.raises(AssessmentApprovalError) as exc:
+        await _service().decide_version(
+            session, organization_id=uuid4(), case_id=uuid4(), version_number=1,
+            decision="approved", reviewer_identity_id=uuid4(),
+        )
+    assert exc.value.code == "blockers_open"
+    inserts = [s for s in session.statements[before:] if "INSERT" in s]
+    assert inserts == []
+
+
+@pytest.mark.asyncio
+async def test_deciding_an_already_approved_version_is_refused() -> None:
+    session = FakeAssessmentSession(
+        version_row=_version_row(blockers=[]), decisions=["submitted", "approved"]
+    )
+    with pytest.raises(AssessmentApprovalError) as exc:
+        await _service().decide_version(
+            session, organization_id=uuid4(), case_id=uuid4(), version_number=1,
+            decision="rejected", reviewer_identity_id=uuid4(),
+        )
+    assert exc.value.code == "version_frozen"
+
+
+@pytest.mark.asyncio
+async def test_unsupported_decision_is_rejected_before_any_write() -> None:
+    session = FakeAssessmentSession(version_row=_version_row(blockers=[]), decisions=["submitted"])
+    before = len(session.statements)
+    with pytest.raises(HTTPException) as exc:
+        await _service().decide_version(
+            session, organization_id=uuid4(), case_id=uuid4(), version_number=1,
+            decision="maybe", reviewer_identity_id=uuid4(),
+        )
+    assert exc.value.status_code == 422
+    assert [s for s in session.statements[before:] if "INSERT" in s] == []
+
+
+@pytest.mark.asyncio
+async def test_current_status_is_derived_from_the_event_stream() -> None:
+    session = FakeAssessmentSession(version_row=_version_row(blockers=[]))
+    assert await _service().current_status(
+        session, organization_id=uuid4(), case_id=uuid4(), version_number=1
+    ) == "draft"
+
+    session._decisions = ["submitted"]
+    assert await _service().current_status(
+        session, organization_id=uuid4(), case_id=uuid4(), version_number=1
+    ) == "submitted"
+
+    session._decisions = ["submitted", "changes_requested"]
+    assert await _service().current_status(
+        session, organization_id=uuid4(), case_id=uuid4(), version_number=1
+    ) == "draft"

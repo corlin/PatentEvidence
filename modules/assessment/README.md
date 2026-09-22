@@ -48,6 +48,13 @@ novelty gate. Numerical range overlap stays a candidate precisely because 选择
 and 实施例点值 are exceptions only a human can confirm; an undocumented
 substitute is never presumed to be a 惯用手段.
 
+- `approval.py` — version-scoped approval state machine
+  (`AssessmentApprovalEngine`): 草稿 → 待复核 → 已批准/已驳回，打回修改回到
+  草稿。状态不存字段而是由追加的决策事件流推导 (`derive_status`)，因为版本表
+  不允许 UPDATE。有未解决阻塞项时拒绝批准，除非复核人显式接受「证据不足」
+  结论并写明理由；已批准版本是终态，任何后续决定都被拒。每个决定都带绑定
+  `payload_sha256` 的决策签名。
+
 - `records.py` — freezes a package into an append-only
   `AssessmentVersionRecord`: rules version, prompt versions, the full payload
   and a SHA-256 over the canonicalised payload, so an approval or report can
