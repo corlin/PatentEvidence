@@ -547,6 +547,8 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
       {showDeliverable && deliverable && (
         <DeliverableModal
           deliverable={deliverable}
+          orgId={orgId}
+          caseId={caseId}
           onClose={() => setShowDeliverable(false)}
         />
       )}
@@ -554,11 +556,14 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
   )
 }
 
-/** 导出预评估意见模态：只读、候选措辞、带人工确认与免责声明，可下载 JSON。 */
+/** 导出预评估意见模态：只读、候选措辞、带人工确认与免责声明，可下载 JSON / 可打印 HTML。 */
 const DeliverableModal: React.FC<{
   deliverable: AssessmentDeliverable
+  orgId: string
+  caseId: string
   onClose: () => void
-}> = ({ deliverable, onClose }) => {
+}> = ({ deliverable, orgId, caseId, onClose }) => {
+  const htmlUrl = `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${deliverable.version_number}/deliverable.html`
   const downloadJson = () => {
     const blob = new Blob([JSON.stringify(deliverable, null, 2)], {
       type: 'application/json',
@@ -677,6 +682,13 @@ const DeliverableModal: React.FC<{
         <button type="button" className="btn btn-primary btn-sm" onClick={downloadJson}>
           下载 JSON
         </button>
+        <a
+          className="btn btn-primary btn-sm"
+          href={htmlUrl}
+          download={`assessment-deliverable-v${deliverable.version_number}.html`}
+        >
+          下载可打印 HTML
+        </a>
         <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
           关闭
         </button>

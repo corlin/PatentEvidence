@@ -363,5 +363,10 @@ describe('Pre-assessment Web Surface', () => {
     // 草稿版本未过复核 → 交付物不得伪装成「已批准/可授权」
     expect(screen.queryByText('已批准')).toBeNull()
     expect(apiClient.getAssessmentDeliverable).toHaveBeenCalledWith('org-1', 'case-1', 1)
+    // 可打印 HTML 导出链接指向只读导出端点
+    const htmlLink = screen.getByRole('link', { name: /下载可打印 HTML/ }) as HTMLAnchorElement
+    expect(htmlLink.href).toContain(
+      '/api/v1/organizations/org-1/cases/case-1/assessments/1/deliverable.html'
+    )
   })
 })

@@ -489,6 +489,43 @@ def test_deliverable_route_surfaces_a_missing_version_as_404() -> None:
     assert response.json()["detail"] == "assessment_version_not_found"
 
 
+def test_deliverable_html_route_returns_a_printable_attachment() -> None:
+    """HTML 导出：可打印附件、候选措辞、带免责声明与冻结声明，且只读。"""
+    client, access, _ = _client()
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/1/deliverable.html"
+    )
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    disposition = response.headers["content-disposition"]
+    assert "attachment" in disposition
+    assert "assessment-deliverable-v1.html" in disposition
+    html = response.text
+    assert "候选" in html
+    assert "不构成专利性结论" in html
+    assert "冻结" in html
+    assert "须人工确认" in html
+    # 交付物永远是候选，绝不携带结论措辞
+    for banned in ("良好授权前景", "创新高度", "全案风险评级"):
+        assert banned not in html
+    assert not access.actions
+
+
+def test_deliverable_html_route_surfaces_a_missing_version_as_404() -> None:
+    class MissingService(FakeService):
+        async def get_version(self, session: Any, **kwargs: Any) -> AssessmentVersionRecord:
+            raise HTTPException(status_code=404, detail="assessment_version_not_found")
+
+    client, _, _ = _client(MissingService())
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/99/deliverable.html"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "assessment_version_not_found"
+
+
 def test_delivery_attachment_route_returns_200_and_stays_read_only() -> None:
     """交付包附件路由：只读、候选措辞、未达门禁时标 attachable=False。"""
     client, access, service = _client()

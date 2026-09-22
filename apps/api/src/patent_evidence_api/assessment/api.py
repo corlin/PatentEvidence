@@ -12,9 +12,10 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from modules.assessment.approval import AssessmentApprovalError
+from modules.assessment.deliverable_html import render_deliverable_html
 from patent_evidence_api.core.http import parse_json_body, parse_uuid_or_404
 from patent_evidence_api.organization.access import OrganizationAccess
 from patent_evidence_api.assessment.assembly import AssessmentAssemblyService
@@ -234,6 +235,38 @@ def create_assessment_router(
             )
             deliverable["disclaimer"] = DISCLAIMER
             return {"deliverable": deliverable}
+
+    @router.get(
+        "/{organization_id}/cases/{case_id}/assessments/{version_number}/deliverable.html"
+    )
+    async def get_assessment_deliverable_html(
+        organization_id: str, case_id: str, version_number: int, request: Request
+    ) -> HTMLResponse:
+        """把某冻结版本的预评估意见导出为自包含可打印 HTML（候选措辞，非结论）。
+
+        与版本路由同为只读；文档内始终携带候选声明、人工确认标记、发布免责
+        声明与版本冻结声明，且只展示结论门禁结果、绝不产出专利性结论。
+        """
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.authorized(request, org_uuid) as (session, _):
+            deliverable = await assessment_service.build_deliverable(
+                session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+                version_number=version_number,
+            )
+            html = render_deliverable_html(deliverable)
+            return HTMLResponse(
+                content=html,
+                headers={
+                    "Content-Disposition": (
+                        "attachment; "
+                        f'filename="assessment-deliverable-v{version_number}.html"'
+                    )
+                },
+            )
 
     @router.get(
         "/{organization_id}/cases/{case_id}/assessments/{version_number}/diff/{other_version_number}"
