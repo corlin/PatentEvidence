@@ -232,6 +232,26 @@ describe('Pre-assessment Web Surface', () => {
     expect(screen.queryByText('版本列表（只读）')).toBeNull()
   })
 
+  it('never labels an approved version in a way that reads as patentable', async () => {
+    vi.spyOn(apiClient, 'getAssessmentVersion').mockResolvedValue({
+      version: { ...detail, status: 'approved' },
+    })
+
+    render(
+      <Router>
+        <SessionProvider>
+          <AssessmentWorkbenchView orgId="org-1" caseId="case-1" />
+        </SessionProvider>
+      </Router>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('复核通过')).toBeDefined()
+    })
+    expect(screen.queryByText('已批准')).toBeNull()
+    expect(screen.getByText(/仅表示本候选评估包通过内部复核/)).toBeDefined()
+  })
+
   it('reloads detail when another version chip is clicked', async () => {
     const second = { ...summary, id: 'ver-2', version_number: 2 }
     vi.spyOn(apiClient, 'listAssessmentVersions').mockResolvedValue({ items: [summary, second] })

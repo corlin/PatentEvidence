@@ -2,6 +2,7 @@ import type {
   AssessmentApplicationProfile,
   AssessmentAssembleResult,
   AssessmentCandidateProfile,
+  AssessmentDecisionRecord,
   AssessmentVersionDetail,
   AssessmentVersionSummary,
   CaseDetail,
@@ -804,6 +805,34 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({}),
     })
+  },
+
+  // 预评估复核动作（追加决策记录，不改写版本）
+  async submitAssessmentVersion(
+    orgId: string,
+    caseId: string,
+    versionNumber: number
+  ): Promise<{ decision: AssessmentDecisionRecord }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${versionNumber}/submit`,
+      { method: 'POST', body: JSON.stringify({}) }
+    )
+  },
+
+  async decideAssessmentVersion(
+    orgId: string,
+    caseId: string,
+    versionNumber: number,
+    body: {
+      decision: 'approved' | 'rejected' | 'changes_requested'
+      comments?: string
+      accepts_insufficient_evidence?: boolean
+    }
+  ): Promise<{ decision: AssessmentDecisionRecord }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${versionNumber}/decide`,
+      { method: 'POST', body: JSON.stringify(body) }
+    )
   },
 
   // 预评估输入档案（可变；改动只影响下一个版本，改不到已冻结的版本）

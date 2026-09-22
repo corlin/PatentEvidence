@@ -3,6 +3,7 @@ import { apiClient, ApiError } from '../services/apiClient'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { StatusBadge } from '../components/StatusBadge'
 import { AssessmentInputPanel } from '../components/AssessmentInputPanel'
+import { AssessmentReviewPanel } from '../components/AssessmentReviewPanel'
 import type {
   AssessmentVersionDetail,
   AssessmentVersionStatus,
@@ -19,11 +20,23 @@ interface AssessmentWorkbenchViewProps {
 const FALLBACK_DISCLAIMER =
   '本评估仅输出候选发现与阻塞项，不构成专利性结论或法律意见；任何结论须经人工复核确认后方可对外使用。'
 
-const STATUS_META: Record<string, { label: string; className: string }> = {
-  draft: { label: '草稿', className: 'badge badge-neutral' },
-  submitted: { label: '待复核', className: 'badge badge-warning' },
-  approved: { label: '已批准', className: 'badge badge-success' },
-  rejected: { label: '已驳回', className: 'badge badge-danger' },
+/**
+ * 状态标记不写「已批准」——那会被读成「具备专利性」。写成「复核通过」并把
+ * 限定语固定挂在旁边：通过的是这个候选评估包，不是方案本身。
+ */
+const STATUS_META: Record<string, { label: string; className: string; note: string }> = {
+  draft: { label: '草稿', className: 'badge badge-neutral', note: '尚未提交复核。' },
+  submitted: { label: '待复核', className: 'badge badge-warning', note: '等待复核人作出决定。' },
+  approved: {
+    label: '复核通过',
+    className: 'badge badge-success',
+    note: '仅表示本候选评估包通过内部复核，不代表该方案具备专利性或可授权。',
+  },
+  rejected: {
+    label: '复核未通过',
+    className: 'badge badge-danger',
+    note: '本候选评估包未通过内部复核，不等于该方案不具备专利性。',
+  },
 }
 
 const RISK_KIND_LABEL: Record<string, string> = {
@@ -40,8 +53,8 @@ const LEVEL_LABEL: Record<string, string> = {
 }
 
 function statusMeta(status: AssessmentVersionStatus | null | undefined) {
-  if (!status) return { label: '未提交', className: 'badge badge-neutral' }
-  return STATUS_META[status] || { label: status, className: 'badge badge-neutral' }
+  if (!status) return { label: '草稿', className: 'badge badge-neutral', note: '尚未提交复核。' }
+  return STATUS_META[status] || { label: status, className: 'badge badge-neutral', note: '' }
 }
 
 export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = ({
@@ -57,7 +70,7 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // 只读版本区与输入准备区分开：写操作不混入「不可改写」的版本区
-  const [tab, setTab] = useState<'versions' | 'prepare'>('versions')
+  const [tab, setTab] = useState<'versions' | 'prepare' | 'review'>('versions')
 
   const loadVersions = async () => {
     setLoading(true)
@@ -148,10 +161,19 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
           >
             准备输入
           </button>
+          <button
+            type="button"
+            className={tab === 'review' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            onClick={() => setTab('review')}
+          >
+            复核
+          </button>
         </div>
       </div>
 
-      {tab === 'prepare' ? (
+      {tab === 'review' ? (
+        <AssessmentReviewPanel orgId={orgId} caseId={caseId} detail={detail} onDecided={loadVersions} />
+      ) : tab === 'prepare' ? (
         <AssessmentInputPanel
           orgId={orgId}
           caseId={caseId}
@@ -230,6 +252,7 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
                     {new Date(detail.created_at).toLocaleString('zh-CN')}
                   </div>
                 </div>
+                <p className="text-sm text-secondary mt-sm">{statusMeta(detail.status).note}</p>
               </div>
 
               {/* 阻塞项：标题必须说清「因此当前没有结论」 */}

@@ -533,6 +533,20 @@ export interface AssessmentCandidateProfile {
   has_profile: boolean
 }
 
+export interface AssessmentDecisionRecord {
+  version_id: string
+  version_number: number
+  payload_sha256: string
+  decision: string
+  reviewer_identity_id: string | null
+  comments: string
+  open_blockers: string[]
+  accepts_insufficient_evidence: boolean
+  decision_signature: string
+  decided_at: string | null
+  disclaimer: string
+}
+
 export interface AssessmentAssembleResult {
   version: AssessmentVersionSummary
   gaps: string[]

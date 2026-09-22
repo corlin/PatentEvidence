@@ -122,3 +122,21 @@ give a conclusion, together with the version's blocker count; the panel states
 that the gaps were merged into that version's blockers. A 422 refusal is shown
 as what is actually missing — no subject filing date, no confirmed matrix, no
 comparison cells — rather than as a generic failure.
+
+### Review actions in the interface
+
+Submission and decisions live on a third "review" tab, apart from the
+read-only version area: deciding appends a record, but keeping the controls
+off the version screen keeps "this version cannot be rewritten" and "you can
+act on it now" from competing on the same page.
+
+The approved status is labelled **复核通过 / passed internal review**, never
+"approved" on its own, and every status label carries a fixed qualifier
+stating what it does and does not mean. A terminal version renders no action
+at all and says that a revision is a new version number.
+
+Approving a version with open blockers requires ticking an explicit
+declaration naming the blocker count and writing a reason; until both are
+done the button stays disabled, mirroring the state machine's
+`accepts_insufficient_evidence` requirement rather than leaving it to the
+server to reject after the fact.
