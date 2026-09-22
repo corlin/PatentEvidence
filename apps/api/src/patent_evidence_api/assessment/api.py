@@ -126,6 +126,37 @@ def create_assessment_router(
             )
             return {"items": [render_version_summary(r) for r in records]}
 
+    # 注意：必须注册在 /assessments/{version_number}（int 路径参数）之前，
+    # 否则 "delivery-attachment" 会先被 int 路由捕获并因解析失败返回 422。
+    @router.get(
+        "/{organization_id}/cases/{case_id}/assessments/delivery-attachment"
+    )
+    async def get_delivery_attachment(
+        organization_id: str, case_id: str, request: Request
+    ) -> dict[str, Any]:
+        """为交付包清单挑一个最适合挂接的预评估版本（候选，非结论）。
+
+        只读。返回的 attachment 带 attachable 标记：仅当存在「已批准且无阻塞项」的
+        版本时为真；否则回退到最新版本并标 attachable=False 与原因。没有任何评估
+        版本时返回 {"attachment": null}。永不声称结论。
+        """
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.authorized(request, org_uuid) as (session, _):
+            attachment = await assessment_service.get_delivery_attachment(
+                session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+            )
+            if attachment is None:
+                return {"attachment": None}
+            attachment["requires_human_confirmation"] = bool(
+                attachment.get("requires_human_confirmation", True)
+            )
+            attachment["disclaimer"] = DISCLAIMER
+            return {"attachment": attachment}
+
     @router.get("/{organization_id}/cases/{case_id}/assessments/{version_number}")
     async def get_assessment_version(
         organization_id: str, case_id: str, version_number: int, request: Request

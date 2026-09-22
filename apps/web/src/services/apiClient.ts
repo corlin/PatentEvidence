@@ -832,6 +832,15 @@ export const apiClient = {
     )
   },
 
+  async getAssessmentDeliveryAttachment(
+    orgId: string,
+    caseId: string
+  ): Promise<{ attachment: AssessmentDeliverable | null }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/delivery-attachment`
+    )
+  },
+
   // 预评估复核动作（追加决策记录，不改写版本）
   async submitAssessmentVersion(
     orgId: string,

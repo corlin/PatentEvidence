@@ -453,6 +453,64 @@ class AssessmentService:
         eligibility = evaluate_conclusion_eligibility(summary)
         return build_assessment_deliverable(version, status, eligibility)
 
+    async def get_delivery_attachment(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+    ) -> dict[str, Any] | None:
+        """为交付包清单挑一个最适合挂接的预评估版本，产出候选交付物。
+
+        选择规则（确定性、可复现）：
+        - 优先取「最新且已批准、无阻塞项」的版本；满足时才可作为交付附件
+          （attachable=True）。
+        - 若没有满足的版本，回退到最新版本（无论状态），并标 attachable=False
+          与原因，避免把未达门禁的候选悄悄当成可交付件。
+        没有任何版本时返回 None（诚实结果，不是缺陷）。
+        """
+        versions = await self.list_versions(
+            session, organization_id=organization_id, case_id=case_id
+        )
+        if not versions:
+            return None
+
+        chosen: AssessmentVersionRecord | None = None
+        chosen_status: str | None = None
+        for candidate in versions:  # list_versions 已按 version_number DESC
+            status = await self.current_status(
+                session,
+                organization_id=organization_id,
+                case_id=case_id,
+                version_number=candidate.version_number,
+            )
+            if status == "approved" and not candidate.blockers:
+                chosen, chosen_status = candidate, status
+                break
+        if chosen is None:
+            chosen = versions[0]
+            chosen_status = await self.current_status(
+                session,
+                organization_id=organization_id,
+                case_id=case_id,
+                version_number=chosen.version_number,
+            )
+
+        deliverable = await self.build_deliverable(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=chosen.version_number,
+        )
+        deliverable["attachable"] = bool(
+            chosen_status == "approved" and not chosen.blockers
+        )
+        if not deliverable["attachable"]:
+            deliverable["attachment_reason"] = (
+                "所选版本尚未达到交付附件门禁：须为已批准且无阻塞项的评估版本。"
+            )
+        return deliverable
+
     async def _insert_decision(
         self,
         session: AsyncSession,

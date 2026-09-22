@@ -457,3 +457,66 @@ def test_deliverable_route_surfaces_a_missing_version_as_404() -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "assessment_version_not_found"
+
+
+def test_delivery_attachment_route_returns_200_and_stays_read_only() -> None:
+    """交付包附件路由：只读、候选措辞、未达门禁时标 attachable=False。"""
+    client, access, service = _client()
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/delivery-attachment"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    attachment = body["attachment"]
+    assert attachment is not None
+    # FakeService.current_status 恒为 submitted → 未达门禁
+    assert attachment["attachable"] is False
+    assert "门禁" in attachment["attachment_reason"]
+    assert attachment["requires_human_confirmation"] is True
+    assert attachment["disclaimer"] == DISCLAIMER
+    assert "不构成专利性结论" in attachment["publication_disclaimer"]
+    # 附件永远是候选，绝不携带任何形式的结论
+    assert "conclusion" not in attachment
+    assert not access.actions
+    # 只读路径：列版本 + 读版本（构交付物），不做任何写入
+    assert all(
+        call["method"] in {"list_versions", "get_version"} for call in service.calls
+    )
+
+
+def test_delivery_attachment_route_marks_attachable_when_approved() -> None:
+    """当所选版本已批准且无阻塞时，附件标 attachable=True。"""
+
+    class ApprovedService(FakeService):
+        async def current_status(self, session: Any, **kwargs: Any) -> str:
+            return "approved"
+
+    client, _, _ = _client(ApprovedService())
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/delivery-attachment"
+    )
+
+    assert response.status_code == 200
+    attachment = response.json()["attachment"]
+    assert attachment["attachable"] is True
+    assert "attachment_reason" not in attachment
+    assert attachment["eligibility"]["eligible"] is True
+
+
+def test_delivery_attachment_route_returns_null_without_versions() -> None:
+    """案件没有任何评估版本时返回 {"attachment": null}，不编造附件。"""
+
+    class NoVersionsService(FakeService):
+        async def list_versions(
+            self, session: Any, **kwargs: Any
+        ) -> list[AssessmentVersionRecord]:
+            return []
+
+    client, _, _ = _client(NoVersionsService())
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/delivery-attachment"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"attachment": None}

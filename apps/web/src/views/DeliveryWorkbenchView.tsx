@@ -5,7 +5,12 @@ import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { StatusBadge } from '../components/StatusBadge'
 import { MarkdownViewer } from '../components/MarkdownViewer'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import type { DeliveryRecord, EvidenceSnapshotDetail, CaseDetail } from '../types/api'
+import type {
+  DeliveryRecord,
+  EvidenceSnapshotDetail,
+  CaseDetail,
+  AssessmentDeliverable,
+} from '../types/api'
 import { Link } from '../router/Router'
 
 interface DeliveryWorkbenchViewProps {
@@ -20,6 +25,10 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
   const [currentCase, setCurrentCase] = useState<CaseDetail | null>(null)
   const [deliveryRecord, setDeliveryRecord] = useState<DeliveryRecord | null>(null)
   const [reportDetail, setReportDetail] = useState<EvidenceSnapshotDetail | null>(null)
+  // 交付包清单里的预评估意见附件（候选，非结论）；可勾选表示是否纳入本次交付包
+  const [assessmentAttachment, setAssessmentAttachment] =
+    useState<AssessmentDeliverable | null>(null)
+  const [includeAssessment, setIncludeAssessment] = useState(true)
 
   const [clientRecipient, setClientRecipient] = useState('')
   const [loading, setLoading] = useState(true)
@@ -33,15 +42,21 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
     setLoading(true)
     setError(null)
     try {
-      const [cRes, dlvRes, repRes] = await Promise.all([
+      const [cRes, dlvRes, repRes, attRes] = await Promise.all([
         apiClient.getCase(orgId, caseId),
         apiClient.getDeliveryRecord(orgId, caseId).catch(() => ({ delivery: null })),
         apiClient.getActiveReport(orgId, caseId).catch(() => null),
+        apiClient
+          .getAssessmentDeliveryAttachment(orgId, caseId)
+          .catch(() => ({ attachment: null })),
       ])
 
       setCurrentCase(cRes)
       setDeliveryRecord(dlvRes.delivery)
       setReportDetail(repRes)
+      setAssessmentAttachment(attRes.attachment)
+      // 未达门禁（attachable=false）时默认不勾选，避免把候选悄悄当作可交付件
+      setIncludeAssessment(attRes.attachment?.attachable === true)
       if (dlvRes.delivery?.client_recipient) {
         setClientRecipient(dlvRes.delivery.client_recipient)
       }
@@ -213,6 +228,81 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
             </div>
           </div>
         )}
+
+        {/* Delivery Package Manifest: attachable pre-assessment opinion (candidate, non-conclusion) */}
+        <div className="card p-md mb-md">
+          <div className="flex-between align-center mb-sm">
+            <h2 className="text-md font-bold"><Icon name="scroll" size={14} /> 交付包清单（预评估意见附件）</h2>
+            {assessmentAttachment && (
+              <span
+                className={`badge ${
+                  assessmentAttachment.attachable ? 'badge-success' : 'badge-neutral'
+                }`}
+              >
+                {assessmentAttachment.attachable ? '已达门禁，可纳入交付包' : '未达门禁，不可纳入'}
+              </span>
+            )}
+          </div>
+
+          {assessmentAttachment ? (
+            <>
+              <label className="flex-row gap-sm align-center mb-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeAssessment}
+                  disabled={!assessmentAttachment.attachable}
+                  onChange={(e) => setIncludeAssessment(e.target.checked)}
+                />
+                <span className="text-sm font-semibold">
+                  预评估意见 v{assessmentAttachment.version_number}（候选，非结论）
+                </span>
+                {!assessmentAttachment.attachable && assessmentAttachment.attachment_reason && (
+                  <span className="text-xs text-secondary">
+                    {assessmentAttachment.attachment_reason}
+                  </span>
+                )}
+              </label>
+
+              <div className="grid-3-cols gap-md p-md bg-surface border rounded">
+                <div className="min-w-0">
+                  <span className="text-xs text-secondary block mb-xs font-semibold">
+                    内容摘要 SHA-256 (payload)
+                  </span>
+                  <div className="font-mono text-xs break-all bg-subtle p-xs rounded border">
+                    {assessmentAttachment.payload_sha256}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs text-secondary block mb-xs font-semibold">
+                    规则版本 (rules_version)
+                  </span>
+                  <div className="font-mono text-xs bg-subtle p-xs rounded border">
+                    {assessmentAttachment.rules_version}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs text-secondary block mb-xs font-semibold">
+                    复核状态 / 候选发布门禁
+                  </span>
+                  <div className="text-xs bg-subtle p-xs rounded border">
+                    {assessmentAttachment.status_label} ——{' '}
+                    {assessmentAttachment.eligibility.eligible
+                      ? '允许发布候选判断'
+                      : '不允许发布候选判断'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="alert alert-warning mt-sm">
+                <div className="alert-content text-xs">{assessmentAttachment.candidate_notice}</div>
+              </div>
+            </>
+          ) : (
+            <div className="p-md text-center text-secondary text-sm bg-surface border rounded">
+              尚未创建任何预评估版本，无可挂接的预评估意见。
+            </div>
+          )}
+        </div>
 
         {/* Final Report Full Preview */}
         <div className="card p-md">

@@ -688,3 +688,108 @@ async def test_build_deliverable_missing_version_is_404() -> None:
         )
     assert exc.value.status_code == 404
 
+
+class FakeMultiVersionSession(FakeSession):
+    """多版本 + 按版本号区分的决策流，用于交付附件选择逻辑测试。"""
+
+    def __init__(
+        self,
+        *,
+        versions: list[Row],
+        decisions_by_version: dict[int, list[str]],
+    ) -> None:
+        super().__init__(case_exists=True)
+        self._versions = versions
+        self._decisions_by_version = decisions_by_version
+
+    async def execute(self, statement: Any, params: Any = None) -> FakeResult:
+        sql = str(statement)
+        params = dict(params or {})
+        if "FROM assessment_versions" in sql and "ORDER BY version_number DESC" in sql:
+            # 忠实复刻真实查询：按版本号降序返回
+            return FakeResult(
+                rows=sorted(self._versions, key=lambda v: v.version_number, reverse=True)
+            )
+        if "FROM assessment_versions" in sql and "version_number=:version_number" in sql:
+            vn = params.get("version_number")
+            for version in self._versions:
+                if version.version_number == vn:
+                    return FakeResult(rows=[version])
+            return FakeResult(rows=[])
+        if "FROM assessment_version_reviews" in sql and "ORDER BY decided_at" in sql:
+            vid = params.get("version_id")
+            for version in self._versions:
+                if version.id == vid:
+                    decisions = self._decisions_by_version.get(version.version_number, [])
+                    return FakeResult(rows=[Row(decision=d) for d in decisions])
+            return FakeResult(rows=[])
+        return await super().execute(statement, params)
+
+
+def _version_row_at(version_number: int, *, blockers: list[str]) -> Row:
+    row = _rich_version_row(blockers=blockers, decisions=[])
+    row.version_number = version_number
+    return row
+
+
+@pytest.mark.asyncio
+async def test_get_delivery_attachment_prefers_latest_approved_without_blockers() -> None:
+    """有多个已批准无阻塞版本时，选最新者作为交付附件。"""
+    v1 = _version_row_at(1, blockers=[])
+    v2 = _version_row_at(2, blockers=[])
+    v3 = _version_row_at(3, blockers=[])  # 最新但仍是草稿
+    session = FakeMultiVersionSession(
+        versions=[v1, v2, v3],
+        decisions_by_version={
+            1: ["submitted", "approved"],
+            2: ["submitted", "approved"],
+            3: [],  # 草稿
+        },
+    )
+    attachment = await _service().get_delivery_attachment(
+        session, organization_id=uuid4(), case_id=uuid4()
+    )
+
+    assert attachment is not None
+    assert attachment["version_number"] == 2  # 最新且已批准无阻塞
+    assert attachment["attachable"] is True
+    assert "attachment_reason" not in attachment
+    assert attachment["requires_human_confirmation"] is True
+    # 附件仍是候选，绝不携带任何形式的「结论」
+    assert "candidate_notice" in attachment
+    assert "conclusion" not in attachment
+
+
+@pytest.mark.asyncio
+async def test_get_delivery_attachment_falls_back_to_latest_unattachable() -> None:
+    """无「已批准且无阻塞」版本时，回退到最新版本并标 attachable=False 与原因。"""
+    v1 = _version_row_at(1, blockers=["引证未定位：D1/F2"])
+    v2 = _version_row_at(2, blockers=["引证未定位：D1/F2"])
+    session = FakeMultiVersionSession(
+        versions=[v1, v2],
+        decisions_by_version={
+            1: ["submitted", "approved"],  # 已批准但带阻塞项
+            2: ["submitted"],  # 尚未批准
+        },
+    )
+    attachment = await _service().get_delivery_attachment(
+        session, organization_id=uuid4(), case_id=uuid4()
+    )
+
+    assert attachment is not None
+    assert attachment["version_number"] == 2  # 回退到最新（未达门禁）
+    assert attachment["attachable"] is False
+    assert "门禁" in attachment["attachment_reason"]
+    # 未达门禁时不得声称可发布候选判断
+    assert attachment["eligibility"]["eligible"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_delivery_attachment_is_none_when_no_versions() -> None:
+    """案件没有任何评估版本时，诚实返回 None，不编造附件。"""
+    session = FakeMultiVersionSession(versions=[], decisions_by_version={})
+    attachment = await _service().get_delivery_attachment(
+        session, organization_id=uuid4(), case_id=uuid4()
+    )
+    assert attachment is None
+

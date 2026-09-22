@@ -661,6 +661,10 @@ export interface AssessmentDeliverable {
   publication_disclaimer: string
   version_freeze_declaration: string
   generated_at: string
+  /** 交付包附件门禁：仅当存在「已批准且无阻塞项」的版本时为真。 */
+  attachable?: boolean
+  /** 当 attachable 为假时说明原因（未达门禁）。 */
+  attachment_reason?: string
 }
 
 // Delivery Types
