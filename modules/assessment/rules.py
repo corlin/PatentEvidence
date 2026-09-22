@@ -21,6 +21,12 @@ ASSESSMENT_RULES_VERSION = "assessment-rules-v2"
 COVERING_JUDGMENTS = {"identical", "equivalent"}
 SINGLE_REFERENCE_JUDGMENTS = {"identical"}
 
+JUDGMENT_PRECEDENCE = {"identical": 3, "equivalent": 2, "different": 1, "insufficient_evidence": 0}
+
+
+def _judgment_precedence(judgment: str) -> int:
+    return JUDGMENT_PRECEDENCE.get(judgment, -1)
+
 
 @dataclass(frozen=True)
 class FeatureComparisonRow:
@@ -251,7 +257,13 @@ def combination_findings(
         return []
     findings: list[AssessmentFinding] = []
     for first, second in combinations(doc_ids, 2):
-        cells = {r.feature_code: r.judgment for r in grouped[first] + grouped[second]}
+        # 组合覆盖 = 任一篇披露即覆盖，因此同名特征取"最优"判定，不能被后一篇覆盖掉。
+        cells: dict[str, str] = {}
+        for row in grouped[first] + grouped[second]:
+            if row.feature_code not in cells or _judgment_precedence(row.judgment) > _judgment_precedence(
+                cells[row.feature_code]
+            ):
+                cells[row.feature_code] = row.judgment
         covered = {code for code, judgment in cells.items() if judgment in COVERING_JUDGMENTS}
         if len(covered) == total_features:
             findings.append(
@@ -378,6 +390,15 @@ def assess_evidence_completeness(
     provided = list(citations or [])
     verified_citations = [c for c in provided if c.verified and c.location.strip() and c.quote.strip()]
     missing_anchors = [c.anchor() for c in provided if not c.location.strip() or not c.quote.strip()]
+    # 有判定但完全没有引证的单元格同样是证据缺口：没有可验证原文时必须显示证据不足。
+    cited_cells = {c.anchor() for c in provided}
+    missing_anchors.extend(
+        sorted(
+            f"{row.doc_id}/{row.feature_code}"
+            for row in rows
+            if f"{row.doc_id}/{row.feature_code}" not in cited_cells
+        )
+    )
     unverified_citations = [
         c.anchor() for c in provided if not c.verified and c.location.strip() and c.quote.strip()
     ]

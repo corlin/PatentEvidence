@@ -47,6 +47,7 @@ graph LR
    - 证据完备度区分「阻塞项」与「提示项」：引证未定位、引用未逐字核验、数据源失败 → 禁止输出结论；仅摘要级引用、数据源部分成功、缺失法律状态时点 → 标记并要求人工判断；
    - 三步法第 3 步为结构化人工填写清单（公知常识、明确教导、技术偏见/相反教导、结合障碍、效果可预期性），代码只校验完整性并标记阻塞项，不代替人判断；辅助性审查基准须举证，商业成功还须证明由技术特征直接带来；内置事后诸葛亮风险提示；
    - 版本化评估提示词（`prompts/assessment/`：`novelty-v1` 单独对比原则、`inventive-step-v2` 三步法与结合启示清单），结论可回溯具体提示词版本；
+   - 统一编排入口 `assess_case()`：一次调用跑完全部门禁，产出评估包（候选结论、三步法、第 3 步清单状态、证据完备度、阻塞项、提示项、规则版本与提示词版本），可直接序列化供后续 API 层与复核流消费；
    - 输出仅为候选判断：系统建议的组合恒需人工确认，最终结论由代理师提交、复核人批准。
 
 7. **证据链哈希封存与预评估报告（Merkle Root SHA-256 & Reports）**
@@ -122,7 +123,7 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run API unit tests (87/87 passed)
+# Run API unit tests (95/95 passed)
 .venv/bin/pytest apps/api/tests/unit/
 
 # Run PostgreSQL RLS integration tests (81/81 passed)

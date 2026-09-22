@@ -317,3 +317,31 @@ def test_abstract_only_and_missing_legal_status_timepoint_are_flagged_not_blocki
     assert result.blocks_conclusion is False
     assert any("摘要" in flag for flag in result.flags)
     assert any("法律状态时点" in flag for flag in result.flags)
+
+
+def test_combination_coverage_takes_the_best_judgment_per_feature() -> None:
+    """回归：同名特征不能被组合里的后一篇覆盖掉（任一篇披露即覆盖）。"""
+    rows = [
+        FeatureComparisonRow("F1", "D1", "identical"),
+        FeatureComparisonRow("F2", "D1", "different"),
+        FeatureComparisonRow("F1", "D2", "different"),
+        FeatureComparisonRow("F2", "D2", "identical"),
+    ]
+
+    findings = combination_findings(rows, total_features=2)
+    assert len(findings) == 1
+    assert "D1+D2" in findings[0].reasoning
+
+
+def test_cells_without_any_citation_count_as_evidence_gap() -> None:
+    rows, documents = _rows_and_docs()
+    result = assess_evidence_completeness(
+        rows,
+        total_features=2,
+        documents=documents,
+        citations=[EvidenceCitation("D1", "F1", location="[0012]", quote="低位宽映射", verified=True)],
+    )
+
+    assert "D1/F2" in result.missing_anchors
+    assert result.blocks_conclusion is True
+    assert result.source_coverage == 0.5
