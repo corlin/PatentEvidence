@@ -48,3 +48,32 @@ before hashing, closes that transaction for KDF, then locks and rechecks token
 identity plus identity security version before applying the password change.
 Invalid tokens therefore schedule no Argon2, while capacity and race failures
 do not disclose token validity.
+
+## Pre-assessment versions
+
+The pre-assessment stage is exposed under
+`/api/v1/organizations/{organization_id}/cases/{case_id}/assessments`. Every
+route is either a read or an append: `POST` creates a version or appends a
+review decision, `GET` lists versions, reads one version, and derives its
+status. No route rewrites or deletes a version.
+
+Creating a version runs the deterministic gates once and freezes the resulting
+package — candidate findings, blocking gaps, flags and the three-step
+scaffolding — together with the rules version, the prompt versions and a
+SHA-256 over the canonical payload. Submitting and deciding append decision
+records; status is always derived from that append-only decision stream rather
+than stored on the version row, so an approved version keeps pointing at the
+exact bytes that were approved.
+
+### Disclosure rule
+
+An assessment version never carries a patentability conclusion. The domain
+layer emits candidate findings and the gaps that must still be closed, and the
+HTTP layer must not invent a conclusion on top of them. Every response repeats
+`requires_human_confirmation` and a `disclaimer` stating that the package is
+candidate output rather than legal advice, so a caller cannot read one as a
+confirmed opinion by accident. Approving a version that still has open
+blockers requires the reviewer to set `accepts_insufficient_evidence`
+explicitly and record a reason; the state machine rejects the transition
+otherwise, and any attempt to decide on a version already in a terminal state
+is refused — a revision is a new version number.

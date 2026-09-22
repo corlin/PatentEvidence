@@ -1,0 +1,166 @@
+"""HTTP routes for pre-assessment versions.
+
+Everything here is read-only or append-only: versions are created, listed and
+read; submission and review decisions append decision records. There is no
+route that rewrites or deletes a version, because the persistence layer has no
+UPDATE/DELETE grant and the approval boundary depends on that.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from modules.assessment.approval import AssessmentApprovalError
+from patent_evidence_api.core.http import parse_json_body, parse_uuid_or_404
+from patent_evidence_api.organization.access import OrganizationAccess
+from patent_evidence_api.assessment.schemas import (
+    AssessmentCreateBody,
+    AssessmentDecideBody,
+    render_decision,
+    render_version,
+    render_version_summary,
+)
+from patent_evidence_api.assessment.services import AssessmentService
+
+
+def create_assessment_router(
+    access: OrganizationAccess,
+    assessment_service: AssessmentService,
+) -> APIRouter:
+    router = APIRouter(prefix="/api/v1/organizations")
+
+    @router.post("/{organization_id}/cases/{case_id}/assessments", status_code=201)
+    async def create_assessment_version(
+        organization_id: str, case_id: str, request: Request
+    ) -> JSONResponse:
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+        body = await parse_json_body(request, AssessmentCreateBody)
+
+        async with access.mutation(
+            request,
+            org_uuid,
+            action="case.assessment.create_version",
+            target_type="assessment_version",
+        ) as operation:
+            try:
+                record = await assessment_service.create_version(
+                    operation.session,
+                    organization_id=org_uuid,
+                    case_id=case_uuid,
+                    payload=body.to_assessment_input(),
+                    actor_identity_id=operation.principal.identity_id,
+                )
+            except AssessmentApprovalError as exc:
+                raise HTTPException(status_code=409, detail=exc.code) from exc
+            operation.describe(
+                target_id=record.id,
+                safe_summary=f"Created assessment version {record.version_number}",
+            )
+            return JSONResponse(
+                status_code=201,
+                content={"version": render_version(record, status="draft")},
+            )
+
+    @router.get("/{organization_id}/cases/{case_id}/assessments")
+    async def list_assessment_versions(
+        organization_id: str, case_id: str, request: Request
+    ) -> dict[str, Any]:
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.authorized(request, org_uuid) as (session, _):
+            records = await assessment_service.list_versions(
+                session, organization_id=org_uuid, case_id=case_uuid
+            )
+            return {"items": [render_version_summary(r) for r in records]}
+
+    @router.get("/{organization_id}/cases/{case_id}/assessments/{version_number}")
+    async def get_assessment_version(
+        organization_id: str, case_id: str, version_number: int, request: Request
+    ) -> dict[str, Any]:
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.authorized(request, org_uuid) as (session, _):
+            record = await assessment_service.get_version(
+                session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+                version_number=version_number,
+            )
+            status = await assessment_service.current_status(
+                session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+                version_number=version_number,
+            )
+            return {"version": render_version(record, status=status)}
+
+    @router.post("/{organization_id}/cases/{case_id}/assessments/{version_number}/submit")
+    async def submit_assessment_version(
+        organization_id: str, case_id: str, version_number: int, request: Request
+    ) -> dict[str, Any]:
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.mutation(
+            request,
+            org_uuid,
+            action="case.assessment.submit_version",
+            target_type="assessment_version_review",
+        ) as operation:
+            try:
+                record = await assessment_service.submit_version(
+                    operation.session,
+                    organization_id=org_uuid,
+                    case_id=case_uuid,
+                    version_number=version_number,
+                    actor_identity_id=operation.principal.identity_id,
+                )
+            except AssessmentApprovalError as exc:
+                raise HTTPException(status_code=409, detail=exc.code) from exc
+            operation.describe(
+                target_id=UUID(record.version_id),
+                safe_summary=f"Submitted assessment version {version_number}",
+            )
+            return {"decision": render_decision(record)}
+
+    @router.post("/{organization_id}/cases/{case_id}/assessments/{version_number}/decide")
+    async def decide_assessment_version(
+        organization_id: str, case_id: str, version_number: int, request: Request
+    ) -> dict[str, Any]:
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+        body = await parse_json_body(request, AssessmentDecideBody)
+
+        async with access.mutation(
+            request,
+            org_uuid,
+            action="case.assessment.decide_version",
+            target_type="assessment_version_review",
+        ) as operation:
+            try:
+                record = await assessment_service.decide_version(
+                    operation.session,
+                    organization_id=org_uuid,
+                    case_id=case_uuid,
+                    version_number=version_number,
+                    decision=body.decision,
+                    reviewer_identity_id=operation.principal.identity_id,
+                    comments=body.comments,
+                    accepts_insufficient_evidence=body.accepts_insufficient_evidence,
+                )
+            except AssessmentApprovalError as exc:
+                raise HTTPException(status_code=409, detail=exc.code) from exc
+            operation.describe(
+                target_id=UUID(record.version_id),
+                safe_summary=f"Assessment decision: {body.decision}",
+            )
+            return {"decision": render_decision(record)}
+
+    return router

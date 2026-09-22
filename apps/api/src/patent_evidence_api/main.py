@@ -67,6 +67,8 @@ from patent_evidence_api.reports.api import create_reports_router
 from patent_evidence_api.reports.services import EvidenceReportService
 from patent_evidence_api.review.api import create_review_router
 from patent_evidence_api.review.services import ReviewService
+from patent_evidence_api.assessment.api import create_assessment_router
+from patent_evidence_api.assessment.services import AssessmentService
 
 
 def create_app(
@@ -220,6 +222,12 @@ def create_app(
         create_review_router(
             organization_access,
             ReviewService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_assessment_router(
+            organization_access,
+            AssessmentService(resolved_clock),
         )
     )
 
