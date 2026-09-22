@@ -48,5 +48,11 @@ novelty gate. Numerical range overlap stays a candidate precisely because 选择
 and 实施例点值 are exceptions only a human can confirm; an undocumented
 substitute is never presumed to be a 惯用手段.
 
+- `records.py` — freezes a package into an append-only
+  `AssessmentVersionRecord`: rules version, prompt versions, the full payload
+  and a SHA-256 over the canonicalised payload, so an approval or report can
+  bind to a byte-stable snapshot instead of to whatever the rules produce
+  today. There is no update path; a revision is a new version number.
+
 Nothing here emits a patentability conclusion: outputs are candidate findings
 that a patent agent must confirm and a reviewer must approve.
