@@ -23,6 +23,7 @@ from modules.assessment.rules import (
     EvidenceCompleteness,
     FeatureComparisonRow,
     MotivationChecklist,
+    PriorityVerification,
     SubjectApplication,
     ThreeStepScaffold,
     assess_evidence_completeness,
@@ -32,8 +33,10 @@ from modules.assessment.rules import (
     hindsight_risk,
     motivation_checklist_state,
     novelty_findings,
+    priority_verification_findings,
     reference_eligibility_findings,
     three_step_scaffold,
+    verify_priority,
 )
 
 
@@ -56,6 +59,7 @@ class AssessmentInput:
 class AssessmentPackage:
     rules_version: str
     reference_kinds: dict[str, str]
+    priority: PriorityVerification | None
     findings: list[AssessmentFinding]
     three_step: ThreeStepScaffold | None
     motivation: dict[str, Any] | None
@@ -71,6 +75,7 @@ class AssessmentPackage:
         return {
             "rules_version": self.rules_version,
             "reference_kinds": self.reference_kinds,
+            "priority": self.priority.to_dict() if self.priority else None,
             "findings": [finding.to_dict() for finding in self.findings],
             "three_step": self.three_step.to_dict() if self.three_step else None,
             "motivation": self.motivation,
@@ -98,10 +103,18 @@ def assess_case(payload: AssessmentInput) -> AssessmentPackage:
     if total_features is None:
         total_features = len({row.feature_code for row in payload.rows})
 
-    reference_kinds = classify_all_references(payload.documents, payload.subject)
+    feature_codes = tuple(sorted({row.feature_code for row in payload.rows}))
+    priority = verify_priority(payload.subject, feature_codes)
+
+    reference_kinds = classify_all_references(
+        payload.documents, payload.subject, priority, payload.rows
+    )
 
     findings: list[AssessmentFinding] = []
-    findings.extend(reference_eligibility_findings(payload.documents, payload.subject))
+    findings.extend(priority_verification_findings(payload.subject, feature_codes))
+    findings.extend(
+        reference_eligibility_findings(payload.documents, payload.subject, priority, reference_kinds)
+    )
     findings.extend(novelty_findings(payload.rows, total_features, reference_kinds))
     findings.extend(combination_findings(payload.rows, total_features, reference_kinds))
 
@@ -131,6 +144,16 @@ def assess_case(payload: AssessmentInput) -> AssessmentPackage:
 
     blockers: list[str] = list(evidence.blocking_gaps)
     flags: list[str] = list(evidence.flags)
+    flags.extend(priority.flags)
+    if priority.invalid_claims:
+        flags.append(
+            "存在不成立的优先权主张，相关特征的基准日已回落到申请日"
+            f" {payload.subject.filing_date.isoformat()}"
+        )
+    if priority.per_feature_reference_dates and len(
+        set(priority.per_feature_reference_dates.values())
+    ) > 1:
+        flags.append("部分优先权导致不同技术特征的时间基准日不同，日期门禁按特征逐项判断")
     if motivation is None:
         blockers.append("三步法第 3 步结合启示清单未填写，缺 5 项必答项")
     elif motivation["blocks_conclusion"]:
@@ -149,6 +172,7 @@ def assess_case(payload: AssessmentInput) -> AssessmentPackage:
     return AssessmentPackage(
         rules_version=ASSESSMENT_RULES_VERSION,
         reference_kinds=reference_kinds,
+        priority=priority,
         findings=findings,
         three_step=scaffold,
         motivation=motivation,

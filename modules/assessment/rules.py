@@ -16,12 +16,15 @@ from datetime import date
 from itertools import combinations
 from typing import Any
 
-ASSESSMENT_RULES_VERSION = "assessment-rules-v2"
+ASSESSMENT_RULES_VERSION = "assessment-rules-v3"
 
 COVERING_JUDGMENTS = {"identical", "equivalent"}
 SINGLE_REFERENCE_JUDGMENTS = {"identical"}
 
 JUDGMENT_PRECEDENCE = {"identical": 3, "equivalent": 2, "different": 1, "insufficient_evidence": 0}
+
+# 优先权期限（月）：发明与实用新型 12 个月，外观设计 6 个月。
+PRIORITY_TERM_MONTHS = {"invention": 12, "utility_model": 12, "design": 6}
 
 
 def _judgment_precedence(judgment: str) -> int:
@@ -58,13 +61,209 @@ class CandidateDocument:
 
 
 @dataclass(frozen=True)
+class PriorityClaim:
+    """一项优先权主张。
+
+    `covers` 用于部分优先权：只列出该在先申请确实记载的技术特征（或方案标识）。
+    为空表示全部特征均享有该项优先权。未列入 `covers` 的特征回落到申请日。
+    """
+
+    claim_id: str
+    priority_date: date
+    country: str = ""
+    first_application: bool = True  # 是否为同一主题的第一次申请
+    same_subject: bool = True  # 在后申请与在先申请是否为相同主题
+    proof_verified: bool = False  # 优先权证明文件/在先申请副本是否已核验
+    covers: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
+class PriorityVerification:
+    """优先权核验结果：把「一个基准日」拆成「按特征的基准日」。
+
+    代码只做可核验的部分（期限、首次申请、主题覆盖、证明是否核验）；
+    相同主题的实质判断、优先权是否真正成立，必须由代理师确认。
+    """
+
+    default_reference_date: date
+    per_feature_reference_dates: dict[str, date]
+    valid_claims: tuple[str, ...]
+    invalid_claims: tuple[dict[str, Any], ...]
+    flags: tuple[str, ...]
+    requires_human_confirmation: bool
+
+    def reference_date_for(self, feature_code: str | None) -> date:
+        if feature_code is None:
+            return self.default_reference_date
+        return self.per_feature_reference_dates.get(feature_code, self.default_reference_date)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "default_reference_date": self.default_reference_date.isoformat(),
+            "per_feature_reference_dates": {
+                code: value.isoformat() for code, value in sorted(self.per_feature_reference_dates.items())
+            },
+            "valid_claims": list(self.valid_claims),
+            "invalid_claims": [dict(item) for item in self.invalid_claims],
+            "flags": list(self.flags),
+            "requires_human_confirmation": self.requires_human_confirmation,
+        }
+
+
+def _add_months(start: date, months: int) -> date:
+    """期限届满日：按月加，跨年进位；当月无对应日时回退到月末。"""
+    total = start.month - 1 + months
+    year = start.year + total // 12
+    month = total % 12 + 1
+    day = start.day
+    while day > 1:
+        try:
+            return date(year, month, day)
+        except ValueError:
+            day -= 1
+    return date(year, month, 1)
+
+
+def verify_priority(
+    subject: SubjectApplication,
+    feature_codes: tuple[str, ...] = (),
+) -> PriorityVerification:
+    """核验多项 / 部分优先权，给出按特征的时间基准日。
+
+    确定性可核验的只有四项：期限、首次申请、相同主题（按调用方标注）、
+    证明是否核验。全部成立才算有效；无效的优先权使基准日回落到申请日。
+    """
+    filing_date = subject.filing_date
+    term_months = PRIORITY_TERM_MONTHS.get(subject.application_type, PRIORITY_TERM_MONTHS["invention"])
+    valid: list[str] = []
+    invalid: list[dict[str, Any]] = []
+    flags: list[str] = []
+
+    covered: dict[str, date] = {}
+    for claim in subject.claims():
+        deadline = _add_months(claim.priority_date, term_months)
+        if claim.priority_date > filing_date:
+            invalid.append({"claim_id": claim.claim_id, "reason": "优先权日晚于本申请申请日"})
+            continue
+        if filing_date > deadline:
+            invalid.append(
+                {
+                    "claim_id": claim.claim_id,
+                    "reason": f"超出 {term_months} 个月优先权期限（届满日 {deadline.isoformat()}）",
+                }
+            )
+            continue
+        if not claim.first_application:
+            invalid.append({"claim_id": claim.claim_id, "reason": "并非同一主题的第一次申请"})
+            continue
+        if not claim.same_subject:
+            invalid.append({"claim_id": claim.claim_id, "reason": "在后申请与在先申请并非相同主题"})
+            continue
+        if not claim.proof_verified:
+            flags.append(
+                f"优先权 {claim.claim_id} 的证明文件/在先申请副本尚未核验，"
+                "暂按成立计算，代理师须补核验。"
+            )
+        valid.append(claim.claim_id)
+
+        if claim.covers:
+            for code in claim.covers:
+                previous = covered.get(code)
+                if previous is None or claim.priority_date < previous:
+                    covered[code] = claim.priority_date
+        else:
+            for code in feature_codes:
+                previous = covered.get(code)
+                if previous is None or claim.priority_date < previous:
+                    covered[code] = claim.priority_date
+
+    earliest_valid = None
+    for claim in subject.claims():
+        if claim.claim_id in valid:
+            if earliest_valid is None or claim.priority_date < earliest_valid:
+                earliest_valid = claim.priority_date
+
+    default_reference_date = min([earliest_valid or filing_date, filing_date])
+    per_feature: dict[str, date] = {}
+    for code in feature_codes:
+        per_feature[code] = min([covered.get(code, filing_date), filing_date])
+
+    if valid and any(code for code in feature_codes if code not in covered):
+        missing = sorted(code for code in feature_codes if code not in covered)
+        flags.append(
+            "存在部分优先权：以下特征不在任何有效在先申请的记载范围内，"
+            f"其基准日回落到申请日 {filing_date.isoformat()}：{', '.join(missing)}。"
+        )
+
+    return PriorityVerification(
+        default_reference_date=default_reference_date,
+        per_feature_reference_dates=per_feature,
+        valid_claims=tuple(valid),
+        invalid_claims=tuple(invalid),
+        flags=tuple(flags),
+        requires_human_confirmation=bool(invalid) or bool(flags),
+    )
+
+
+def priority_verification_findings(
+    subject: SubjectApplication,
+    feature_codes: tuple[str, ...] = (),
+) -> list[AssessmentFinding]:
+    """把不成立或存疑的优先权暴露成必须人工处理的项。"""
+    verification = verify_priority(subject, feature_codes)
+    if not verification.invalid_claims and not verification.flags:
+        return []
+    return [
+        AssessmentFinding(
+            risk_kind="priority_verification",
+            level="needs_confirmation",
+            basis=[
+                {"valid_claims": list(verification.valid_claims)},
+                {"invalid_claims": [dict(item) for item in verification.invalid_claims]},
+                {"default_reference_date": verification.default_reference_date.isoformat()},
+            ],
+            requires_human_confirmation=True,
+            reasoning=(
+                "优先权核验存在不成立或存疑项："
+                + "；".join(item["reason"] for item in verification.invalid_claims)
+                + ("；" if verification.invalid_claims and verification.flags else "")
+                + "；".join(verification.flags)
+                + "。权利要求层面的基准日必须由代理师确认。"
+            ),
+        )
+    ]
+
+
+@dataclass(frozen=True)
 class SubjectApplication:
-    """本申请的时间基准。判断现有技术以申请日为准；有优先权的，指优先权日。"""
+    """本申请的时间基准。判断现有技术以申请日为准；有优先权的，指优先权日。
+
+    多项优先权 / 部分优先权会让同一件申请的不同技术方案拥有不同的基准日，
+    因此 `priority_claims` 是权威来源；`priority_date` 只是单一优先权的简写，
+    在 `priority_claims` 为空时生效。
+    """
 
     filing_date: date
     priority_date: date | None = None
+    priority_claims: tuple[PriorityClaim, ...] = ()
+    application_type: str = "invention"  # invention | utility_model | design
+
+    def claims(self) -> tuple[PriorityClaim, ...]:
+        if self.priority_claims:
+            return self.priority_claims
+        if self.priority_date is None:
+            return ()
+        return (
+            PriorityClaim(
+                claim_id="P1",
+                priority_date=self.priority_date,
+                first_application=True,
+                proof_verified=True,
+            ),
+        )
 
     def reference_date(self) -> date:
+        """未做优先权核验时的兜底基准日（不区分部分优先权）。"""
         return min([self.priority_date or self.filing_date, self.filing_date])
 
 
@@ -75,16 +274,36 @@ class ReferenceKind:
     UNKNOWN = "unknown"  # 日期缺失：证据不足，不得用于任何判断
 
 
+# 文献日期分类的保守度：越高越不可用。部分优先权会让同一文献对不同特征得到
+# 不同分类，文献级取最保守的那个。
+REFERENCE_KIND_SEVERITY = {
+    ReferenceKind.PRIOR_ART: 0,
+    ReferenceKind.CONFLICTING_APPLICATION: 1,
+    ReferenceKind.NOT_USABLE: 2,
+    ReferenceKind.UNKNOWN: 3,
+}
+
+
 def classify_reference(
     document: CandidateDocument,
     subject: SubjectApplication,
+    verification: PriorityVerification | None = None,
+    feature_code: str | None = None,
 ) -> str:
     """Date gate: 现有技术 / 抵触申请 / 不可用 / 日期未知.
 
     抵触申请 = 由任何单位或个人在本申请申请日（优先权日）以前向中国提出，
     并记载在本申请日（含当日）以后公布的同样的发明或实用新型申请。
+
+    传入 `verification` 与 `feature_code` 时按该特征自己的基准日判断——
+    部分优先权下同一文献对不同特征的结论可能不同。
     """
-    reference_date = subject.reference_date()
+    if verification is not None and feature_code is not None:
+        reference_date = verification.reference_date_for(feature_code)
+    elif verification is not None:
+        reference_date = verification.default_reference_date
+    else:
+        reference_date = subject.reference_date()
     published = document.publication_date
     earlier_filing = document.effective_filing_date()
     if published is None or earlier_filing is None:
@@ -99,18 +318,47 @@ def classify_reference(
 def classify_all_references(
     documents: list[CandidateDocument],
     subject: SubjectApplication,
+    verification: PriorityVerification | None = None,
+    rows: list[FeatureComparisonRow] | None = None,
 ) -> dict[str, str]:
-    return {doc.doc_id: classify_reference(doc, subject) for doc in documents}
+    """文献级分类。有部分优先权时，一篇文献对不同特征的结论可能不同，
+    文献级一律取最保守（最不可用）的那个。"""
+    features_by_doc = _rows_by_doc(rows) if rows else {}
+    result: dict[str, str] = {}
+    for doc in documents:
+        codes = sorted({r.feature_code for r in features_by_doc.get(doc.doc_id, [])})
+        if verification is not None and codes:
+            kinds = [classify_reference(doc, subject, verification, code) for code in codes]
+            result[doc.doc_id] = max(kinds, key=lambda kind: REFERENCE_KIND_SEVERITY[kind])
+        else:
+            result[doc.doc_id] = classify_reference(doc, subject, verification)
+    return result
+
+
+def classify_reference_for_features(
+    document: CandidateDocument,
+    subject: SubjectApplication,
+    verification: PriorityVerification,
+    feature_codes: list[str],
+) -> dict[str, str]:
+    """按特征给出日期分类，供人工逐项核对部分优先权的影响。"""
+    return {
+        code: classify_reference(document, subject, verification, code)
+        for code in sorted(set(feature_codes))
+    }
 
 
 def reference_eligibility_findings(
     documents: list[CandidateDocument],
     subject: SubjectApplication,
+    verification: PriorityVerification | None = None,
+    kinds: dict[str, str] | None = None,
 ) -> list[AssessmentFinding]:
     """Date-gate findings: which references may be used, and for what."""
     findings: list[AssessmentFinding] = []
+    resolved = kinds or classify_all_references(documents, subject, verification)
     for doc in documents:
-        kind = classify_reference(doc, subject)
+        kind = resolved.get(doc.doc_id, ReferenceKind.UNKNOWN)
         if kind == ReferenceKind.PRIOR_ART:
             continue
         if kind == ReferenceKind.CONFLICTING_APPLICATION:
@@ -134,7 +382,8 @@ def reference_eligibility_findings(
                     basis=[{"doc_id": doc.doc_id, "kind": kind}],
                     requires_human_confirmation=True,
                     reasoning=(
-                        f"对比文件 {doc.doc_id} 公开日晚于本申请基准日 {subject.reference_date()} "
+                        f"对比文件 {doc.doc_id} 公开日晚于本申请基准日 "
+                        f"{verification.default_reference_date if verification else subject.reference_date()} "
                         "且并非在先申请，不能用于评价新颖性或创造性。"
                     ),
                 )

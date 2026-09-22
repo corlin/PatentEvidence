@@ -10,6 +10,7 @@ from modules.assessment.rules import (
     EvidenceCitation,
     FeatureComparisonRow,
     MotivationChecklist,
+    PriorityClaim,
     SubjectApplication,
 )
 
@@ -75,7 +76,7 @@ def test_assess_case_runs_every_gate_and_returns_a_package() -> None:
         )
     )
 
-    assert package.rules_version == "assessment-rules-v2"
+    assert package.rules_version == "assessment-rules-v3"
     assert package.reference_kinds == {"D1": "prior_art", "D2": "prior_art"}
     assert package.three_step is not None
     assert package.three_step.closest_prior_art in {"D1", "D2"}
@@ -160,6 +161,47 @@ def test_package_is_serialisable() -> None:
     )
     payload = package.to_dict()
 
-    assert payload["rules_version"] == "assessment-rules-v2"
+    assert payload["rules_version"] == "assessment-rules-v3"
     assert isinstance(payload["findings"], list)
     assert isinstance(payload["evidence"], dict)
+
+
+def test_package_carries_priority_verification() -> None:
+    package = assess_case(
+        AssessmentInput(
+            subject=SubjectApplication(
+                filing_date=date(2025, 6, 1),
+                priority_claims=(
+                    PriorityClaim("P1", date(2024, 8, 15), proof_verified=True, covers=frozenset({"F1"})),
+                ),
+            ),
+            documents=_documents(),
+            rows=_rows(),
+            citations=_citations(),
+            motivation_checklist=_checklist(),
+        )
+    )
+
+    assert package.priority is not None
+    assert package.priority.valid_claims == ("P1",)
+    assert package.priority.per_feature_reference_dates["F1"] == date(2024, 8, 15)
+    assert package.priority.per_feature_reference_dates["F2"] == date(2025, 6, 1)
+    assert any("部分优先权" in flag for flag in package.flags)
+    assert package.to_dict()["priority"]["default_reference_date"] == "2024-08-15"
+
+
+def test_invalid_priority_is_flagged_and_downgrades_reference_kind() -> None:
+    """回归：优先权不成立时基准日回落到申请日，文献重新按现有技术分类。"""
+    subject_valid = SubjectApplication(
+        filing_date=date(2025, 6, 1),
+        priority_claims=(PriorityClaim("P1", date(2024, 2, 1), proof_verified=True),),
+    )
+    broken = assess_case(
+        AssessmentInput(subject=subject_valid, documents=_documents(), rows=_rows(), citations=_citations())
+    )
+
+    assert broken.priority is not None
+    assert broken.priority.invalid_claims
+    assert any("不成立的优先权" in flag for flag in broken.flags)
+    assert set(broken.reference_kinds.values()) == {"prior_art"}
+    assert any(f.risk_kind == "priority_verification" for f in broken.findings)
