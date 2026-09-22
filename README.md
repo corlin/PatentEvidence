@@ -43,8 +43,9 @@ graph LR
    - 特征文本附图标注智能匹配，全局新颖性与创造性风险 Banner 实时评估。
 
 6. **可专利性预评估规则层（Patentability Pre-Assessment Rules）**
-   - 确定性门禁（版本 `assessment-rules-v1`）：新颖性单篇全覆盖门禁、组合覆盖筛查、证据完备度核查与创造性三步法脚手架；全部由应用代码控制，不含模型或厂商调用；
-   - 版本化评估提示词（`prompts/assessment/`：`novelty-v1` 单独对比原则、`inventive-step-v1` 三步法与反事后诸葛亮约束），结论可回溯具体提示词版本；
+   - 确定性门禁（版本 `assessment-rules-v2`）：文献日期门禁（现有技术 / 抵触申请 / 不可用 / 日期未知）、新颖性单篇全覆盖门禁、组合覆盖筛查、证据完备度核查与创造性三步法脚手架；全部由应用代码控制，不含模型或厂商调用；
+   - 三步法第 3 步为结构化人工填写清单（公知常识、明确教导、技术偏见/相反教导、结合障碍、效果可预期性），代码只校验完整性并标记阻塞项，不代替人判断；辅助性审查基准须举证，商业成功还须证明由技术特征直接带来；内置事后诸葛亮风险提示；
+   - 版本化评估提示词（`prompts/assessment/`：`novelty-v1` 单独对比原则、`inventive-step-v2` 三步法与结合启示清单），结论可回溯具体提示词版本；
    - 输出仅为候选判断：系统建议的组合恒需人工确认，最终结论由代理师提交、复核人批准。
 
 7. **证据链哈希封存与预评估报告（Merkle Root SHA-256 & Reports）**
@@ -120,7 +121,7 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run API unit tests (71/71 passed)
+# Run API unit tests (82/82 passed)
 .venv/bin/pytest apps/api/tests/unit/
 
 # Run PostgreSQL RLS integration tests (81/81 passed)

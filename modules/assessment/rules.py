@@ -12,10 +12,11 @@ identical | equivalent | different | insufficient_evidence
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from itertools import combinations
 from typing import Any
 
-ASSESSMENT_RULES_VERSION = "assessment-rules-v1"
+ASSESSMENT_RULES_VERSION = "assessment-rules-v2"
 
 COVERING_JUDGMENTS = {"identical", "equivalent"}
 SINGLE_REFERENCE_JUDGMENTS = {"identical"}
@@ -39,6 +40,113 @@ class CandidateDocument:
     publication_number: str
     title: str
     source_verified: bool = False
+    publication_date: date | None = None
+    filing_date: date | None = None  # 对比文件的申请日
+    priority_date: date | None = None  # 对比文件主张的优先权日
+    filed_in_china: bool = True  # 抵触申请只认向中国提出的申请（含进入中国国家阶段的 PCT）
+
+    def effective_filing_date(self) -> date | None:
+        """对比文件的在先申请日：有优先权日的，指优先权日。"""
+        candidates = [d for d in (self.priority_date, self.filing_date) if d is not None]
+        return min(candidates) if candidates else None
+
+
+@dataclass(frozen=True)
+class SubjectApplication:
+    """本申请的时间基准。判断现有技术以申请日为准；有优先权的，指优先权日。"""
+
+    filing_date: date
+    priority_date: date | None = None
+
+    def reference_date(self) -> date:
+        return min([self.priority_date or self.filing_date, self.filing_date])
+
+
+class ReferenceKind:
+    PRIOR_ART = "prior_art"  # 申请日（优先权日）前为公众所知：可用于新颖性与创造性
+    CONFLICTING_APPLICATION = "conflicting_application"  # 抵触申请：只能用于评价新颖性
+    NOT_USABLE = "not_usable"  # 公开晚于基准日且并非在先申请：不能用于评价
+    UNKNOWN = "unknown"  # 日期缺失：证据不足，不得用于任何判断
+
+
+def classify_reference(
+    document: CandidateDocument,
+    subject: SubjectApplication,
+) -> str:
+    """Date gate: 现有技术 / 抵触申请 / 不可用 / 日期未知.
+
+    抵触申请 = 由任何单位或个人在本申请申请日（优先权日）以前向中国提出，
+    并记载在本申请日（含当日）以后公布的同样的发明或实用新型申请。
+    """
+    reference_date = subject.reference_date()
+    published = document.publication_date
+    earlier_filing = document.effective_filing_date()
+    if published is None or earlier_filing is None:
+        return ReferenceKind.UNKNOWN
+    if published < reference_date:
+        return ReferenceKind.PRIOR_ART
+    if earlier_filing < reference_date and document.filed_in_china:
+        return ReferenceKind.CONFLICTING_APPLICATION
+    return ReferenceKind.NOT_USABLE
+
+
+def classify_all_references(
+    documents: list[CandidateDocument],
+    subject: SubjectApplication,
+) -> dict[str, str]:
+    return {doc.doc_id: classify_reference(doc, subject) for doc in documents}
+
+
+def reference_eligibility_findings(
+    documents: list[CandidateDocument],
+    subject: SubjectApplication,
+) -> list[AssessmentFinding]:
+    """Date-gate findings: which references may be used, and for what."""
+    findings: list[AssessmentFinding] = []
+    for doc in documents:
+        kind = classify_reference(doc, subject)
+        if kind == ReferenceKind.PRIOR_ART:
+            continue
+        if kind == ReferenceKind.CONFLICTING_APPLICATION:
+            findings.append(
+                AssessmentFinding(
+                    risk_kind="reference_eligibility",
+                    level="needs_confirmation",
+                    basis=[{"doc_id": doc.doc_id, "kind": kind}],
+                    requires_human_confirmation=True,
+                    reasoning=(
+                        f"对比文件 {doc.doc_id} 为抵触申请：可用于评价新颖性，"
+                        "不得用于评价创造性，也不得作为最接近的现有技术。"
+                    ),
+                )
+            )
+        elif kind == ReferenceKind.NOT_USABLE:
+            findings.append(
+                AssessmentFinding(
+                    risk_kind="reference_eligibility",
+                    level="needs_confirmation",
+                    basis=[{"doc_id": doc.doc_id, "kind": kind}],
+                    requires_human_confirmation=True,
+                    reasoning=(
+                        f"对比文件 {doc.doc_id} 公开日晚于本申请基准日 {subject.reference_date()} "
+                        "且并非在先申请，不能用于评价新颖性或创造性。"
+                    ),
+                )
+            )
+        else:
+            findings.append(
+                AssessmentFinding(
+                    risk_kind="reference_eligibility",
+                    level="needs_confirmation",
+                    basis=[{"doc_id": doc.doc_id, "kind": kind}],
+                    requires_human_confirmation=True,
+                    reasoning=(
+                        f"对比文件 {doc.doc_id} 缺少公开日或申请日/优先权日，"
+                        "无法完成日期门禁，证据不足，不得用于任何评价。"
+                    ),
+                )
+            )
+    return findings
 
 
 @dataclass
@@ -72,16 +180,24 @@ def _feature_codes(rows: list[FeatureComparisonRow]) -> list[str]:
 def novelty_findings(
     rows: list[FeatureComparisonRow],
     total_features: int,
+    reference_kinds: dict[str, str] | None = None,
 ) -> list[AssessmentFinding]:
     """Novelty gate: a single reference covering ALL features identically.
 
     Deterministic single-reference/all-elements gate. The application keeps
     this gate; any model may only supply the underlying cell judgments.
+
+    Only 现有技术 and 抵触申请 can be used here (抵触申请仅评价新颖性).
     """
     if total_features <= 0:
         return []
+    kinds = reference_kinds or {}
     findings: list[AssessmentFinding] = []
     for doc_id, doc_rows in sorted(_rows_by_doc(rows).items()):
+        if kinds.get(doc_id) in {ReferenceKind.NOT_USABLE, ReferenceKind.UNKNOWN}:
+            continue
+        conflicting = kinds.get(doc_id) == ReferenceKind.CONFLICTING_APPLICATION
+        scope_note = "（抵触申请，仅可用于评价新颖性，不得用于创造性）" if conflicting else ""
         identical = {r.feature_code for r in doc_rows if r.judgment in SINGLE_REFERENCE_JUDGMENTS}
         if len(identical) == total_features:
             findings.append(
@@ -91,7 +207,7 @@ def novelty_findings(
                     basis=[r.to_dict() for r in sorted(doc_rows, key=lambda r: r.feature_code)],
                     requires_human_confirmation=False,
                     reasoning=(
-                        f"单篇对比文件 {doc_id} 对全部 {total_features} 项必要技术特征均为相同公开，"
+                        f"单篇对比文件 {doc_id}{scope_note} 对全部 {total_features} 项必要技术特征均为相同公开，"
                         "触发新颖性单篇全覆盖门禁；结论仍需代理师与复核人确认。"
                     ),
                 )
@@ -106,7 +222,7 @@ def novelty_findings(
                     basis=[r.to_dict() for r in sorted(doc_rows, key=lambda r: r.feature_code)],
                     requires_human_confirmation=True,
                     reasoning=(
-                        f"对比文件 {doc_id} 覆盖全部特征但含等同替代判断，不触发新颖性门禁；"
+                        f"对比文件 {doc_id}{scope_note} 覆盖全部特征但含等同替代判断，不触发新颖性门禁；"
                         "等同认定必须人工复核。"
                     ),
                 )
@@ -117,16 +233,20 @@ def novelty_findings(
 def combination_findings(
     rows: list[FeatureComparisonRow],
     total_features: int,
+    reference_kinds: dict[str, str] | None = None,
 ) -> list[AssessmentFinding]:
     """Coverage screening for document pairs (no motivation judgment here).
 
     Motivation-to-combine is NOT decided by code or by a model: a covering
     pair is only a *candidate combination* that a patent agent must confirm.
+
+    抵触申请不得用于评价创造性，因此只有现有技术进入组合筛查。
     """
     if total_features <= 0:
         return []
+    kinds = reference_kinds or {}
     grouped = _rows_by_doc(rows)
-    doc_ids = sorted(grouped)
+    doc_ids = sorted(doc_id for doc_id in grouped if kinds.get(doc_id, ReferenceKind.PRIOR_ART) == ReferenceKind.PRIOR_ART)
     if len(doc_ids) < 2:
         return []
     findings: list[AssessmentFinding] = []
@@ -201,15 +321,22 @@ class ThreeStepScaffold:
 
 def three_step_scaffold(
     rows: list[FeatureComparisonRow],
+    reference_kinds: dict[str, str] | None = None,
 ) -> ThreeStepScaffold | None:
     """Step 1 + 2 of the inventive-step sequence, as candidate scaffolding.
 
     Step 1 (closest prior art) is scored deterministically as the document
     with the most identical judgments (ties broken by fewer
-    insufficient_evidence cells, then doc_id). Step 3 (motivation to combine)
-    is never computed here.
+    insufficient_evidence cells, then doc_id). 抵触申请不得作为最接近的现有
+    技术（它只能评价新颖性），因此不参与打分。 Step 3 (motivation to
+    combine) is never computed here — it is a human-filled checklist.
     """
-    grouped = _rows_by_doc(rows)
+    kinds = reference_kinds or {}
+    grouped = {
+        doc_id: rows_for_doc
+        for doc_id, rows_for_doc in _rows_by_doc(rows).items()
+        if kinds.get(doc_id, ReferenceKind.PRIOR_ART) == ReferenceKind.PRIOR_ART
+    }
     if not grouped:
         return None
     all_features = _feature_codes(rows)
@@ -230,3 +357,119 @@ def three_step_scaffold(
         distinguishing_features=[code for code in all_features if code not in identical_features],
         actual_technical_problem="（占位）实际解决的技术问题必须由代理师基于区别特征与技术效果确定，不得直接写成区别特征本身。",
     )
+
+
+MOTIVATION_CHECKLIST_ITEMS: tuple[str, ...] = (
+    "common_knowledge",  # 区别特征是否为公知常识或本领域的惯用手段
+    "explicit_teaching",  # 是否存在另一篇文献给出将该特征应用到最接近现有技术的明确教导
+    "prejudice_or_teaching_away",  # 现有技术是否存在技术偏见或相反教导
+    "combination_obstacle",  # 是否存在结合的技术障碍（无法工作/需改造）
+    "effect_predictability",  # 结合后的技术效果是否可预期
+)
+
+
+@dataclass
+class MotivationChecklist:
+    """Step 3: structured, human-filled motivation-to-combine checklist.
+
+    Code never decides whether a motivation exists; it only verifies that
+    every item has been answered and flags items that favor inventiveness.
+    """
+
+    common_knowledge: str | None = None
+    explicit_teaching: str | None = None
+    prejudice_or_teaching_away: str | None = None
+    combination_obstacle: str | None = None
+    effect_predictability: str | None = None
+
+    def answers(self) -> dict[str, str | None]:
+        return {item: getattr(self, item) for item in MOTIVATION_CHECKLIST_ITEMS}
+
+    def to_dict(self) -> dict[str, Any]:
+        return self.answers()
+
+
+def motivation_checklist_state(checklist: MotivationChecklist) -> dict[str, Any]:
+    """Validate completeness; return blockers and inventiveness-favouring flags."""
+    answers = checklist.answers()
+    unanswered = [item for item, value in answers.items() if not value or value.strip() == ""]
+    favouring = [
+        item
+        for item in ("prejudice_or_teaching_away", "combination_obstacle")
+        if str(answers.get(item) or "").strip().lower() == "yes"
+    ]
+    return {
+        "complete": not unanswered,
+        "unanswered": unanswered,
+        "favouring_inventiveness": favouring,
+        "blocks_conclusion": bool(unanswered),
+        "rules_version": ASSESSMENT_RULES_VERSION,
+    }
+
+
+AUXILIARY_FACTOR_KINDS: tuple[str, ...] = (
+    "long_unsolved_problem",
+    "overcoming_prejudice",
+    "unexpected_effect",
+    "commercial_success",
+)
+
+
+@dataclass
+class AuxiliaryFactor:
+    """辅助性审查基准。主张必须有证据支撑；商业成功还须由技术特征直接导致。"""
+
+    kind: str
+    claimed: bool = False
+    evidence_cited: bool = False
+    causal_link_to_features: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def evaluate_auxiliary_factors(factors: list[AuxiliaryFactor]) -> dict[str, Any]:
+    """辅助因素只作参考：未举证的主张不计入，不得单独支撑创造性结论。"""
+    counted: list[dict[str, Any]] = []
+    unsubstantiated: list[str] = []
+    for factor in factors:
+        entry = factor.to_dict()
+        if not factor.claimed:
+            continue
+        if factor.kind == "commercial_success" and not (factor.evidence_cited and factor.causal_link_to_features):
+            entry["status"] = "unsubstantiated"
+            unsubstantiated.append(factor.kind)
+        elif not factor.evidence_cited:
+            entry["status"] = "unsubstantiated"
+            unsubstantiated.append(factor.kind)
+        else:
+            entry["status"] = "counted"
+        counted.append(entry)
+    return {
+        "counted": counted,
+        "unsubstantiated": unsubstantiated,
+        "note": "辅助性审查基准仅为参考，不得单独作为具备创造性的依据。",
+        "rules_version": ASSESSMENT_RULES_VERSION,
+    }
+
+
+def hindsight_risk(
+    actual_technical_problem: str,
+    distinguishing_feature_statements: list[str],
+) -> dict[str, Any]:
+    """Flag 事后诸葛亮 risk when the 'problem' simply restates the features.
+
+    Deterministic smell check only: it does not decide the problem, it only
+    warns when the stated problem embeds the distinguishing feature itself.
+    """
+    problem = (actual_technical_problem or "").strip()
+    hits = [stmt for stmt in distinguishing_feature_statements if stmt and stmt.strip() and stmt.strip() in problem]
+    return {
+        "hindsight_risk": bool(hits),
+        "matched_statements": hits,
+        "guidance": (
+            "实际解决的技术问题必须基于区别特征所达到的技术效果重新确定，"
+            "不得把区别特征本身或本申请方案直接写成技术问题。"
+        ),
+        "rules_version": ASSESSMENT_RULES_VERSION,
+    }

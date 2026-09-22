@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+from datetime import date
+
 from modules.assessment.rules import (
+    AuxiliaryFactor,
     CandidateDocument,
     FeatureComparisonRow,
+    MotivationChecklist,
+    ReferenceKind,
+    SubjectApplication,
     ThreeStepScaffold,
+    classify_reference,
     combination_findings,
+    evaluate_auxiliary_factors,
     evidence_completeness_finding,
+    hindsight_risk,
+    motivation_checklist_state,
     novelty_findings,
+    reference_eligibility_findings,
     three_step_scaffold,
 )
 
@@ -93,3 +104,111 @@ def test_three_step_scaffold_selects_closest_prior_art_and_distinguishing_featur
 
 def test_three_step_scaffold_returns_none_without_rows() -> None:
     assert three_step_scaffold([]) is None
+
+
+def _subject() -> SubjectApplication:
+    return SubjectApplication(filing_date=date(2025, 6, 1), priority_date=date(2024, 12, 1))
+
+
+def test_classify_reference_prior_art_when_published_before_reference_date() -> None:
+    doc = CandidateDocument(
+        "D1", "CN1A", "doc", publication_date=date(2024, 1, 10), filing_date=date(2023, 5, 1)
+    )
+    assert classify_reference(doc, _subject()) == ReferenceKind.PRIOR_ART
+
+
+def test_classify_reference_conflicting_application_when_filed_earlier_published_later() -> None:
+    doc = CandidateDocument(
+        "D2", "CN2A", "doc", publication_date=date(2025, 9, 1), filing_date=date(2024, 3, 1)
+    )
+    assert classify_reference(doc, _subject()) == ReferenceKind.CONFLICTING_APPLICATION
+
+
+def test_classify_reference_foreign_later_filing_is_not_conflicting() -> None:
+    doc = CandidateDocument(
+        "D3", "EP3A", "doc", publication_date=date(2025, 9, 1),
+        filing_date=date(2024, 3, 1), filed_in_china=False,
+    )
+    assert classify_reference(doc, _subject()) == ReferenceKind.NOT_USABLE
+
+
+def test_classify_reference_unknown_when_dates_missing() -> None:
+    doc = CandidateDocument("D4", "CN4A", "doc")
+    assert classify_reference(doc, _subject()) == ReferenceKind.UNKNOWN
+
+
+def test_conflicting_application_counts_for_novelty_only() -> None:
+    kinds = {"D2": ReferenceKind.CONFLICTING_APPLICATION}
+    rows = _rows_all_identical("D2", ("F1", "F2"))
+
+    novelty = novelty_findings(rows, total_features=2, reference_kinds=kinds)
+    assert len(novelty) == 1
+    assert "仅可用于评价新颖性" in novelty[0].reasoning
+
+    assert combination_findings(rows, total_features=2, reference_kinds=kinds) == []
+
+
+def test_unusable_reference_is_excluded_from_novelty_and_flagged() -> None:
+    doc = CandidateDocument(
+        "D5", "CN5A", "doc", publication_date=date(2025, 12, 1), filing_date=date(2025, 7, 1)
+    )
+    findings = reference_eligibility_findings([doc], _subject())
+    assert len(findings) == 1
+    assert findings[0].risk_kind == "reference_eligibility"
+    assert "不能用于评价新颖性或创造性" in findings[0].reasoning
+
+    assert novelty_findings(
+        _rows_all_identical("D5", ("F1", "F2")),
+        total_features=2,
+        reference_kinds={"D5": ReferenceKind.NOT_USABLE},
+    ) == []
+
+
+def test_closest_prior_art_skips_conflicting_application() -> None:
+    rows = _rows_all_identical("D9", ("F1", "F2", "F3")) + _rows_all_identical("D1", ("F1",))
+    scaffold = three_step_scaffold(
+        rows, reference_kinds={"D9": ReferenceKind.CONFLICTING_APPLICATION}
+    )
+
+    assert scaffold is not None
+    assert scaffold.closest_prior_art == "D1"
+
+
+def test_motivation_checklist_blocks_conclusion_when_incomplete() -> None:
+    state = motivation_checklist_state(MotivationChecklist(common_knowledge="no"))
+    assert state["complete"] is False
+    assert state["blocks_conclusion"] is True
+    assert len(state["unanswered"]) == 4
+
+
+def test_motivation_checklist_flags_items_favouring_inventiveness() -> None:
+    filled = MotivationChecklist(
+        common_knowledge="no",
+        explicit_teaching="no",
+        prejudice_or_teaching_away="yes",
+        combination_obstacle="no",
+        effect_predictability="unexpected",
+    )
+    state = motivation_checklist_state(filled)
+    assert state["complete"] is True
+    assert state["blocks_conclusion"] is False
+    assert state["favouring_inventiveness"] == ["prejudice_or_teaching_away"]
+
+
+def test_commercial_success_without_causal_link_is_unsubstantiated() -> None:
+    result = evaluate_auxiliary_factors([
+        AuxiliaryFactor("commercial_success", claimed=True, evidence_cited=True),
+        AuxiliaryFactor("unexpected_effect", claimed=True, evidence_cited=True),
+    ])
+    statuses = {entry["kind"]: entry["status"] for entry in result["counted"]}
+    assert statuses["commercial_success"] == "unsubstantiated"
+    assert statuses["unexpected_effect"] == "counted"
+    assert "不得单独作为具备创造性的依据" in result["note"]
+
+
+def test_hindsight_risk_when_problem_restates_distinguishing_feature() -> None:
+    risk = hindsight_risk("如何在解码阶段采用低位宽映射", ["在解码阶段采用低位宽映射"])
+    assert risk["hindsight_risk"] is True
+
+    clean = hindsight_risk("如何在不增加硬件面积的前提下降低推理功耗", ["在解码阶段采用低位宽映射"])
+    assert clean["hindsight_risk"] is False

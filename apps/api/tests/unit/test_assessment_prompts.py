@@ -11,7 +11,7 @@ from prompts.originality.originality import ORIGINALITY_SYSTEM_PROMPT, build_ori
 
 def test_assessment_prompts_are_version_registered() -> None:
     assert PROMPT_REGISTRY["assessment/novelty"]["version"] == "novelty-v1"
-    assert PROMPT_REGISTRY["assessment/inventive_step"]["version"] == "inventive-step-v1"
+    assert PROMPT_REGISTRY["assessment/inventive_step"]["version"] == "inventive-step-v2"
     assert "assessment/originality" not in PROMPT_REGISTRY  # 独创性不在专利评估边界内
 
 
@@ -37,6 +37,10 @@ def test_inventive_step_prompt_keeps_three_step_order_and_hindsight_ban() -> Non
     assert "三步法" in INVENTIVE_STEP_SYSTEM_PROMPT
     assert "事后诸葛亮" in INVENTIVE_STEP_SYSTEM_PROMPT
     assert "结合启示" in INVENTIVE_STEP_SYSTEM_PROMPT
+    assert "商业成功" in INVENTIVE_STEP_SYSTEM_PROMPT
+    for item in ("common_knowledge", "explicit_teaching", "prejudice_or_teaching_away",
+                 "combination_obstacle", "effect_predictability"):
+        assert item in INVENTIVE_STEP_SYSTEM_PROMPT
 
     user_prompt = build_inventive_step_user_prompt(
         "测试量化专利",
