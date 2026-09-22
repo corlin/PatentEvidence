@@ -103,3 +103,22 @@ persisted field records whether a quote was located verbatim in the source,
 and a confirmed comparison matrix means a human reviewed the chart, not that
 each quote was traced. Mapping one onto the other would overstate the
 evidence, so the gap stays visible and blocks instead.
+
+### Input profiles in the interface
+
+The workbench keeps two tabs: a read-only version area and a separate
+"prepare input" area. Write operations never share a screen with the version
+area, so "this version cannot be rewritten" and "this form can be saved" are
+never visible at the same time.
+
+`GET .../assessment-input/candidates` lists **every** search candidate, joined
+with its profile when one exists. Un-profiled candidates appear with
+`has_profile=false` and null dates rather than defaults — a list that only
+returned the filled-in rows would hide the very gaps the page exists to close.
+
+Assembling never reports a bare success. When `gaps` is non-empty the response
+renders them in a blocking panel titled as the reason the new version cannot
+give a conclusion, together with the version's blocker count; the panel states
+that the gaps were merged into that version's blockers. A 422 refusal is shown
+as what is actually missing — no subject filing date, no confirmed matrix, no
+comparison cells — rather than as a generic failure.

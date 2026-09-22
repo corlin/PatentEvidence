@@ -125,13 +125,13 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run API unit tests (183/183 passed)
+# Run API unit tests (181/181 passed)
 .venv/bin/pytest apps/api/tests/unit/
 
 # Run PostgreSQL RLS integration tests (81/81 passed)
 ./scripts/test-postgres.sh
 
-# Run frontend Vitest suite (30/30 passed)
+# Run frontend Vitest suite (38/38 passed)
 pnpm test:web
 
 # Build production frontend bundle

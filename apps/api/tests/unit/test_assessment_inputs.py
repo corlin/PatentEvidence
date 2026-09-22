@@ -13,6 +13,7 @@ from patent_evidence_api.assessment.inputs import AssessmentInputService
 ORG = uuid4()
 CASE = uuid4()
 CAND = uuid4()
+CAND2 = uuid4()
 
 
 def row(**kwargs: Any) -> SimpleNamespace:
@@ -35,9 +36,16 @@ class FakeResult:
 
 
 class FakeSession:
-    def __init__(self, *, case_exists: bool = True, candidate_exists: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        case_exists: bool = True,
+        candidate_exists: bool = True,
+        candidate_slots: list[Any] | None = None,
+    ) -> None:
         self.case_exists = case_exists
         self.candidate_exists = candidate_exists
+        self.candidate_slots = candidate_slots or []
         self.statements: list[str] = []
         self.params: list[dict[str, Any]] = []
 
@@ -47,6 +55,8 @@ class FakeSession:
         self.params.append(dict(params or {}))
         if "RETURNING" in sql:
             return FakeResult(rows=[self._echo(sql, dict(params or {}))])
+        if "FROM search_candidates c" in sql:
+            return FakeResult(rows=self.candidate_slots)
         if "FROM case_application_profiles" in sql:
             return FakeResult(rows=[])
         if "FROM candidate_document_profiles" in sql:
@@ -188,3 +198,64 @@ async def test_list_candidate_profiles_scopes_to_case() -> None:
     )
     assert items == []
     assert any("candidate_document_profiles" in s for s in session.statements)
+
+
+@pytest.mark.asyncio
+async def test_list_candidate_profiles_includes_unprofiled_candidates() -> None:
+    """未建档的候选文献必须出现在列表里，否则界面只能看到已填的、缺口被列表藏起来。"""
+    session = FakeSession(
+        candidate_slots=[
+            row(
+                id=uuid4(),
+                candidate_id=CAND,
+                publication_number="CN1A",
+                title="doc one",
+                filing_date=date(2023, 5, 1),
+                priority_date=None,
+                filed_in_china=True,
+                source_verified=True,
+                verified_by_identity_id=None,
+                created_at=datetime(2026, 9, 22, 12, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 9, 22, 12, 0, tzinfo=UTC),
+            ),
+            row(
+                id=None,
+                candidate_id=CAND2,
+                publication_number="CN2A",
+                title="doc two",
+                filing_date=None,
+                priority_date=None,
+                filed_in_china=None,
+                source_verified=None,
+                verified_by_identity_id=None,
+                created_at=None,
+                updated_at=None,
+            ),
+        ]
+    )
+    items = await _service().list_candidate_profiles(
+        session, organization_id=ORG, case_id=CASE
+    )
+
+    assert len(items) == 2
+    assert items[0]["has_profile"] is True
+    assert items[1]["has_profile"] is False
+    # 未建档不得补默认值：日期保持 None，来源核验保持 False
+    assert items[1]["filing_date"] is None
+    assert items[1]["priority_date"] is None
+    assert items[1]["source_verified"] is False
+    assert items[1]["id"] is None
+    assert any("LEFT JOIN" in s for s in session.statements)
+
+
+@pytest.mark.asyncio
+async def test_list_candidate_profiles_still_scopes_to_tenant_and_case() -> None:
+    session = FakeSession(candidate_slots=[])
+    await _service().list_candidate_profiles(session, organization_id=ORG, case_id=CASE)
+
+    listing = [s for s in session.statements if "FROM search_candidates c" in s]
+    assert listing
+    assert session.params[-1] == {"org_id": ORG, "case_id": CASE}
+    for statement in listing:
+        assert "organization_id=:org_id" in statement
+        assert "c.case_id=:case_id" in statement

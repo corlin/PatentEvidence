@@ -96,22 +96,25 @@ class AssessmentInputService:
     async def list_candidate_profiles(
         self, session: AsyncSession, *, organization_id: UUID, case_id: UUID
     ) -> list[dict[str, Any]]:
+        """List every search candidate with its profile when one exists."""
+        # LEFT JOIN 而非 INNER JOIN：尚未建档的候选文献必须出现在列表里，标成
+        # has_profile=false。否则界面只能看到「已填的」，缺口被列表本身藏起来。
         rows = (
             await session.execute(
                 text(
-                    """SELECT p.id, p.candidate_id, c.publication_number, c.title,
+                    """SELECT p.id, c.id AS candidate_id, c.publication_number, c.title,
                     p.filing_date, p.priority_date, p.filed_in_china, p.source_verified,
                     p.verified_by_identity_id, p.created_at, p.updated_at
-                    FROM candidate_document_profiles p
-                    JOIN search_candidates c
-                      ON c.id = p.candidate_id AND c.organization_id = p.organization_id
-                    WHERE p.organization_id=:org_id AND p.case_id=:case_id
+                    FROM search_candidates c
+                    LEFT JOIN candidate_document_profiles p
+                      ON p.candidate_id = c.id AND p.organization_id = c.organization_id
+                    WHERE c.organization_id=:org_id AND c.case_id=:case_id
                     ORDER BY c.created_at"""
                 ),
                 {"org_id": organization_id, "case_id": case_id},
             )
         ).fetchall()
-        return [self._candidate_row(row) for row in rows]
+        return [self._candidate_slot(row) for row in rows]
 
     async def upsert_candidate_profile(
         self,
@@ -214,6 +217,33 @@ class AssessmentInputService:
             ),
             "created_at": row.created_at.isoformat() if row.created_at else None,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "has_profile": True,
+        }
+
+    @staticmethod
+    def _candidate_slot(row: Any) -> dict[str, Any]:
+        """A candidate joined with its optional profile.
+
+        Un-profiled candidates keep null dates rather than defaults, and carry
+        ``has_profile=False`` so the UI can show what is still missing instead
+        of only what was filled in.
+        """
+        profiled = row.id is not None
+        return {
+            "id": str(row.id) if row.id else None,
+            "candidate_id": str(row.candidate_id),
+            "publication_number": getattr(row, "publication_number", None),
+            "title": getattr(row, "title", None),
+            "filing_date": row.filing_date.isoformat() if row.filing_date else None,
+            "priority_date": row.priority_date.isoformat() if row.priority_date else None,
+            "filed_in_china": bool(row.filed_in_china) if profiled else None,
+            "source_verified": bool(row.source_verified) if profiled else False,
+            "verified_by_identity_id": (
+                str(row.verified_by_identity_id) if row.verified_by_identity_id else None
+            ),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            "has_profile": profiled,
         }
 
 

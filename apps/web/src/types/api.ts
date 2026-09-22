@@ -507,6 +507,39 @@ export interface AssessmentVersionDetail extends AssessmentVersionSummary {
   created_by_identity_id: string | null
 }
 
+// Pre-assessment input profiles (mutable input, never approval records)
+export interface AssessmentApplicationProfile {
+  id: string
+  filing_date: string | null
+  application_type: string
+  priority_claims: Array<Record<string, unknown>>
+  recorded_by_identity_id: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AssessmentCandidateProfile {
+  id: string | null
+  candidate_id: string
+  publication_number: string | null
+  title: string | null
+  filing_date: string | null
+  priority_date: string | null
+  filed_in_china: boolean | null
+  source_verified: boolean
+  verified_by_identity_id: string | null
+  created_at: string | null
+  updated_at: string | null
+  has_profile: boolean
+}
+
+export interface AssessmentAssembleResult {
+  version: AssessmentVersionSummary
+  gaps: string[]
+  source: Record<string, unknown>
+  disclaimer: string
+}
+
 // Delivery Types
 export interface DeliveryRecord {
   id: string

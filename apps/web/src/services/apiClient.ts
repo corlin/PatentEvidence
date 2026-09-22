@@ -1,4 +1,7 @@
 import type {
+  AssessmentApplicationProfile,
+  AssessmentAssembleResult,
+  AssessmentCandidateProfile,
   AssessmentVersionDetail,
   AssessmentVersionSummary,
   CaseDetail,
@@ -790,6 +793,63 @@ export const apiClient = {
   ): Promise<{ version: AssessmentVersionDetail }> {
     return request(
       `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${versionNumber}`
+    )
+  },
+
+  async createAssessmentVersionFromCase(
+    orgId: string,
+    caseId: string
+  ): Promise<AssessmentAssembleResult> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/assessments/from-case`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    })
+  },
+
+  // 预评估输入档案（可变；改动只影响下一个版本，改不到已冻结的版本）
+  async getAssessmentApplicationProfile(
+    orgId: string,
+    caseId: string
+  ): Promise<{ profile: AssessmentApplicationProfile | null }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/assessment-input/application`)
+  },
+
+  async upsertAssessmentApplicationProfile(
+    orgId: string,
+    caseId: string,
+    body: {
+      filing_date: string
+      application_type?: string
+      priority_claims?: Array<Record<string, unknown>>
+    }
+  ): Promise<{ profile: AssessmentApplicationProfile }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessment-input/application`,
+      { method: 'POST', body: JSON.stringify(body) }
+    )
+  },
+
+  async listAssessmentCandidateProfiles(
+    orgId: string,
+    caseId: string
+  ): Promise<{ items: AssessmentCandidateProfile[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/assessment-input/candidates`)
+  },
+
+  async upsertAssessmentCandidateProfile(
+    orgId: string,
+    caseId: string,
+    candidateId: string,
+    body: {
+      filing_date?: string | null
+      priority_date?: string | null
+      filed_in_china?: boolean
+      source_verified?: boolean
+    }
+  ): Promise<{ profile: AssessmentCandidateProfile }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessment-input/candidates/${candidateId}`,
+      { method: 'POST', body: JSON.stringify(body) }
     )
   },
 }

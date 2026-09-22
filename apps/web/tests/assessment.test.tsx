@@ -194,6 +194,44 @@ describe('Pre-assessment Web Surface', () => {
     expect(screen.getByText('实体级候选观察项（不改变比对判定）')).toBeDefined()
   })
 
+  it('keeps write operations in a separate tab rather than the version area', async () => {
+    vi.spyOn(apiClient, 'getAssessmentApplicationProfile').mockResolvedValue({
+      profile: {
+        id: 'prof-1',
+        filing_date: '2025-03-01',
+        application_type: 'invention',
+        priority_claims: [],
+        recorded_by_identity_id: 'user-1',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    })
+    vi.spyOn(apiClient, 'listAssessmentCandidateProfiles').mockResolvedValue({ items: [] })
+
+    render(
+      <Router>
+        <SessionProvider>
+          <AssessmentWorkbenchView orgId="org-1" caseId="case-1" />
+        </SessionProvider>
+      </Router>
+    )
+
+    // 默认停在只读版本区，写操作不在其中
+    await waitFor(() => {
+      expect(screen.getByText('版本列表（只读）')).toBeDefined()
+    })
+    expect(screen.queryByText('本案申请信息（日期门禁的基准）')).toBeNull()
+
+    fireEvent.click(screen.getByText('准备输入'))
+
+    await waitFor(() => {
+      expect(screen.getByText('本案申请信息（日期门禁的基准）')).toBeDefined()
+    })
+    expect(screen.getByText('生成新版本')).toBeDefined()
+    // 切走后版本区不再渲染，避免「可写」与「不可改写」同屏混淆
+    expect(screen.queryByText('版本列表（只读）')).toBeNull()
+  })
+
   it('reloads detail when another version chip is clicked', async () => {
     const second = { ...summary, id: 'ver-2', version_number: 2 }
     vi.spyOn(apiClient, 'listAssessmentVersions').mockResolvedValue({ items: [summary, second] })

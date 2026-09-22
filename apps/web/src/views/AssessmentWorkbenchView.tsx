@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { apiClient, ApiError } from '../services/apiClient'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
 import { StatusBadge } from '../components/StatusBadge'
+import { AssessmentInputPanel } from '../components/AssessmentInputPanel'
 import type {
   AssessmentVersionDetail,
   AssessmentVersionStatus,
@@ -55,6 +56,8 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 只读版本区与输入准备区分开：写操作不混入「不可改写」的版本区
+  const [tab, setTab] = useState<'versions' | 'prepare'>('versions')
 
   const loadVersions = async () => {
     setLoading(true)
@@ -129,13 +132,41 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
         </div>
       </div>
 
-      {loading ? (
+      <div className="card p-sm mb-md">
+        <div className="flex-row gap-sm">
+          <button
+            type="button"
+            className={tab === 'versions' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            onClick={() => setTab('versions')}
+          >
+            版本（只读）
+          </button>
+          <button
+            type="button"
+            className={tab === 'prepare' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+            onClick={() => setTab('prepare')}
+          >
+            准备输入
+          </button>
+        </div>
+      </div>
+
+      {tab === 'prepare' ? (
+        <AssessmentInputPanel
+          orgId={orgId}
+          caseId={caseId}
+          onAssembled={(res) => {
+            setVersions((prev) => [res.version, ...prev.filter((v) => v.version_number !== res.version.version_number)])
+            setSelectedVersion(res.version.version_number)
+          }}
+        />
+      ) : loading ? (
         <div className="card p-lg text-secondary text-sm">正在加载评估版本...</div>
       ) : versions.length === 0 ? (
         <div className="card p-lg">
           <p className="text-sm text-secondary">
-            该案件尚无预评估版本。评估版本由后端在跑完日期门禁、新颖性与创造性覆盖、
-            证据完备度检查后冻结生成，页面不提供手工编辑或删除。
+            该案件尚无预评估版本。可先在「准备输入」登记本案申请日与对比文件日期，
+            再依据案件既有数据生成；版本一旦生成即冻结，页面不提供手工编辑或删除。
           </p>
         </div>
       ) : (
