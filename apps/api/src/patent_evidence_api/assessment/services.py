@@ -453,6 +453,53 @@ class AssessmentService:
         eligibility = evaluate_conclusion_eligibility(summary)
         return build_assessment_deliverable(version, status, eligibility)
 
+    async def _latest_gate_satisfied_version(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+    ) -> tuple[AssessmentVersionRecord, str] | None:
+        """找「最新且已批准、无阻塞项」的评估版本；不存在返回 None。
+
+        list_versions 按 version_number DESC 返回，取首个满足者即为最新。
+        """
+        versions = await self.list_versions(
+            session, organization_id=organization_id, case_id=case_id
+        )
+        for candidate in versions:
+            status = await self.current_status(
+                session,
+                organization_id=organization_id,
+                case_id=case_id,
+                version_number=candidate.version_number,
+            )
+            if status == "approved" and not candidate.blockers:
+                return candidate, status
+        return None
+
+    async def assert_delivery_gate(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+    ) -> None:
+        """案件交付门禁：须存在「已批准且无阻塞项」的评估版本才允许正式交付。
+
+        与 report 结论门禁同口径（evaluate_conclusion_eligibility），但落在案件级：
+        不满足时拒绝交付并给出明确原因，绝不乐观默认。注意本门禁不产出任何
+        专利性结论——它只校验内部复核流程是否完成。
+        """
+        satisfied = await self._latest_gate_satisfied_version(
+            session, organization_id=organization_id, case_id=case_id
+        )
+        if satisfied is None:
+            raise HTTPException(
+                status_code=409,
+                detail="assessment_delivery_gate_not_satisfied",
+            )
+
     async def get_delivery_attachment(
         self,
         session: AsyncSession,
@@ -475,19 +522,12 @@ class AssessmentService:
         if not versions:
             return None
 
-        chosen: AssessmentVersionRecord | None = None
-        chosen_status: str | None = None
-        for candidate in versions:  # list_versions 已按 version_number DESC
-            status = await self.current_status(
-                session,
-                organization_id=organization_id,
-                case_id=case_id,
-                version_number=candidate.version_number,
-            )
-            if status == "approved" and not candidate.blockers:
-                chosen, chosen_status = candidate, status
-                break
-        if chosen is None:
+        satisfied = await self._latest_gate_satisfied_version(
+            session, organization_id=organization_id, case_id=case_id
+        )
+        if satisfied is not None:
+            chosen, chosen_status = satisfied
+        else:
             chosen = versions[0]
             chosen_status = await self.current_status(
                 session,

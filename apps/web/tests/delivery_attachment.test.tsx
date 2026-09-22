@@ -104,6 +104,14 @@ describe('Delivery package assessment attachment', () => {
     const checkbox = screen.getByRole('checkbox') as HTMLInputElement
     expect(checkbox.checked).toBe(true)
     expect(checkbox.disabled).toBe(false)
+
+    // 案件交付门禁满足：正式交付按钮可用
+    const deliverBtn = screen.getByRole('button', {
+      name: /确认正式交付客户/,
+    }) as HTMLButtonElement
+    expect(deliverBtn.disabled).toBe(false)
+    // 门禁未满足的警示不出现
+    expect(screen.queryByText(/案件交付门禁未满足/)).toBeNull()
   })
 
   it('leaves the item unchecked and explains the gate when not attachable', async () => {
@@ -129,6 +137,14 @@ describe('Delivery package assessment attachment', () => {
     const checkbox = screen.getByRole('checkbox') as HTMLInputElement
     expect(checkbox.checked).toBe(false)
     expect(checkbox.disabled).toBe(true)
+
+    // 案件交付门禁未满足：警示在场、不可逆的正式交付按钮被禁用
+    expect(screen.getByText(/案件交付门禁未满足/)).toBeDefined()
+    expect(screen.getByText(/当前最新版本（v3，待复核）未达门禁/)).toBeDefined()
+    const deliverBtn = screen.getByRole('button', {
+      name: /交付门禁未满足，暂不可交付/,
+    }) as HTMLButtonElement
+    expect(deliverBtn.disabled).toBe(true)
   })
 
   it('shows an honest empty state when no assessment version exists', async () => {
@@ -144,5 +160,13 @@ describe('Delivery package assessment attachment', () => {
       ).toBeDefined()
     })
     expect(screen.queryByRole('checkbox')).toBeNull()
+
+    // 没有任何评估版本同样不满足交付门禁：警示在场、交付按钮禁用
+    expect(screen.getByText(/案件交付门禁未满足/)).toBeDefined()
+    expect(screen.getByText(/本案尚未创建任何预评估版本/)).toBeDefined()
+    const deliverBtn = screen.getByRole('button', {
+      name: /交付门禁未满足，暂不可交付/,
+    }) as HTMLButtonElement
+    expect(deliverBtn.disabled).toBe(true)
   })
 })

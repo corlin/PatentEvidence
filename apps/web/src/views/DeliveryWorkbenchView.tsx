@@ -87,8 +87,14 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
       setSuccess('案件已正式完成客户交付！交付凭证与防伪下载口令已生成。')
       await loadData()
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message)
-      else setError('执行交付失败')
+      if (err instanceof ApiError) {
+        // 案件交付门禁：后端拒绝时给出明确原因，绝不乐观默认
+        setError(
+          err.detail === 'assessment_delivery_gate_not_satisfied'
+            ? '案件交付门禁未满足：须存在「已批准且无阻塞项」的预评估版本，才能执行正式交付。'
+            : err.message
+        )
+      } else setError('执行交付失败')
     } finally {
       setActionLoading(false)
     }
@@ -108,6 +114,9 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
   }
 
   const isDelivered = currentCase?.status === 'delivered' || !!deliveryRecord
+  // 案件交付门禁：与后端 assert_delivery_gate 同口径——仅当存在「已批准且无阻塞项」
+  // 的预评估版本（attachable=true）时才允许执行不可逆的正式交付。
+  const deliveryGateSatisfied = assessmentAttachment?.attachable === true
 
   return (
     <WorkbenchLayout
@@ -189,6 +198,19 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
               正式交付后，系统将锁定全案证据链并生成专有的防伪交付凭证。
             </p>
 
+            {/* 案件交付门禁：未满足时明确说明原因并禁用不可逆的交付动作 */}
+            {!deliveryGateSatisfied && (
+              <div className="alert alert-warning mb-md">
+                <div className="alert-content">
+                  <strong>案件交付门禁未满足</strong>：须存在「已批准且无阻塞项」的预评估版本，
+                  才能执行正式交付。
+                  {assessmentAttachment
+                    ? ` 当前最新版本（v${assessmentAttachment.version_number}，${assessmentAttachment.status_label}）未达门禁。`
+                    : ' 本案尚未创建任何预评估版本。'}
+                </div>
+              </div>
+            )}
+
             <div className="flex-stack gap-md max-w-lg">
               <div className="form-group">
                 <label className="form-label text-xs font-bold mb-xs">
@@ -206,10 +228,19 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowDeliverConfirm(true)}
-                disabled={actionLoading}
+                disabled={actionLoading || !deliveryGateSatisfied}
+                title={
+                  deliveryGateSatisfied
+                    ? undefined
+                    : '案件交付门禁未满足：须存在已批准且无阻塞项的预评估版本'
+                }
                 className="btn btn-primary btn-sm font-bold"
               >
-                {actionLoading ? '交付处理中...' : '确认正式交付客户 (Mark as Delivered)'}
+                {actionLoading
+                  ? '交付处理中...'
+                  : deliveryGateSatisfied
+                    ? '确认正式交付客户 (Mark as Delivered)'
+                    : '交付门禁未满足，暂不可交付'}
               </button>
             </div>
           </div>

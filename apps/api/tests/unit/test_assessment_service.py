@@ -793,3 +793,49 @@ async def test_get_delivery_attachment_is_none_when_no_versions() -> None:
     )
     assert attachment is None
 
+
+@pytest.mark.asyncio
+async def test_assert_delivery_gate_passes_when_approved_unblocked_exists() -> None:
+    """存在「已批准且无阻塞项」的版本时，交付门禁放行（不抛异常）。"""
+    v1 = _version_row_at(1, blockers=[])
+    v2 = _version_row_at(2, blockers=[])
+    session = FakeMultiVersionSession(
+        versions=[v1, v2],
+        decisions_by_version={
+            1: ["submitted", "approved"],
+            2: ["submitted", "approved"],
+        },
+    )
+    # 不抛异常即通过
+    await _service().assert_delivery_gate(
+        session, organization_id=uuid4(), case_id=uuid4()
+    )
+
+
+@pytest.mark.asyncio
+async def test_assert_delivery_gate_raises_when_only_blocked_approved() -> None:
+    """仅有「已批准但带阻塞项」的版本时，门禁拒绝（409）。"""
+    v1 = _version_row_at(1, blockers=["引证未定位：D1/F2"])
+    session = FakeMultiVersionSession(
+        versions=[v1],
+        decisions_by_version={1: ["submitted", "approved"]},
+    )
+    with pytest.raises(HTTPException) as exc:
+        await _service().assert_delivery_gate(
+            session, organization_id=uuid4(), case_id=uuid4()
+        )
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "assessment_delivery_gate_not_satisfied"
+
+
+@pytest.mark.asyncio
+async def test_assert_delivery_gate_raises_when_no_versions() -> None:
+    """案件没有任何评估版本时，门禁拒绝（409），绝不乐观默认。"""
+    session = FakeMultiVersionSession(versions=[], decisions_by_version={})
+    with pytest.raises(HTTPException) as exc:
+        await _service().assert_delivery_gate(
+            session, organization_id=uuid4(), case_id=uuid4()
+        )
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "assessment_delivery_gate_not_satisfied"
+

@@ -225,6 +225,8 @@ def create_app(
         create_review_router(
             organization_access,
             ReviewService(resolved_clock),
+            # 案件交付门禁：正式交付前须存在「已批准且无阻塞项」的评估版本
+            AssessmentService(resolved_clock),
         )
     )
     application.include_router(

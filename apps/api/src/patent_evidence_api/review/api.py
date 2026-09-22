@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from patent_evidence_api.core.http import parse_json_body, parse_uuid_or_404
 from patent_evidence_api.organization.access import OrganizationAccess
+from patent_evidence_api.assessment.services import AssessmentService
 from patent_evidence_api.review.services import ReviewService
 
 
@@ -35,6 +36,7 @@ class DeliveryBody(BaseModel):
 def create_review_router(
     access: OrganizationAccess,
     review_service: ReviewService,
+    assessment_service: AssessmentService,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/organizations")
 
@@ -141,6 +143,14 @@ def create_review_router(
             action="case.delivery.deliver",
             target_type="delivery_record",
         ) as operation:
+            # 案件交付门禁：正式交付不可逆，执行前须确认存在「已批准且无阻塞项」
+            # 的预评估版本（与 report 结论门禁同口径，但落在案件级）。
+            # 不满足时拒绝并给出明确原因，绝不乐观默认。
+            await assessment_service.assert_delivery_gate(
+                operation.session,
+                organization_id=org_uuid,
+                case_id=c_uuid,
+            )
             result = await review_service.deliver_case(
                 operation.session,
                 organization_id=org_uuid,
