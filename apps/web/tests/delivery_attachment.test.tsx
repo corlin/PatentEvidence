@@ -112,6 +112,14 @@ describe('Delivery package assessment attachment', () => {
     expect(deliverBtn.disabled).toBe(false)
     // 门禁未满足的警示不出现
     expect(screen.queryByText(/案件交付门禁未满足/)).toBeNull()
+
+    // 增量 15：附件项提供可打印 HTML 下载，指向只读导出端点
+    const htmlLink = screen.getByRole('link', {
+      name: /下载可打印 HTML/,
+    }) as HTMLAnchorElement
+    expect(htmlLink.href).toContain(
+      '/api/v1/organizations/org-1/cases/case-1/assessments/2/deliverable.html'
+    )
   })
 
   it('leaves the item unchecked and explains the gate when not attachable', async () => {
@@ -145,6 +153,14 @@ describe('Delivery package assessment attachment', () => {
       name: /交付门禁未满足，暂不可交付/,
     }) as HTMLButtonElement
     expect(deliverBtn.disabled).toBe(true)
+
+    // 未达门禁只禁止「纳入交付包」，不隐藏候选打印件本身（只读且自带免责声明）
+    const htmlLink = screen.getByRole('link', {
+      name: /下载可打印 HTML/,
+    }) as HTMLAnchorElement
+    expect(htmlLink.href).toContain(
+      '/api/v1/organizations/org-1/cases/case-1/assessments/3/deliverable.html'
+    )
   })
 
   it('shows an honest empty state when no assessment version exists', async () => {
@@ -160,6 +176,8 @@ describe('Delivery package assessment attachment', () => {
       ).toBeDefined()
     })
     expect(screen.queryByRole('checkbox')).toBeNull()
+    // 无附件时同样不提供打印件下载
+    expect(screen.queryByRole('link', { name: /下载可打印 HTML/ })).toBeNull()
 
     // 没有任何评估版本同样不满足交付门禁：警示在场、交付按钮禁用
     expect(screen.getByText(/案件交付门禁未满足/)).toBeDefined()

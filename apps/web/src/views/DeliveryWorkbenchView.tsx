@@ -324,6 +324,19 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
                 </div>
               </div>
 
+              <div className="flex-row gap-sm align-center mt-sm">
+                <a
+                  className="btn btn-secondary btn-sm"
+                  href={`/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${assessmentAttachment.version_number}/deliverable.html`}
+                  download={`assessment-deliverable-v${assessmentAttachment.version_number}.html`}
+                >
+                  下载可打印 HTML（候选，非结论）
+                </a>
+                <span className="text-xs text-secondary">
+                  自包含打印件，内含候选声明、人工确认标记与版本冻结声明。
+                </span>
+              </div>
+
               <div className="alert alert-warning mt-sm">
                 <div className="alert-content text-xs">{assessmentAttachment.candidate_notice}</div>
               </div>
