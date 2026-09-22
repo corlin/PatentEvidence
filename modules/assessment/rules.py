@@ -76,7 +76,7 @@ def novelty_findings(
     """Novelty gate: a single reference covering ALL features identically.
 
     Deterministic single-reference/all-elements gate. The application keeps
-    this gate; Jev and any LLM may only supply the underlying cell judgments.
+    this gate; any model may only supply the underlying cell judgments.
     """
     if total_features <= 0:
         return []

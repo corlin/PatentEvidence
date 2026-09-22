@@ -30,6 +30,9 @@ artifacts/
 .superpowers/
 .worktrees/
 
+# Local agent session memory
+.workbuddy/
+
 # OS/editor files
 .DS_Store
 .idea/

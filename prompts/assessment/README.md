@@ -9,7 +9,9 @@ assessment results can pin the prompt that produced them.
 | --- | --- | --- |
 | `assessment/novelty` | `novelty-v1` | Novelty single-reference reasoning; supports (never overrides) the deterministic single-reference/all-elements gate in `modules/assessment/rules.py` |
 | `assessment/inventive_step` | `inventive-step-v1` | Three-step inventiveness sequence with anti-hindsight constraints; consumes `ThreeStepScaffold` |
-| `assessment/originality` | `originality-v1` | Copyright originality (独立完成 + 最低限度创造性), idea/expression dichotomy, merger/limited-expression filtering |
+
+Copyright originality (独创性) is deliberately out of this boundary — see
+`prompts/originality/` (draft, not in product scope).
 
 Rules of this boundary:
 
@@ -18,5 +20,5 @@ Rules of this boundary:
 - Prompt output is candidate reasoning only; every conclusion must cite
   verifiable source locations or be marked `insufficient_evidence`.
 - Deterministic gates (novelty single-reference, combination coverage,
-  evidence completeness) stay in `modules/assessment/rules.py`; prompts and
-  Jev signals may enrich reasoning but cannot bypass a gate.
+  evidence completeness) stay in `modules/assessment/rules.py`; prompts may
+  enrich reasoning but cannot bypass a gate.

@@ -115,7 +115,7 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run API unit tests (78/78 passed)
+# Run API unit tests (74/74 passed)
 .venv/bin/pytest apps/api/tests/unit/
 
 # Run PostgreSQL RLS integration tests (81/81 passed)
@@ -154,14 +154,11 @@ human approval remain application-controlled.
 The same boundary now extends into the pre-assessment stage
 (`modules/assessment/rules.py`, version-pinned `assessment-rules-v1`):
 novelty single-reference/all-elements and combination-coverage gates,
-evidence-completeness findings, and the three-step scaffold stay deterministic,
-while `adapters/jev/motivation.py` contributes typed combination-motivation
-signals (same field, same problem, motivation grade, technical prejudice) as
-non-authoritative metadata — `requires_human_confirmation` is always true for
-system-suggested combinations. Versioned assessment prompts
-(`prompts/assessment/`: `novelty-v1`, `inventive-step-v1`, `originality-v1`)
-pin the reviewed prompt that produced each result; `originality-v1` covers
-copyright originality (独立完成 + 最低限度创造性, idea/expression dichotomy).
+evidence-completeness findings, and the three-step scaffold are deterministic
+and application-controlled — no model or vendor call is involved. Versioned
+assessment prompts (`prompts/assessment/`: `novelty-v1`, `inventive-step-v1`)
+pin the reviewed prompt that produced each result; a copyright-originality
+draft lives separately in `prompts/originality/` and is not in product scope.
 
 ### 4. Starting the Development Stack
 

@@ -6,13 +6,13 @@ from prompts.assessment.inventive_step import (
     build_inventive_step_user_prompt,
 )
 from prompts.assessment.novelty import NOVELTY_SYSTEM_PROMPT, build_novelty_user_prompt
-from prompts.assessment.originality import ORIGINALITY_SYSTEM_PROMPT, build_originality_user_prompt
+from prompts.originality.originality import ORIGINALITY_SYSTEM_PROMPT, build_originality_user_prompt
 
 
 def test_assessment_prompts_are_version_registered() -> None:
     assert PROMPT_REGISTRY["assessment/novelty"]["version"] == "novelty-v1"
     assert PROMPT_REGISTRY["assessment/inventive_step"]["version"] == "inventive-step-v1"
-    assert PROMPT_REGISTRY["assessment/originality"]["version"] == "originality-v1"
+    assert "assessment/originality" not in PROMPT_REGISTRY  # 独创性不在专利评估边界内
 
 
 def test_novelty_prompt_enforces_single_reference_principle() -> None:
