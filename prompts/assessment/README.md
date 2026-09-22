@@ -7,7 +7,7 @@ assessment results can pin the prompt that produced them.
 
 | id | version | scope |
 | --- | --- | --- |
-| `assessment/novelty` | `novelty-v1` | Novelty single-reference reasoning; supports (never overrides) the deterministic single-reference/all-elements gate in `modules/assessment/rules.py` |
+| `assessment/novelty` | `novelty-v2` | Novelty single-reference reasoning; supports (never overrides) the deterministic single-reference/all-elements gate in `modules/assessment/rules.py` |
 | `assessment/inventive_step` | `inventive-step-v2` | Three-step inventiveness sequence with anti-hindsight constraints and the five-item motivation checklist; consumes `ThreeStepScaffold` |
 
 Copyright originality (独创性) is deliberately out of this boundary — see

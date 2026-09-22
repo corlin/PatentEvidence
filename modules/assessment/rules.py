@@ -877,3 +877,254 @@ def hindsight_risk(
         ),
         "rules_version": ASSESSMENT_RULES_VERSION,
     }
+
+
+# ---------------------------------------------------------------------------
+# 实体级新颖性细化（只出候选标记，绝不自动升级为 identical）
+# ---------------------------------------------------------------------------
+
+
+class EntityObservationEffect:
+    MAY_DEFEAT = "may_defeat_novelty"  # 候选：可能破坏新颖性，须人工确认
+    DOES_NOT_DEFEAT = "does_not_defeat_novelty"  # 候选：通常不破坏新颖性
+    UNDETERMINED = "undetermined"  # 证据不足，无法给出倾向
+
+
+@dataclass(frozen=True)
+class NumericRange:
+    """权利要求的数值范围 vs 对比文件公开的数值范围。
+
+    `disclosed_is_example` 表示对比文件公开的是实施例的具体点值而非连续范围，
+    此时即便落入权利要求范围，也不当然破坏新颖性（须人工判断是否构成选择发明）。
+    """
+
+    feature_code: str
+    doc_id: str
+    claimed_lower: float | None = None
+    claimed_upper: float | None = None
+    disclosed_lower: float | None = None
+    disclosed_upper: float | None = None
+    disclosed_is_example: bool = False
+
+
+@dataclass(frozen=True)
+class ConceptRelation:
+    """权利要求概念与对比文件公开概念的上下位关系。"""
+
+    feature_code: str
+    doc_id: str
+    claimed_concept: str = ""
+    disclosed_concept: str = ""
+    # generic_disclosed: 对比文件公开上位、权利要求为下位
+    # specific_disclosed: 对比文件公开下位、权利要求为上位
+    # synonym: 同义/惯用称谓替换
+    # unknown: 关系未定
+    relation: str = "unknown"
+
+
+@dataclass(frozen=True)
+class KnownSubstitute:
+    """惯用手段的直接置换。
+
+    `substitutability_documented` 表示是否有教科书、手册或标准等证据证明该置换
+    属于惯用手段。没有证据时不得推定为惯用手段。
+    """
+
+    feature_code: str
+    doc_id: str
+    claimed_means: str = ""
+    disclosed_means: str = ""
+    substitutability_documented: bool = False
+
+
+@dataclass(frozen=True)
+class EntityLevelObservation:
+    """一条实体级候选观察。
+
+    观察项永远不改变比对单元格的判定（identical/equivalent/different），
+    也永远不触发单篇全覆盖门禁——它只是交给代理师的候选信号。
+    """
+
+    kind: str
+    feature_code: str
+    doc_id: str
+    effect: str
+    reasoning: str
+    requires_human_confirmation: bool = True
+    rules_version: str = ASSESSMENT_RULES_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _overlaps(
+    claimed_lower: float | None,
+    claimed_upper: float | None,
+    disclosed_lower: float | None,
+    disclosed_upper: float | None,
+) -> bool | None:
+    """两区间是否重叠。任一端缺失即返回 None（信息不足）。"""
+    if None in (claimed_lower, claimed_upper, disclosed_lower, disclosed_upper):
+        return None
+    return claimed_lower <= disclosed_upper and disclosed_lower <= claimed_upper
+
+
+def observe_numeric_ranges(ranges: list[NumericRange]) -> list[EntityLevelObservation]:
+    """数值范围重叠：只标「可能破坏新颖性」的候选，绝不下结论。
+
+    数值范围重叠在新颖性判断中通常破坏新颖性，但存在选择发明、实施例点值等
+    例外，因此代码只给出候选方向，例外与否由代理师确认。
+    """
+    observations: list[EntityLevelObservation] = []
+    for item in ranges:
+        overlap = _overlaps(
+            item.claimed_lower, item.claimed_upper, item.disclosed_lower, item.disclosed_upper
+        )
+        if overlap is None:
+            observations.append(
+                EntityLevelObservation(
+                    kind="numeric_range",
+                    feature_code=item.feature_code,
+                    doc_id=item.doc_id,
+                    effect=EntityObservationEffect.UNDETERMINED,
+                    reasoning=(
+                        f"特征 {item.feature_code} 的权利要求数值范围或对比文件 {item.doc_id} "
+                        "的公开范围不完整，无法判断区间关系，证据不足。"
+                    ),
+                )
+            )
+            continue
+        if not overlap:
+            observations.append(
+                EntityLevelObservation(
+                    kind="numeric_range",
+                    feature_code=item.feature_code,
+                    doc_id=item.doc_id,
+                    effect=EntityObservationEffect.DOES_NOT_DEFEAT,
+                    reasoning=(
+                        f"对比文件 {item.doc_id} 公开的数值范围与特征 {item.feature_code} "
+                        "的权利要求范围不相交，通常不破坏新颖性；"
+                        "是否构成选择发明须人工确认。"
+                    ),
+                )
+            )
+            continue
+        example_note = (
+            "对比文件公开的为实施例点值而非连续范围，可能不构成范围公开；"
+            if item.disclosed_is_example
+            else ""
+        )
+        observations.append(
+            EntityLevelObservation(
+                kind="numeric_range",
+                feature_code=item.feature_code,
+                doc_id=item.doc_id,
+                effect=EntityObservationEffect.MAY_DEFEAT,
+                reasoning=(
+                    f"对比文件 {item.doc_id} 公开的数值范围与特征 {item.feature_code} "
+                    f"的权利要求范围重叠，存在破坏新颖性的候选风险；{example_note}"
+                    "是否属于选择发明或端点例外须人工确认，系统不作认定。"
+                ),
+            )
+        )
+    return observations
+
+
+def observe_concept_relations(relations: list[ConceptRelation]) -> list[EntityLevelObservation]:
+    """上位/下位概念：方向敏感。上位公开不破坏下位，下位公开破坏上位。"""
+    observations: list[EntityLevelObservation] = []
+    for item in relations:
+        if item.relation == "generic_disclosed":
+            observations.append(
+                EntityLevelObservation(
+                    kind="concept_generality",
+                    feature_code=item.feature_code,
+                    doc_id=item.doc_id,
+                    effect=EntityObservationEffect.DOES_NOT_DEFEAT,
+                    reasoning=(
+                        f"对比文件 {item.doc_id} 公开的是上位概念「{item.disclosed_concept}」，"
+                        f"权利要求为下位概念「{item.claimed_concept}」；"
+                        "上位概念的公开通常不破坏下位概念特征的新颖性（须人工确认）。"
+                    ),
+                )
+            )
+        elif item.relation == "specific_disclosed":
+            observations.append(
+                EntityLevelObservation(
+                    kind="concept_generality",
+                    feature_code=item.feature_code,
+                    doc_id=item.doc_id,
+                    effect=EntityObservationEffect.MAY_DEFEAT,
+                    reasoning=(
+                        f"对比文件 {item.doc_id} 公开的是下位概念「{item.disclosed_concept}」，"
+                        f"权利要求为上位概括「{item.claimed_concept}」；"
+                        "下位公开通常破坏上位概括的新颖性，但须人工确认该下位是否确实落入上位范围。"
+                    ),
+                )
+            )
+        else:
+            observations.append(
+                EntityLevelObservation(
+                    kind="concept_generality",
+                    feature_code=item.feature_code,
+                    doc_id=item.doc_id,
+                    effect=EntityObservationEffect.UNDETERMINED,
+                    reasoning=(
+                        f"特征 {item.feature_code} 与对比文件 {item.doc_id} 的概念关系未定"
+                        f"「{item.claimed_concept}」vs「{item.disclosed_concept}」，"
+                        "无法判断上下位，须人工确认。"
+                    ),
+                )
+            )
+    return observations
+
+
+def observe_known_substitutes(substitutes: list[KnownSubstitute]) -> list[EntityLevelObservation]:
+    """惯用手段的直接置换：只有在有文献证据证明属惯用手段时才给候选倾向。"""
+    observations: list[EntityLevelObservation] = []
+    for item in substitutes:
+        if item.substitutability_documented:
+            observations.append(
+                EntityLevelObservation(
+                    kind="known_substitute",
+                    feature_code=item.feature_code,
+                    doc_id=item.doc_id,
+                    effect=EntityObservationEffect.MAY_DEFEAT,
+                    reasoning=(
+                        f"对比文件 {item.doc_id} 公开「{item.disclosed_means}」，"
+                        f"权利要求为「{item.claimed_means}」，已有证据证明属惯用手段的直接置换；"
+                        "依审查指南该类替换可能破坏新颖性，但须人工确认证据是否充分。"
+                    ),
+                )
+            )
+        else:
+            observations.append(
+                EntityLevelObservation(
+                    kind="known_substitute",
+                    feature_code=item.feature_code,
+                    doc_id=item.doc_id,
+                    effect=EntityObservationEffect.UNDETERMINED,
+                    reasoning=(
+                        f"对比文件 {item.doc_id} 公开「{item.disclosed_means}」，"
+                        f"权利要求为「{item.claimed_means}」，但无教科书/手册/标准等证据证明"
+                        "二者属惯用手段的直接置换；不得推定为惯用手段，须人工补充证据。"
+                    ),
+                )
+            )
+    return observations
+
+
+def entity_level_observations(
+    ranges: list[NumericRange] | None = None,
+    relations: list[ConceptRelation] | None = None,
+    substitutes: list[KnownSubstitute] | None = None,
+) -> list[EntityLevelObservation]:
+    """汇总三类实体级候选观察项。
+
+    这些观察项不改变任何比对单元格的判定，也不触发单篇全覆盖门禁。
+    """
+    observations: list[EntityLevelObservation] = []
+    observations.extend(observe_numeric_ranges(ranges or []))
+    observations.extend(observe_concept_relations(relations or []))
+    observations.extend(observe_known_substitutes(substitutes or []))
+    return observations

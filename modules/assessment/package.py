@@ -18,17 +18,22 @@ from modules.assessment.rules import (
     AssessmentFinding,
     AuxiliaryFactor,
     CandidateDocument,
+    ConceptRelation,
     DataSourceRun,
+    EntityLevelObservation,
     EvidenceCitation,
     EvidenceCompleteness,
     FeatureComparisonRow,
+    KnownSubstitute,
     MotivationChecklist,
+    NumericRange,
     PriorityVerification,
     SubjectApplication,
     ThreeStepScaffold,
     assess_evidence_completeness,
     classify_all_references,
     combination_findings,
+    entity_level_observations,
     evaluate_auxiliary_factors,
     hindsight_risk,
     motivation_checklist_state,
@@ -53,6 +58,9 @@ class AssessmentInput:
     auxiliary_factors: list[AuxiliaryFactor] = field(default_factory=list)
     actual_technical_problem: str = ""
     distinguishing_feature_statements: list[str] = field(default_factory=list)
+    numeric_ranges: list[NumericRange] = field(default_factory=list)
+    concept_relations: list[ConceptRelation] = field(default_factory=list)
+    known_substitutes: list[KnownSubstitute] = field(default_factory=list)
 
 
 @dataclass
@@ -60,6 +68,7 @@ class AssessmentPackage:
     rules_version: str
     reference_kinds: dict[str, str]
     priority: PriorityVerification | None
+    entity_observations: list[EntityLevelObservation]
     findings: list[AssessmentFinding]
     three_step: ThreeStepScaffold | None
     motivation: dict[str, Any] | None
@@ -76,6 +85,7 @@ class AssessmentPackage:
             "rules_version": self.rules_version,
             "reference_kinds": self.reference_kinds,
             "priority": self.priority.to_dict() if self.priority else None,
+            "entity_observations": [item.to_dict() for item in self.entity_observations],
             "findings": [finding.to_dict() for finding in self.findings],
             "three_step": self.three_step.to_dict() if self.three_step else None,
             "motivation": self.motivation,
@@ -133,6 +143,14 @@ def assess_case(payload: AssessmentInput) -> AssessmentPackage:
         )
         hindsight = hindsight_risk(payload.actual_technical_problem, statements)
 
+    # 实体级观察项在门禁之后计算：它们只是候选信号，绝不回写比对单元格的判定，
+    # 也绝不参与 novelty_findings / combination_findings 的触发。
+    entity_observations_list = entity_level_observations(
+        ranges=payload.numeric_ranges,
+        relations=payload.concept_relations,
+        substitutes=payload.known_substitutes,
+    )
+
     evidence = assess_evidence_completeness(
         payload.rows,
         total_features,
@@ -164,6 +182,13 @@ def assess_case(payload: AssessmentInput) -> AssessmentPackage:
         flags.append("实际解决的技术问题疑似复述区别特征，存在事后诸葛亮风险")
     if any(finding.risk_kind == "inventive_combination" for finding in findings):
         flags.append("存在系统建议的文献组合，结合动机必须由代理师人工确认")
+    if any(item.effect == "may_defeat_novelty" for item in entity_observations_list):
+        flags.append(
+            "存在实体级候选观察项提示可能破坏新颖性（数值范围重叠 / 下位公开 / 惯用手段置换），"
+            "仅作候选信号，不改变比对判定，须代理师逐项确认"
+        )
+    if any(item.effect == "undetermined" for item in entity_observations_list):
+        flags.append("存在实体级观察项因证据不足无法给出倾向，须补充证据后重新判断")
 
     requires_human_confirmation = (
         any(finding.requires_human_confirmation for finding in findings) or bool(blockers) or bool(flags)
@@ -173,6 +198,7 @@ def assess_case(payload: AssessmentInput) -> AssessmentPackage:
         rules_version=ASSESSMENT_RULES_VERSION,
         reference_kinds=reference_kinds,
         priority=priority,
+        entity_observations=entity_observations_list,
         findings=findings,
         three_step=scaffold,
         motivation=motivation,

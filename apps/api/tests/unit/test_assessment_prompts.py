@@ -10,7 +10,7 @@ from prompts.originality.originality import ORIGINALITY_SYSTEM_PROMPT, build_ori
 
 
 def test_assessment_prompts_are_version_registered() -> None:
-    assert PROMPT_REGISTRY["assessment/novelty"]["version"] == "novelty-v1"
+    assert PROMPT_REGISTRY["assessment/novelty"]["version"] == "novelty-v2"
     assert PROMPT_REGISTRY["assessment/inventive_step"]["version"] == "inventive-step-v2"
     assert "assessment/originality" not in PROMPT_REGISTRY  # 独创性不在专利评估边界内
 
@@ -31,6 +31,32 @@ def test_novelty_prompt_enforces_single_reference_principle() -> None:
     assert "CN117283912A" in user_prompt
     assert "低位宽映射" in user_prompt
     assert "【0012】" not in user_prompt  # raw location text passes through unchanged
+
+
+def test_novelty_prompt_covers_entity_level_exceptions_and_direction() -> None:
+    assert "选择发明" in NOVELTY_SYSTEM_PROMPT
+    assert "实施例" in NOVELTY_SYSTEM_PROMPT
+    assert "上位概念" in NOVELTY_SYSTEM_PROMPT
+    assert "惯用手段" in NOVELTY_SYSTEM_PROMPT
+    assert "不得推定" in NOVELTY_SYSTEM_PROMPT
+
+    user_prompt = build_novelty_user_prompt(
+        "测试量化专利",
+        doc_id="D1",
+        publication_number="CN117283912A",
+        feature_rows=[{"feature_code": "F1", "judgment": "different", "citation_location": "[0012]", "citation_quote": "8bit"}],
+        entity_observations=[
+            {
+                "kind": "numeric_range",
+                "feature_code": "F1",
+                "doc_id": "D1",
+                "effect": "may_defeat_novelty",
+                "reasoning": "公开范围 4-12 与权利要求 8-16 重叠",
+            }
+        ],
+    )
+    assert "公开范围 4-12 与权利要求 8-16 重叠" in user_prompt
+    assert "仅候选" in user_prompt
 
 
 def test_inventive_step_prompt_keeps_three_step_order_and_hindsight_ban() -> None:

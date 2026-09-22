@@ -17,7 +17,9 @@ Deterministic pre-assessment rules and combination-motivation screening
     `MotivationChecklist` for step 3 (completeness validation only),
     auxiliary factors with evidence requirements, a hindsight smell check, and
     `assess_evidence_completeness` (来源覆盖率 / 引证定位 / 引用逐字核验 /
-    数据源失败 / 法律状态时点). No model calls, no vendor integration.
+    数据源失败 / 法律状态时点), and entity-level novelty observations
+    (`entity_level_observations`: 数值范围重叠 / 上位下位概括 / 惯用手段置换).
+    No model calls, no vendor integration.
 
 Evidence completeness distinguishes blocking gaps from flags: 引证未定位、
 引用未逐字核验、数据源失败 are blocking (禁止输出结论); 摘要级引用、
@@ -34,6 +36,17 @@ Priority is upstream of the date gate: a wrong reference date invalidates every
 downstream novelty and inventive-step judgment, so invalid or unverified
 priority claims surface as `priority_verification` findings rather than being
 silently absorbed into a single date.
+
+### Entity-level observations never change a judgment
+
+`entity_level_observations` produces `EntityLevelObservation` candidates with
+`effect = may_defeat_novelty | does_not_defeat_novelty | undetermined`, and
+`requires_human_confirmation` is always True. They are computed *after* the
+gates and never write back into the comparison cells, so they can neither
+upgrade a `different` cell to `identical` nor trigger the single-reference
+novelty gate. Numerical range overlap stays a candidate precisely because 选择发明
+and 实施例点值 are exceptions only a human can confirm; an undocumented
+substitute is never presumed to be a 惯用手段.
 
 Nothing here emits a patentability conclusion: outputs are candidate findings
 that a patent agent must confirm and a reviewer must approve.
