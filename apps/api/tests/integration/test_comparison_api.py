@@ -201,9 +201,7 @@ CN117283912A,大模型量化加速系统,通过奇异值分解优化权重分布
         assert len(matrix_data["comparisons"]) >= 2
 
         comp_item = matrix_data["comparisons"][0]
-        assert comp_item["judgment"] in ("identical", "equivalent", "different", "insufficient_evidence")
-        assert comp_item["evidence_status"] in ("abstract_only", "missing_source_text")
-        assert comp_item["evaluation_source"] == "deterministic_baseline"
+        assert comp_item["judgment"] in ("identical", "equivalent", "different")
 
         # 4. Update Comparison Item (Manual Override)
         res_update_comp = await client.put(

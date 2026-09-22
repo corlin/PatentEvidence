@@ -10,8 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adapters.jev.client import JevInventivenessClient
-from modules.comparison.engine import JevClient, RuleComparisonEngine, compare_feature_with_ai
+from modules.comparison.engine import RuleComparisonEngine, compare_feature_with_ai
 from modules.comparison.evaluator import MatrixEvaluator
 
 Clock = Callable[[], datetime]
@@ -22,11 +21,10 @@ def default_clock() -> datetime:
 
 
 class ComparisonMatrixService:
-    def __init__(self, clock: Clock = default_clock, jev_client: JevClient | None = None) -> None:
+    def __init__(self, clock: Clock = default_clock) -> None:
         self.clock = clock
         self.engine = RuleComparisonEngine()
         self.evaluator = MatrixEvaluator()
-        self.jev_client = jev_client or JevInventivenessClient()
 
     async def generate_or_rebuild_matrix(
         self,
@@ -121,35 +119,22 @@ class ComparisonMatrixService:
                     candidate_pub_no=cand["publication_number"],
                     candidate_title=cand["title"],
                     candidate_abstract=cand["abstract"],
-                    candidate_chunks=(
-                        [{"id": "abstract", "text": cand["abstract"]}]
-                        if cand["abstract"]
-                        else []
-                    ),
-                    jev_client=self.jev_client,
                 )
                 comp_id = uuid4()
                 await session.execute(
                     text(
                         """INSERT INTO claim_feature_comparisons
                         (id, organization_id, case_id, matrix_id, claim_feature_id, candidate_id,
-                         judgment, confidence_score, citation_location, citation_quote, reasoning_analysis,
-                         evidence_status, evaluation_source, evaluation_metadata,
-                         is_manually_edited, created_at, updated_at)
+                         judgment, confidence_score, citation_location, citation_quote, reasoning_analysis, is_manually_edited, created_at, updated_at)
                         VALUES
                         (:id, :org_id, :case_id, :matrix_id, :feat_id, :cand_id,
-                         :judgment, :score, :loc, :quote, :reasoning,
-                         :evidence_status, :evaluation_source, CAST(:evaluation_metadata AS jsonb),
-                         false, :now, :now)
+                         :judgment, :score, :loc, :quote, :reasoning, false, :now, :now)
                         ON CONFLICT (matrix_id, claim_feature_id, candidate_id)
                         DO UPDATE SET judgment = EXCLUDED.judgment,
                                       confidence_score = EXCLUDED.confidence_score,
                                       citation_location = EXCLUDED.citation_location,
                                       citation_quote = EXCLUDED.citation_quote,
                                       reasoning_analysis = EXCLUDED.reasoning_analysis,
-                                      evidence_status = EXCLUDED.evidence_status,
-                                      evaluation_source = EXCLUDED.evaluation_source,
-                                      evaluation_metadata = EXCLUDED.evaluation_metadata,
                                       updated_at = EXCLUDED.updated_at
                         WHERE claim_feature_comparisons.is_manually_edited = false"""
                     ),
@@ -165,9 +150,6 @@ class ComparisonMatrixService:
                         "loc": comp_res.citation_location,
                         "quote": comp_res.citation_quote,
                         "reasoning": comp_res.reasoning_analysis,
-                        "evidence_status": comp_res.evidence_status,
-                        "evaluation_source": comp_res.evaluation_source,
-                        "evaluation_metadata": json.dumps(comp_res.evaluation_metadata, ensure_ascii=False),
                         "now": now,
                     },
                 )
@@ -177,9 +159,6 @@ class ComparisonMatrixService:
                         "claim_feature_id": str(feat["id"]),
                         "candidate_id": str(cand["id"]),
                         "judgment": comp_res.judgment,
-                        "evidence_status": comp_res.evidence_status,
-                        "evaluation_source": comp_res.evaluation_source,
-                        "evaluation_metadata": comp_res.evaluation_metadata,
                     }
                 )
 
@@ -245,8 +224,7 @@ class ComparisonMatrixService:
             text(
                 """SELECT comp.id, comp.matrix_id, comp.claim_feature_id, comp.candidate_id,
                           comp.judgment, comp.confidence_score, comp.citation_location, comp.citation_quote,
-                          comp.reasoning_analysis, comp.evidence_status, comp.evaluation_source,
-                          comp.evaluation_metadata, comp.is_manually_edited, comp.created_at, comp.updated_at,
+                          comp.reasoning_analysis, comp.is_manually_edited, comp.created_at, comp.updated_at,
                           cand.publication_number, cand.title, cand.applicant, cand.publication_date
                 FROM claim_feature_comparisons comp
                 JOIN search_candidates cand ON comp.candidate_id = cand.id
@@ -280,13 +258,6 @@ class ComparisonMatrixService:
                     "citation_location": r.citation_location,
                     "citation_quote": r.citation_quote,
                     "reasoning_analysis": r.reasoning_analysis,
-                    "evidence_status": r.evidence_status,
-                    "evaluation_source": r.evaluation_source,
-                    "evaluation_metadata": (
-                        json.loads(r.evaluation_metadata)
-                        if isinstance(r.evaluation_metadata, str)
-                        else (r.evaluation_metadata or {})
-                    ),
                     "is_manually_edited": r.is_manually_edited,
                     "created_at": r.created_at.isoformat(),
                     "updated_at": r.updated_at.isoformat(),
@@ -347,7 +318,7 @@ class ComparisonMatrixService:
         params: dict[str, Any] = {"id": comparison_id, "org_id": organization_id, "now": now}
 
         if judgment is not None:
-            if judgment not in ("identical", "equivalent", "different", "insufficient_evidence"):
+            if judgment not in ("identical", "equivalent", "different"):
                 raise HTTPException(status_code=422, detail="invalid_judgment_value")
             updates.append("judgment = :judgment")
             params["judgment"] = judgment

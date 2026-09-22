@@ -219,7 +219,7 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
               className={`card p-md border-l-4 ${
                 matrixData.evaluation.risk_level === 'high_novelty_risk'
                   ? 'border-red-500 bg-red-50'
-                  : matrixData.evaluation.risk_level === 'human_review_required'
+                  : matrixData.evaluation.risk_level === 'inventiveness_risk'
                   ? 'border-yellow-500 bg-yellow-50'
                   : 'border-green-500 bg-green-50'
               }`}
@@ -230,15 +230,15 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                     className={`badge font-bold text-xs ${
                       matrixData.evaluation.risk_level === 'high_novelty_risk'
                         ? 'badge-danger'
-                        : matrixData.evaluation.risk_level === 'human_review_required'
+                        : matrixData.evaluation.risk_level === 'inventiveness_risk'
                         ? 'badge-warning'
                         : 'badge-success'
                     }`}
                   >
                     {matrixData.evaluation.risk_level === 'high_novelty_risk'
                       ? '新颖性高风险预警'
-                      : matrixData.evaluation.risk_level === 'human_review_required'
-                      ? '证据不足 · 需人工复核'
+                      : matrixData.evaluation.risk_level === 'inventiveness_risk'
+                      ? '创造性审查重点关注'
                       : '✓ 良好授权前景'}
                   </span>
                   <span className="text-xs text-secondary font-medium">
@@ -260,28 +260,6 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
               <p className="text-xs font-semibold text-text mt-xs leading-relaxed">
                 {matrixData.evaluation.summary}
               </p>
-              {matrixData.evaluation.three_step_analysis && (
-                <div className="grid-3-cols gap-sm mt-md text-xs">
-                  <div className="p-sm bg-surface border rounded">
-                    <strong>步骤 1 · 最接近现有技术</strong>
-                    <div className="mt-xs font-mono">
-                      {matrixData.evaluation.three_step_analysis.step_1_closest_prior_art.publication_number}
-                    </div>
-                  </div>
-                  <div className="p-sm bg-surface border rounded">
-                    <strong>步骤 2 · 区别特征</strong>
-                    <div className="mt-xs">
-                      {matrixData.evaluation.three_step_analysis.step_2_distinguishing_features.length > 0
-                        ? matrixData.evaluation.three_step_analysis.step_2_distinguishing_features.join('、')
-                        : '未识别到已核验区别特征'}
-                    </div>
-                  </div>
-                  <div className="p-sm bg-surface border rounded">
-                    <strong>步骤 3 · 技术启示与效果</strong>
-                    <div className="mt-xs">尚未评估，需专家确认</div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* 2D Comparison Matrix */}
@@ -375,8 +353,6 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                                 ? 'border-red-300 bg-red-50'
                                 : edit.judgment === 'equivalent'
                                 ? 'border-yellow-300 bg-yellow-50'
-                                : edit.judgment === 'insufficient_evidence'
-                                ? 'border-yellow-300 bg-yellow-50'
                                 : 'border-green-300 bg-green-50'
                             }`}
                             role="region"
@@ -390,12 +366,6 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                                 </span>
                                 {edit.is_manually_edited && (
                                   <span className="badge badge-warning text-xs">已人工修订</span>
-                                )}
-                                <span className={`badge text-xs ${comp.evidence_status === 'verified' ? 'badge-success' : 'badge-warning'}`}>
-                                  {comp.evidence_status === 'verified' ? '原文已核验' : '证据待补充'}
-                                </span>
-                                {comp.evaluation_source === 'jev_live' && (
-                                  <span className="badge badge-primary text-xs">Jev 概率判断</span>
                                 )}
                               </div>
 
@@ -413,10 +383,9 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                                     })
                                   }
                                 >
-                                  <option value="identical">相同 (完全公开)</option>
-                                  <option value="equivalent">等同 (手段替换)</option>
-                                  <option value="different">差异 (未公开)</option>
-                                  <option value="insufficient_evidence">证据不足 (转人工复核)</option>
+                                  <option value="identical"><Icon name="x-circle" size={12} color="#dc2626" /> 相同 (完全公开)</option>
+                                  <option value="equivalent"><Icon name="warning" size={12} color="#d97706" /> 等同 (手段替换)</option>
+                                  <option value="different"><Icon name="check-circle" size={12} color="#16a34a" /> 差异 (未公开)</option>
                                 </select>
                               ) : (
                                 <span
@@ -425,8 +394,6 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                                       ? 'badge-danger'
                                       : comp.judgment === 'equivalent'
                                       ? 'badge-warning'
-                                      : comp.judgment === 'insufficient_evidence'
-                                      ? 'badge-warning'
                                       : 'badge-success'
                                   }`}
                                 >
@@ -434,23 +401,10 @@ export const ComparisonWorkbenchView: React.FC<ComparisonWorkbenchViewProps> = (
                                     ? '相同公开'
                                     : comp.judgment === 'equivalent'
                                     ? '等同替代'
-                                    : comp.judgment === 'insufficient_evidence'
-                                    ? '证据不足'
                                     : '存在差异'}
                                 </span>
                               )}
                             </div>
-
-                            {comp.evaluation_source === 'jev_live' && (
-                              <div className="p-sm bg-subtle border rounded text-xs">
-                                <strong>Jev 运行证据</strong>
-                                <div className="mt-xs font-mono">
-                                  模型 {String(comp.evaluation_metadata.model_id || 'unknown')} ·
-                                  题集 {String(comp.evaluation_metadata.question_set_version || 'unknown')} ·
-                                  耗时 {String(comp.evaluation_metadata.latency_ms || 0)} ms
-                                </div>
-                              </div>
-                            )}
 
                             {/* Citation Location */}
                             <div className="form-group">

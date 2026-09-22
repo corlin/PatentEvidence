@@ -43,7 +43,7 @@ def build_inventive_step_user_prompt(
     features_text = "\n".join(f"- {code}" for code in distinguishing_features) or "- （无区别特征：全部特征被最接近现有技术相同公开，进入新颖性门禁）"
     signals_text = ""
     if motivation_signals:
-        signals_text = "\n【Jev 组合动机候选信号（仅参考，须人工确认）】\n" + "\n".join(
+        signals_text = "\n【组合动机候选信号（仅参考，须人工确认）】\n" + "\n".join(
             f"- {name}: {value:.2f}" for name, value in sorted(motivation_signals.items())
         )
     return f"""案件名称：{title}

@@ -55,7 +55,7 @@ def test_inventive_step_prompt_without_signals_has_no_signal_block() -> None:
     user_prompt = build_inventive_step_user_prompt(
         "测试", closest_prior_art_doc="D1", closest_prior_art_identical_count=3, distinguishing_features=[]
     )
-    assert "Jev 组合动机候选信号" not in user_prompt
+    assert "组合动机候选信号" not in user_prompt
     assert "新颖性门禁" in user_prompt
 
 

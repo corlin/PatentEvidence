@@ -27,16 +27,6 @@ const mockMatrixData: ComparisonMatrixDetail = {
     partial_risk_candidates: [],
     total_features_count: 1,
     total_candidates_count: 1,
-    covered_features_count: 1,
-    three_step_analysis: {
-      step_1_closest_prior_art: {
-        candidate_id: 'cand-1',
-        publication_number: 'CN117283912A',
-        verified_covered_features: 1,
-      },
-      step_2_distinguishing_features: [],
-      step_3_motivation_and_effect: 'not_assessed',
-    },
   },
   features: [
     {
@@ -68,13 +58,6 @@ const mockMatrixData: ComparisonMatrixDetail = {
       citation_location: '说明书第[0025]段',
       citation_quote: '本发明公开了一种面向大语言模型的低位宽混合精度量化加速架构...',
       reasoning_analysis: '对比文献在说明书中直接公开了该特征的全部技术手段。',
-      evidence_status: 'verified',
-      evaluation_source: 'jev_live',
-      evaluation_metadata: {
-        model_id: 'jev-1.13.0',
-        question_set_version: 'patent-feature-disclosure-v1',
-        latency_ms: 137,
-      },
       is_manually_edited: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -108,9 +91,6 @@ describe('Comparison Matrix Web Surface', () => {
       expect(screen.getByText('新颖性高风险预警')).toBeDefined()
       expect(screen.getByText('F1')).toBeDefined()
       expect(screen.getByText(/D1: CN117283912A/)).toBeDefined()
-      expect(screen.getByText('Jev 概率判断')).toBeDefined()
-      expect(screen.getByText('步骤 1 · 最接近现有技术')).toBeDefined()
-      expect(screen.getByText(/模型 jev-1.13.0/)).toBeDefined()
       expect(screen.getByRole('button', { name: '✓ 锁定确认比对表' })).toBeDefined()
     })
   })

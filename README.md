@@ -42,7 +42,12 @@ graph LR
    - 三态侵权判定（`相同公开` / `等同替代` / `存在差异`）、引证位置与法律论据结构化录入；
    - 特征文本附图标注智能匹配，全局新颖性与创造性风险 Banner 实时评估。
 
-6. **证据链哈希封存与预评估报告（Merkle Root SHA-256 & Reports）**
+6. **可专利性预评估规则层（Patentability Pre-Assessment Rules）**
+   - 确定性门禁（版本 `assessment-rules-v1`）：新颖性单篇全覆盖门禁、组合覆盖筛查、证据完备度核查与创造性三步法脚手架；全部由应用代码控制，不含模型或厂商调用；
+   - 版本化评估提示词（`prompts/assessment/`：`novelty-v1` 单独对比原则、`inventive-step-v1` 三步法与反事后诸葛亮约束），结论可回溯具体提示词版本；
+   - 输出仅为候选判断：系统建议的组合恒需人工确认，最终结论由代理师提交、复核人批准。
+
+7. **证据链哈希封存与预评估报告（Merkle Root SHA-256 & Reports）**
    - 全案多源证据 Merkle Root SHA-256 不可变防伪根哈希计算与快照封存；
    - 结构化富文本 Markdown 分析与预评估报告在线生成与预览。
    - 图纸、文档与报告原件统一存放于 MinIO 对象存储，内容寻址并绑定内容哈希，与数据库中的证据记录形成可交叉核验的完整证据链。
@@ -115,7 +120,7 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run API unit tests (74/74 passed)
+# Run API unit tests (71/71 passed)
 .venv/bin/pytest apps/api/tests/unit/
 
 # Run PostgreSQL RLS integration tests (81/81 passed)
@@ -136,29 +141,6 @@ pnpm build:web
 # Verify Docker Compose configuration
 docker compose config > /dev/null
 ```
-
-### Optional Jev evidence judgments
-
-Set `PATENT_EVIDENCE_JEV_API_KEY` only in the server environment to enable
-TypeSafe/Jev judgments in the claim-comparison workflow. The default model alias
-is `jev-latest`; override it with `PATENT_EVIDENCE_JEV_MODEL` when a validated,
-pinned model is required. Without a key, comparisons are explicitly labelled as
-`deterministic_baseline` and `insufficient_evidence`; the application does not
-present heuristic title/abstract matching as a live Jev result.
-
-Jev returns typed Choice, Noul, and Score probabilities. PatentEvidence keeps
-the legal workflow deterministic: exact source-anchor validation, novelty's
-single-reference/all-elements gate, the three-step inventiveness sequence, and
-human approval remain application-controlled.
-
-The same boundary now extends into the pre-assessment stage
-(`modules/assessment/rules.py`, version-pinned `assessment-rules-v1`):
-novelty single-reference/all-elements and combination-coverage gates,
-evidence-completeness findings, and the three-step scaffold are deterministic
-and application-controlled — no model or vendor call is involved. Versioned
-assessment prompts (`prompts/assessment/`: `novelty-v1`, `inventive-step-v1`)
-pin the reviewed prompt that produced each result; a copyright-originality
-draft lives separately in `prompts/originality/` and is not in product scope.
 
 ### 4. Starting the Development Stack
 

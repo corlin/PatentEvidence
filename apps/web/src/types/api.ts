@@ -310,7 +310,7 @@ export interface SearchCandidate {
 }
 
 // Comparison Matrix Types
-export type JudgmentType = 'identical' | 'equivalent' | 'different' | 'insufficient_evidence'
+export type JudgmentType = 'identical' | 'equivalent' | 'different'
 
 export interface ComparisonMatrixHeader {
   id: string
@@ -336,9 +336,6 @@ export interface ClaimFeatureComparison {
   citation_location: string | null
   citation_quote: string | null
   reasoning_analysis: string | null
-  evidence_status: 'verified' | 'abstract_only' | 'missing_source_text' | 'unverified_anchor' | 'evaluation_failed' | 'insufficient'
-  evaluation_source: 'jev_live' | 'jev_error' | 'jev_not_run' | 'deterministic_baseline' | 'legacy'
-  evaluation_metadata: Record<string, unknown>
   is_manually_edited: boolean
   created_at: string
   updated_at: string
@@ -351,16 +348,6 @@ export interface MatrixEvaluation {
   partial_risk_candidates: string[]
   total_features_count: number
   total_candidates_count: number
-  covered_features_count: number
-  three_step_analysis: {
-    step_1_closest_prior_art: {
-      candidate_id: string
-      publication_number: string
-      verified_covered_features: number
-    }
-    step_2_distinguishing_features: string[]
-    step_3_motivation_and_effect: 'not_assessed'
-  } | null
 }
 
 export interface ComparisonMatrixDetail {
@@ -452,5 +439,7 @@ export interface DeliveryRecord {
   report_title?: string | null
   delivered_at: string
 }
+
+
 
 
