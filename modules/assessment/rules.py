@@ -305,6 +305,140 @@ def evidence_completeness_finding(
     )
 
 
+ABSTRACT_ONLY_LOCATIONS = {"摘要", "abstract", "abstract_only", "书目信息"}
+
+
+@dataclass(frozen=True)
+class EvidenceCitation:
+    """One matrix cell's source layer: 原文引文 + 可定位位置 + 逐字核验状态."""
+
+    doc_id: str
+    feature_code: str
+    location: str = ""  # 页码 / 段落 / 权利要求定位 / URL
+    quote: str = ""  # 原文引文
+    verified: bool = False  # 引文能在输入原文块中逐字定位
+
+    def anchor(self) -> str:
+        return f"{self.doc_id}/{self.feature_code}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class DataSourceRun:
+    """One search adapter run: EPO / USPTO / CNIPR 等。"""
+
+    name: str
+    status: str  # ok | partial | failed
+    as_of: date | None = None  # 数据快照时点
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class EvidenceCompleteness:
+    """Spec 6.6 证据完备度：来源覆盖率、未核验引用、数据源失败、法律状态时点。"""
+
+    source_coverage: float
+    verified_citations: int
+    total_citations: int
+    missing_anchors: list[str]
+    unverified_citations: list[str]
+    abstract_only_citations: list[str]
+    failed_sources: list[str]
+    partial_sources: list[str]
+    documents_without_legal_status_timepoint: list[str]
+    blocking_gaps: list[str]
+    flags: list[str]
+    blocks_conclusion: bool
+    level: str
+    rules_version: str = ASSESSMENT_RULES_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def assess_evidence_completeness(
+    rows: list[FeatureComparisonRow],
+    total_features: int,
+    documents: list[CandidateDocument],
+    citations: list[EvidenceCitation] | None = None,
+    source_runs: list[DataSourceRun] | None = None,
+    legal_status_as_of: dict[str, date] | None = None,
+) -> EvidenceCompleteness:
+    """Fine-grained evidence completeness with hard blocking gaps.
+
+    Blocking (禁止输出结论): 引证未定位、引用未逐字核验、数据源失败。
+    法律状态时点缺失只标记不阻塞——它影响权利行使与有效性，而非可专利性
+    判断本身，且公开出版物类对比文件本无法律状态概念；是否影响本案由
+    代理师判断。摘要不能替代说明书原文，同样只标记不阻塞。
+    """
+    provided = list(citations or [])
+    verified_citations = [c for c in provided if c.verified and c.location.strip() and c.quote.strip()]
+    missing_anchors = [c.anchor() for c in provided if not c.location.strip() or not c.quote.strip()]
+    unverified_citations = [
+        c.anchor() for c in provided if not c.verified and c.location.strip() and c.quote.strip()
+    ]
+    abstract_only_citations = [
+        c.anchor() for c in provided if c.location.strip().lower() in {a.lower() for a in ABSTRACT_ONLY_LOCATIONS}
+    ]
+
+    declared_cells = len({(row.doc_id, row.feature_code) for row in rows})
+    denominator = declared_cells or len(provided) or max(total_features * len(documents), 1)
+    source_coverage = round(len(verified_citations) / denominator, 4) if denominator else 0.0
+
+    runs = list(source_runs or [])
+    failed_sources = [run.name for run in runs if run.status == "failed"]
+    partial_sources = [run.name for run in runs if run.status == "partial"]
+
+    status_as_of = legal_status_as_of or {}
+    documents_without_legal_status_timepoint = [
+        doc.doc_id for doc in documents if doc.doc_id not in status_as_of
+    ]
+
+    blocking_gaps: list[str] = []
+    flags: list[str] = []
+    if missing_anchors:
+        blocking_gaps.append(f"引证未定位（缺页码/段落/权利要求位置或原文引文）{len(missing_anchors)} 处")
+    if unverified_citations:
+        blocking_gaps.append(f"引用未逐字核验 {len(unverified_citations)} 处")
+    if failed_sources:
+        blocking_gaps.append(f"数据源失败 {'、'.join(failed_sources)}（任务为 partial_success，不得丢弃成功结果）")
+    if partial_sources:
+        flags.append(f"数据源部分成功 {'、'.join(partial_sources)}")
+    if abstract_only_citations:
+        flags.append(f"仅摘要级引用 {len(abstract_only_citations)} 处，摘要不能替代说明书原文")
+    if documents_without_legal_status_timepoint:
+        flags.append(
+            f"缺失法律状态时点 {'、'.join(documents_without_legal_status_timepoint)}"
+        )
+    missing_cells = max(total_features - len({row.feature_code for row in rows}), 0)
+    if missing_cells:
+        blocking_gaps.append(f"缺失比对单元格 {missing_cells} 项")
+    unverified_documents = [doc.doc_id for doc in documents if not doc.source_verified]
+    if unverified_documents:
+        flags.append(f"来源未核验 {'、'.join(unverified_documents)}")
+
+    level = "needs_confirmation" if (blocking_gaps or flags) else "low"
+    return EvidenceCompleteness(
+        source_coverage=source_coverage,
+        verified_citations=len(verified_citations),
+        total_citations=len(provided),
+        missing_anchors=missing_anchors,
+        unverified_citations=unverified_citations,
+        abstract_only_citations=abstract_only_citations,
+        failed_sources=failed_sources,
+        partial_sources=partial_sources,
+        documents_without_legal_status_timepoint=documents_without_legal_status_timepoint,
+        blocking_gaps=blocking_gaps,
+        flags=flags,
+        blocks_conclusion=bool(blocking_gaps),
+        level=level,
+    )
+
+
 @dataclass
 class ThreeStepScaffold:
     """Deterministic three-step scaffolding; every field is a candidate."""

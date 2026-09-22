@@ -5,6 +5,8 @@ from datetime import date
 from modules.assessment.rules import (
     AuxiliaryFactor,
     CandidateDocument,
+    DataSourceRun,
+    EvidenceCitation,
     FeatureComparisonRow,
     MotivationChecklist,
     ReferenceKind,
@@ -19,6 +21,7 @@ from modules.assessment.rules import (
     novelty_findings,
     reference_eligibility_findings,
     three_step_scaffold,
+    assess_evidence_completeness,
 )
 
 
@@ -212,3 +215,105 @@ def test_hindsight_risk_when_problem_restates_distinguishing_feature() -> None:
 
     clean = hindsight_risk("如何在不增加硬件面积的前提下降低推理功耗", ["在解码阶段采用低位宽映射"])
     assert clean["hindsight_risk"] is False
+
+
+def _rows_and_docs() -> tuple[list[FeatureComparisonRow], list[CandidateDocument]]:
+    rows = [
+        FeatureComparisonRow("F1", "D1", "identical"),
+        FeatureComparisonRow("F2", "D1", "equivalent"),
+    ]
+    documents = [CandidateDocument("D1", "CN1A", "doc one", source_verified=True)]
+    return rows, documents
+
+
+def test_evidence_completeness_passes_when_every_citation_is_located_and_verified() -> None:
+    rows, documents = _rows_and_docs()
+    result = assess_evidence_completeness(
+        rows,
+        total_features=2,
+        documents=documents,
+        citations=[
+            EvidenceCitation("D1", "F1", location="[0012]", quote="低位宽映射", verified=True),
+            EvidenceCitation("D1", "F2", location="[0015]", quote="混合精度", verified=True),
+        ],
+        source_runs=[DataSourceRun("epo", "ok"), DataSourceRun("uspto", "ok")],
+        legal_status_as_of={"D1": date(2026, 1, 5)},
+    )
+
+    assert result.level == "low"
+    assert result.blocks_conclusion is False
+    assert result.blocking_gaps == []
+    assert result.source_coverage == 1.0
+
+
+def test_missing_anchor_blocks_conclusion() -> None:
+    rows, documents = _rows_and_docs()
+    result = assess_evidence_completeness(
+        rows,
+        total_features=2,
+        documents=documents,
+        citations=[
+            EvidenceCitation("D1", "F1", location="[0012]", quote="低位宽映射", verified=True),
+            EvidenceCitation("D1", "F2", location="", quote="", verified=True),
+        ],
+    )
+
+    assert result.blocks_conclusion is True
+    assert "D1/F2" in result.missing_anchors
+    assert any("引证未定位" in gap for gap in result.blocking_gaps)
+
+
+def test_unverified_citation_blocks_conclusion() -> None:
+    rows, documents = _rows_and_docs()
+    result = assess_evidence_completeness(
+        rows,
+        total_features=2,
+        documents=documents,
+        citations=[
+            EvidenceCitation("D1", "F1", location="[0012]", quote="低位宽映射", verified=False),
+            EvidenceCitation("D1", "F2", location="[0015]", quote="混合精度", verified=True),
+        ],
+    )
+
+    assert result.blocks_conclusion is True
+    assert result.unverified_citations == ["D1/F1"]
+    assert result.source_coverage == 0.5
+
+
+def test_failed_data_source_blocks_and_partial_only_flags() -> None:
+    rows, documents = _rows_and_docs()
+    result = assess_evidence_completeness(
+        rows,
+        total_features=2,
+        documents=documents,
+        citations=[
+            EvidenceCitation("D1", "F1", location="[0012]", quote="低位宽映射", verified=True),
+            EvidenceCitation("D1", "F2", location="[0015]", quote="混合精度", verified=True),
+        ],
+        source_runs=[DataSourceRun("epo", "failed"), DataSourceRun("cnipr", "partial")],
+    )
+
+    assert result.failed_sources == ["epo"]
+    assert result.partial_sources == ["cnipr"]
+    assert result.blocks_conclusion is True
+    assert any("数据源失败" in gap for gap in result.blocking_gaps)
+    assert any("部分成功" in flag for flag in result.flags)
+
+
+def test_abstract_only_and_missing_legal_status_timepoint_are_flagged_not_blocking() -> None:
+    rows, documents = _rows_and_docs()
+    result = assess_evidence_completeness(
+        rows,
+        total_features=2,
+        documents=documents,
+        citations=[
+            EvidenceCitation("D1", "F1", location="摘要", quote="低位宽映射", verified=True),
+            EvidenceCitation("D1", "F2", location="[0015]", quote="混合精度", verified=True),
+        ],
+    )
+
+    assert result.abstract_only_citations == ["D1/F1"]
+    assert result.documents_without_legal_status_timepoint == ["D1"]
+    assert result.blocks_conclusion is False
+    assert any("摘要" in flag for flag in result.flags)
+    assert any("法律状态时点" in flag for flag in result.flags)
