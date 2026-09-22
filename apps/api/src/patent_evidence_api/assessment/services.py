@@ -9,7 +9,8 @@ exact package that was reviewed.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -40,8 +41,13 @@ class AssessmentService:
         case_id: UUID,
         payload: AssessmentInput,
         actor_identity_id: UUID | None = None,
+        extra_blockers: Iterable[str] = (),
     ) -> AssessmentVersionRecord:
-        """Run every gate once and freeze the resulting package as a new version."""
+        """Run every gate once and freeze the resulting package as a new version.
+
+        `extra_blockers` 用于组装层报告的源数据缺口。它们与领域层阻塞项合并
+        进记录的 blockers，但不进 payload，因此包摘要仍只覆盖领域层产物。
+        """
         await self._assert_case(session, organization_id, case_id)
 
         package: AssessmentPackage = assess_case(payload)
@@ -55,6 +61,12 @@ class AssessmentService:
             created_by_identity_id=actor_identity_id,
             created_at=self._clock(),
         )
+        merged = list(record.blockers)
+        for blocker in extra_blockers:
+            if blocker not in merged:
+                merged.append(blocker)
+        if merged != list(record.blockers):
+            record = replace(record, blockers=merged)
 
         await session.execute(
             text(

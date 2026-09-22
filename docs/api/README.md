@@ -77,3 +77,29 @@ blockers requires the reviewer to set `accepts_insufficient_evidence`
 explicitly and record a reason; the state machine rejects the transition
 otherwise, and any attempt to decide on a version already in a terminal state
 is refused — a revision is a new version number.
+
+### Assembling input from existing case data
+
+`POST .../assessments/from-case` builds the assessment input from data the
+case already holds — the confirmed comparison matrix supplies the feature
+cells and their citations, search candidates supply the documents, and search
+jobs supply the source runs — then freezes the result as a new version.
+
+Two facts cannot be inferred and must be recorded first, under
+`.../assessment-input`: the subject application's own filing date, priority
+claims and application type, and each candidate document's filing/priority
+dates plus whether its source was verified. A publication date is not a filing
+date, and a search hit is not a verified source, so neither is guessed. These
+profiles are mutable input rather than approval records; editing one can only
+affect the next version, never one already written.
+
+Assembly never fills defaults over missing data. Missing the subject filing
+date or any comparison cell refuses the request outright — a date gate with no
+baseline is meaningless, and producing a version would only mislead. Missing
+candidate dates, unverified sources and unverified citations are reported in
+`gaps` and merged into the version's blockers, where they block any
+conclusion. In particular, citations are always assembled as unverified: no
+persisted field records whether a quote was located verbatim in the source,
+and a confirmed comparison matrix means a human reviewed the chart, not that
+each quote was traced. Mapping one onto the other would overstate the
+evidence, so the gap stays visible and blocks instead.

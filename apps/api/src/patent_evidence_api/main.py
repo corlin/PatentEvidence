@@ -68,6 +68,9 @@ from patent_evidence_api.reports.services import EvidenceReportService
 from patent_evidence_api.review.api import create_review_router
 from patent_evidence_api.review.services import ReviewService
 from patent_evidence_api.assessment.api import create_assessment_router
+from patent_evidence_api.assessment.assembly import AssessmentAssemblyService
+from patent_evidence_api.assessment.input_api import create_assessment_input_router
+from patent_evidence_api.assessment.inputs import AssessmentInputService
 from patent_evidence_api.assessment.services import AssessmentService
 
 
@@ -228,6 +231,13 @@ def create_app(
         create_assessment_router(
             organization_access,
             AssessmentService(resolved_clock),
+            AssessmentAssemblyService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_assessment_input_router(
+            organization_access,
+            AssessmentInputService(resolved_clock),
         )
     )
 

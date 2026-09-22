@@ -6,12 +6,13 @@ from typing import Any, AsyncIterator
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from modules.assessment.approval import AssessmentApprovalError, AssessmentDecisionRecord
 from modules.assessment.records import AssessmentVersionRecord
 from patent_evidence_api.assessment.api import create_assessment_router
+from patent_evidence_api.assessment.assembly import AssessmentAssemblyService, AssembledAssessment
 from patent_evidence_api.assessment.schemas import (
     AssessmentCreateBody,
     DISCLAIMER,
@@ -288,3 +289,65 @@ def test_render_version_always_carries_disclaimer() -> None:
     rendered = render_version(_version(blockers=["missing_anchor"]), status="draft")
     assert rendered["disclaimer"] == DISCLAIMER
     assert rendered["blockers"] == ["missing_anchor"]
+
+
+class FakeAssemblyService(AssessmentAssemblyService):
+    def __init__(self, *, refuse: str | None = None, gaps: list[str] | None = None) -> None:
+        super().__init__(lambda: datetime(2026, 9, 22, 12, 0, tzinfo=UTC))
+        self.refuse = refuse
+        self.gaps = gaps if gaps is not None else ["对比文件 CN2A 缺申请日与优先权日"]
+        self.calls: list[dict[str, Any]] = []
+
+    async def assemble(self, session: Any, **kwargs: Any) -> AssembledAssessment:
+        self.calls.append(kwargs)
+        if self.refuse:
+            raise HTTPException(status_code=422, detail=self.refuse)
+        return AssembledAssessment(
+            payload=AssessmentCreateBody.model_validate(VALID_BODY).to_assessment_input(),
+            gaps=tuple(self.gaps),
+            source={"cell_count": 3},
+        )
+
+
+def _client_with_assembly(
+    assembly: FakeAssemblyService,
+) -> tuple[TestClient, FakeAccess, FakeService]:
+    service = FakeService()
+    access = FakeAccess()
+    app = FastAPI()
+    app.include_router(create_assessment_router(access, service, assembly))  # type: ignore[arg-type]
+    return TestClient(app, raise_server_exceptions=False), access, service
+
+
+def test_assemble_from_case_returns_version_together_with_gaps() -> None:
+    assembly = FakeAssemblyService()
+    client, access, _ = _client_with_assembly(assembly)
+    response = client.post(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/from-case", json={}
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["gaps"] == ["对比文件 CN2A 缺申请日与优先权日"]
+    assert body["source"] == {"cell_count": 3}
+    assert body["version"]["disclaimer"] == DISCLAIMER
+    assert "case.assessment.create_version_from_case" in access.actions
+
+
+def test_assemble_from_case_surfaces_source_gaps_as_422() -> None:
+    client, _, _ = _client_with_assembly(
+        FakeAssemblyService(refuse="application_profile_missing")
+    )
+    response = client.post(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/from-case", json={}
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "application_profile_missing"
+
+
+def test_assemble_route_is_absent_without_assembly_service() -> None:
+    """未配置组装服务时不暴露该路由，避免半可用端点。"""
+    app = FastAPI()
+    app.include_router(create_assessment_router(FakeAccess(), FakeService()))  # type: ignore[arg-type]
+    paths = [getattr(route, "path", "") for route in app.routes]
+    assert not any(p.endswith("/assessments/from-case") for p in paths)

@@ -373,3 +373,32 @@ async def test_current_status_is_derived_from_the_event_stream() -> None:
     assert await _service().current_status(
         session, organization_id=uuid4(), case_id=uuid4(), version_number=1
     ) == "draft"
+
+
+@pytest.mark.asyncio
+async def test_extra_blockers_merge_without_entering_the_payload() -> None:
+    """组装缺口并入记录 blockers，但不进 payload —— 包摘要仍只覆盖领域层产物。"""
+    session = FakeSession(max_version=None)
+    record = await _service().create_version(
+        session,
+        organization_id=uuid4(),
+        case_id=uuid4(),
+        payload=_input(),
+        extra_blockers=["对比文件 CN2A 缺申请日与优先权日"],
+    )
+
+    assert "对比文件 CN2A 缺申请日与优先权日" in record.blockers
+    assert record.payload["blockers"] == [] if "blockers" in record.payload else True
+
+
+@pytest.mark.asyncio
+async def test_extra_blockers_are_not_duplicated() -> None:
+    session = FakeSession(max_version=None)
+    record = await _service().create_version(
+        session,
+        organization_id=uuid4(),
+        case_id=uuid4(),
+        payload=_input(),
+        extra_blockers=["同一条缺口", "同一条缺口"],
+    )
+    assert record.blockers.count("同一条缺口") == 1

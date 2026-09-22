@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from modules.assessment.approval import AssessmentApprovalError
 from patent_evidence_api.core.http import parse_json_body, parse_uuid_or_404
 from patent_evidence_api.organization.access import OrganizationAccess
+from patent_evidence_api.assessment.assembly import AssessmentAssemblyService
 from patent_evidence_api.assessment.schemas import (
     AssessmentCreateBody,
     AssessmentDecideBody,
@@ -30,6 +31,7 @@ from patent_evidence_api.assessment.services import AssessmentService
 def create_assessment_router(
     access: OrganizationAccess,
     assessment_service: AssessmentService,
+    assembly_service: AssessmentAssemblyService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/organizations")
 
@@ -64,6 +66,50 @@ def create_assessment_router(
             return JSONResponse(
                 status_code=201,
                 content={"version": render_version(record, status="draft")},
+            )
+
+    @router.post("/{organization_id}/cases/{case_id}/assessments/from-case", status_code=201)
+    async def create_assessment_version_from_case(
+        organization_id: str, case_id: str, request: Request
+    ) -> JSONResponse:
+        """从案件既有数据组装评估输入并冻结为新版本。
+
+        源数据缺失不会被填成默认值：缺本案申请日或比对单元格时直接 422，
+        不产出版本；其余缺口记入 gaps 并合并为阻塞项。
+        """
+        if assembly_service is None:
+            raise HTTPException(status_code=501, detail="assembly_not_configured")
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.mutation(
+            request,
+            org_uuid,
+            action="case.assessment.create_version_from_case",
+            target_type="assessment_version",
+        ) as operation:
+            assembled = await assembly_service.assemble(
+                operation.session, organization_id=org_uuid, case_id=case_uuid
+            )
+            record = await assessment_service.create_version(
+                operation.session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+                payload=assembled.payload,
+                actor_identity_id=operation.principal.identity_id,
+                extra_blockers=assembled.gaps,
+            )
+            operation.describe(
+                target_id=record.id,
+                safe_summary=f"Assembled assessment version {record.version_number}",
+            )
+            return JSONResponse(
+                status_code=201,
+                content={
+                    "version": render_version(record, status="draft"),
+                    "gaps": list(assembled.gaps),
+                    "source": assembled.source,
+                },
             )
 
     @router.get("/{organization_id}/cases/{case_id}/assessments")
