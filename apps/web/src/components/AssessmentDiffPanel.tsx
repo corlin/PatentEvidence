@@ -143,6 +143,52 @@ export const AssessmentDiffPanel: React.FC<AssessmentDiffPanelProps> = ({
             )}
           </p>
 
+          {diff.inputs && (
+            <div className="text-sm mb-sm">
+              <div className="font-medium mb-sm">
+                输入档案变化（须人工判断是否导致结论变化）
+              </div>
+              {diff.inputs.application_profile.changed_fields.length > 0 && (
+                <div className="mb-sm">
+                  <div className="text-secondary">本案申请信息</div>
+                  {diff.inputs.application_profile.changed_fields.map((c, idx) => (
+                    <div key={idx} className="font-mono">
+                      {c.field}：{c.from ?? '—'} → {c.to ?? '—'}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {diff.inputs.application_profile.priority_claims.added.length > 0 && (
+                <div className="mb-sm">
+                  新增优先权主张：{diff.inputs.application_profile.priority_claims.added.join('、')}
+                </div>
+              )}
+              {diff.inputs.application_profile.priority_claims.removed.length > 0 && (
+                <div className="mb-sm">
+                  不再主张的优先权：{diff.inputs.application_profile.priority_claims.removed.join('、')}
+                </div>
+              )}
+              {diff.inputs.candidate_profiles.added.length > 0 && (
+                <div className="mb-sm">
+                  新增对比文件档案：{diff.inputs.candidate_profiles.added.join('、')}
+                </div>
+              )}
+              {diff.inputs.candidate_profiles.removed.length > 0 && (
+                <div className="mb-sm">
+                  不再出现的对比文件档案：{diff.inputs.candidate_profiles.removed.join('、')}
+                </div>
+              )}
+              {diff.inputs.candidate_profiles.changed.map((c, idx) => (
+                <div key={idx} className="mb-sm">
+                  <span className="font-mono">{c.publication_number}</span>：
+                  {c.changed_fields
+                    .map((f) => `${f.field} ${f.from ?? '—'}→${f.to ?? '—'}`)
+                    .join('；')}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="grid-3-cols text-sm mb-sm">
             <div>
               <div className="font-medium">新增阻塞项 {diff.blockers.added.length}</div>

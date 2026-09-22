@@ -565,9 +565,25 @@ export interface AssessmentVersionDiff {
   }
   priority_changed: boolean
   requires_human_confirmation: boolean
+  inputs?: AssessmentInputDiff | null
   diff_rules_version: string
   notes: string[]
   disclaimer?: string
+}
+
+export interface AssessmentInputDiff {
+  application_profile: {
+    changed_fields: Array<{ field: string; from: string | null; to: string | null }>
+    priority_claims: { added: string[]; removed: string[]; retained: string[] }
+  }
+  candidate_profiles: {
+    added: string[]
+    removed: string[]
+    changed: Array<{
+      publication_number: string
+      changed_fields: Array<{ field: string; from: unknown; to: unknown }>
+    }>
+  }
 }
 
 export interface AssessmentDecisionRecord {

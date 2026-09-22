@@ -126,6 +126,53 @@ def _three_step_delta(older: dict[str, Any] | None, newer: dict[str, Any] | None
     }
 
 
+def _pc_key(claim: dict[str, Any]) -> str:
+    return f"{claim.get('claim_id')}|{claim.get('priority_date')}|{claim.get('country')}"
+
+
+def _diff_inputs(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """对比两份输入快照，只陈述事实，不做输入→结论的因果推断。"""
+    appl_a = a.get("application_profile") or {}
+    appl_b = b.get("application_profile") or {}
+
+    appl_fields = ("filing_date", "application_type")
+    changed_fields = [
+        {"field": f, "from": appl_a.get(f), "to": appl_b.get(f)}
+        for f in appl_fields
+        if appl_a.get(f) != appl_b.get(f)
+    ]
+    priority_a = [_pc_key(c) for c in (appl_a.get("priority_claims") or [])]
+    priority_b = [_pc_key(c) for c in (appl_b.get("priority_claims") or [])]
+    priority_claims = _split_lists(priority_a, priority_b)
+
+    cand_a = {c.get("publication_number"): c for c in (a.get("candidate_profiles") or [])}
+    cand_b = {c.get("publication_number"): c for c in (b.get("candidate_profiles") or [])}
+
+    added = [cn for cn in cand_b if cn not in cand_a]
+    removed = [cn for cn in cand_a if cn not in cand_b]
+    changed = []
+    for cn in cand_b:
+        if cn in cand_a:
+            field_deltas = []
+            for f in ("filing_date", "priority_date", "filed_in_china", "source_verified"):
+                if cand_a[cn].get(f) != cand_b[cn].get(f):
+                    field_deltas.append({"field": f, "from": cand_a[cn].get(f), "to": cand_b[cn].get(f)})
+            if field_deltas:
+                changed.append({"publication_number": cn, "changed_fields": field_deltas})
+
+    return {
+        "application_profile": {
+            "changed_fields": changed_fields,
+            "priority_claims": priority_claims,
+        },
+        "candidate_profiles": {
+            "added": added,
+            "removed": removed,
+            "changed": changed,
+        },
+    }
+
+
 @dataclass(frozen=True)
 class AssessmentVersionDiff:
     """两版之间的差异。纯事实，不含因果推断，也不含结论。"""
@@ -145,6 +192,7 @@ class AssessmentVersionDiff:
     entity_observations: dict[str, list[dict[str, Any]]]
     priority_changed: bool
     requires_human_confirmation: bool
+    inputs: dict[str, Any] | None = None
     diff_rules_version: str = DIFF_RULES_VERSION
     notes: list[str] = field(default_factory=list)
 
@@ -165,6 +213,7 @@ class AssessmentVersionDiff:
             "entity_observations": self.entity_observations,
             "priority_changed": self.priority_changed,
             "requires_human_confirmation": self.requires_human_confirmation,
+            "inputs": self.inputs,
             "diff_rules_version": self.diff_rules_version,
             "notes": list(self.notes),
         }
@@ -178,10 +227,14 @@ def diff_payloads(
     to_version: int,
     from_payload_sha256: str = "",
     to_payload_sha256: str = "",
+    input_a: dict[str, Any] | None = None,
+    input_b: dict[str, Any] | None = None,
 ) -> AssessmentVersionDiff:
     """对比两个版本的 payload 字典，版本号小的作为基准。
 
-    调用方不需要关心方向：差异始终按版本号由小到大描述。
+    调用方不需要关心方向：差异始终按版本号由小到大描述。可选的 input_a/input_b
+    是两个版本冻结时的输入档案快照；两者都提供时，diff 会展示「输入改了什么」，
+    但**不做输入→结论的因果推断**；任一缺失时 inputs 为 None 并明确说明无法归因。
     """
     if from_version > to_version:
         older, newer = newer, older
@@ -199,10 +252,20 @@ def diff_payloads(
             f"两版规则版本不同（{rules_from or '—'} → {rules_to or '—'}），"
             "差异可能来自规则本身，而非案件数据变化"
         )
-    notes.append(
-        "本对比只涉及两个已冻结版本的内容，不推断输入档案的变化："
-        "档案可变且未版本化，无法忠实重建生成各版本时的输入"
-    )
+
+    if input_a is not None and input_b is not None:
+        inputs = _diff_inputs(input_a, input_b)
+        # 只陈述「输入改了什么」，绝不声称「因此结论改了」：是否相关须人工核对。
+        notes.append(
+            "两版均已保存输入快照，下列「输入变化」可能与结论变化相关，"
+            "但本工具不做自动因果判断，是否由输入变化导致须人工核对"
+        )
+    else:
+        inputs = None
+        notes.append(
+            "输入快照未参与本次对比，不对照、不推断输入档案的变化"
+            "（无法做输入→结论的归因）"
+        )
 
     blockers = _split_lists(list(older.get("blockers") or []), list(newer.get("blockers") or []))
     if blockers["removed"]:
@@ -243,6 +306,7 @@ def diff_payloads(
             older.get("requires_human_confirmation", True)
             or newer.get("requires_human_confirmation", True)
         ),
+        inputs=inputs,
         notes=notes,
     )
 
@@ -255,6 +319,8 @@ def diff_packages(
     to_version: int,
     from_payload_sha256: str = "",
     to_payload_sha256: str = "",
+    input_a: dict[str, Any] | None = None,
+    input_b: dict[str, Any] | None = None,
 ) -> AssessmentVersionDiff:
     """`AssessmentPackage` 便捷入口。"""
     return diff_payloads(
@@ -264,4 +330,6 @@ def diff_packages(
         to_version=to_version,
         from_payload_sha256=from_payload_sha256,
         to_payload_sha256=to_payload_sha256,
+        input_a=input_a,
+        input_b=input_b,
     )

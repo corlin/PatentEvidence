@@ -261,3 +261,100 @@ def test_missing_sections_do_not_crash_the_diff() -> None:
     assert diff.findings["retained"] == []
     assert diff.three_step["present_in_both"] is False
     assert diff.priority_changed is False
+
+
+def _input_snapshot(
+    *,
+    filing_date: str = "2025-06-01",
+    application_type: str = "invention",
+    candidates: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        "application_profile": {
+            "filing_date": filing_date,
+            "application_type": application_type,
+            "priority_claims": [],
+        },
+        "candidate_profiles": candidates
+        or [
+            {
+                "publication_number": "CN1A",
+                "filing_date": "2023-05-01",
+                "priority_date": None,
+                "filed_in_china": True,
+                "source_verified": True,
+            }
+        ],
+    }
+
+
+def test_input_diff_shows_application_and_candidate_changes() -> None:
+    older = _input_snapshot()
+    newer = {
+        "application_profile": {
+            "filing_date": "2025-07-01",
+            "application_type": "utility_model",
+            "priority_claims": [],
+        },
+        "candidate_profiles": [
+            {
+                "publication_number": "CN1A",
+                "filing_date": "2023-05-01",
+                "priority_date": None,
+                "filed_in_china": True,
+                "source_verified": False,
+            },
+            {
+                "publication_number": "CN2A",
+                "filing_date": "2023-08-01",
+                "priority_date": None,
+                "filed_in_china": True,
+                "source_verified": True,
+            },
+        ],
+    }
+    diff = diff_payloads(_payload(), _payload(), from_version=1, to_version=2, input_a=older, input_b=newer)
+
+    assert diff.inputs is not None
+    fields = {f["field"]: f for f in diff.inputs["application_profile"]["changed_fields"]}
+    assert fields["filing_date"]["from"] == "2025-06-01"
+    assert fields["application_type"]["to"] == "utility_model"
+    assert "CN2A" in diff.inputs["candidate_profiles"]["added"]
+    assert diff.inputs["candidate_profiles"]["removed"] == []
+    changed = {c["publication_number"]: c for c in diff.inputs["candidate_profiles"]["changed"]}
+    assert "CN1A" in changed
+    assert any(f["field"] == "source_verified" for f in changed["CN1A"]["changed_fields"])
+    # 只陈述变化，不做自动因果判断
+    assert any("不做自动因果判断" in note for note in diff.notes)
+
+
+def test_input_diff_absent_when_snapshot_missing() -> None:
+    diff = diff_payloads(_payload(), _payload(), from_version=1, to_version=2, input_a=None, input_b=None)
+    assert diff.inputs is None
+    assert any("不对照、不推断输入档案的变化" in note for note in diff.notes)
+
+
+def test_input_diff_priority_claims_split() -> None:
+    older = {
+        "application_profile": {
+            "filing_date": "2025-06-01",
+            "application_type": "invention",
+            "priority_claims": [
+                {"claim_id": "P1", "priority_date": "2024-01-01", "country": "CN", "first_application": True, "same_subject": True, "proof_verified": True, "covers": ["F1"]}
+            ],
+        },
+        "candidate_profiles": [],
+    }
+    newer = {
+        "application_profile": {
+            "filing_date": "2025-06-01",
+            "application_type": "invention",
+            "priority_claims": [
+                {"claim_id": "P2", "priority_date": "2024-02-02", "country": "CN", "first_application": True, "same_subject": True, "proof_verified": True, "covers": ["F2"]}
+            ],
+        },
+        "candidate_profiles": [],
+    }
+    diff = diff_payloads(_payload(), _payload(), from_version=1, to_version=2, input_a=older, input_b=newer)
+    pc = diff.inputs["application_profile"]["priority_claims"]
+    assert pc["added"] and pc["removed"] and not pc["retained"]

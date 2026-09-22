@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from modules.assessment.approval import AssessmentApprovalError, AssessmentDecisionRecord
+from modules.assessment.diff import AssessmentVersionDiff
 from modules.assessment.records import AssessmentVersionRecord
 from patent_evidence_api.assessment.api import create_assessment_router
 from patent_evidence_api.assessment.assembly import AssessmentAssemblyService, AssembledAssessment
@@ -131,6 +132,44 @@ class FakeService(AssessmentService):
         if self.reject_decision:
             raise AssessmentApprovalError(self.reject_decision, "状态机拒绝")
         return _decision(kwargs.get("decision", "approved"))
+
+    async def diff_versions(self, session: Any, **kwargs: Any) -> AssessmentVersionDiff:
+        self.calls.append({"method": "diff_versions", **kwargs})
+        # 复刻真实实现的只读路径：按版本号取 older/newer（方向由版本号决定），
+        # 但不走 DB 支撑的 get_input_snapshot——本测试桩不涉及输入快照冻结。
+        from_v = int(kwargs.get("from_version", 1))
+        to_v = int(kwargs.get("to_version", 1))
+        older = await self.get_version(
+            session,
+            organization_id=kwargs.get("organization_id"),
+            case_id=kwargs.get("case_id"),
+            version_number=min(from_v, to_v),
+        )
+        newer = await self.get_version(
+            session,
+            organization_id=kwargs.get("organization_id"),
+            case_id=kwargs.get("case_id"),
+            version_number=max(from_v, to_v),
+        )
+        return AssessmentVersionDiff(
+            from_version=older.version_number,
+            to_version=newer.version_number,
+            from_payload_sha256="old",
+            to_payload_sha256="new",
+            rules_version={},
+            rules_version_changed=False,
+            prompt_changes=[],
+            blockers={},
+            flags={},
+            findings={},
+            evidence={},
+            three_step={},
+            entity_observations={},
+            priority_changed=False,
+            requires_human_confirmation=True,
+            inputs=None,
+            notes=["输入快照缺失：不对照、不推断输入档案的变化"],
+        )
 
 
 def _client(service: FakeService | None = None) -> tuple[TestClient, FakeAccess, FakeService]:
@@ -372,7 +411,7 @@ def test_diff_route_stays_read_only() -> None:
     client, _, service = _client()
     client.get(f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/1/diff/2")
 
-    assert all(call["method"] in {"get_version"} for call in service.calls)
+    assert all(call["method"] in {"get_version", "diff_versions"} for call in service.calls)
 
 
 def test_diff_route_surfaces_a_missing_version_as_404() -> None:

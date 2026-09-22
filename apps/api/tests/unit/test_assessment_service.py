@@ -263,15 +263,35 @@ class FakeAssessmentSession(FakeSession):
         decisions: list[str] | None = None,
         case_exists: bool = True,
         max_version: int | None = None,
+        input_snapshots: dict[int, Any] | None = None,
     ) -> None:
         super().__init__(case_exists=case_exists, max_version=max_version)
         self._version_row = version_row
         self._decisions = decisions or []
+        self._input_snapshots = input_snapshots or {}
 
     async def execute(self, statement: Any, params: Any = None) -> FakeResult:
         sql = str(statement)
         if "FROM assessment_versions" in sql and "version_number=:version_number" in sql:
-            return FakeResult(rows=[self._version_row] if self._version_row else [])
+            vn = (params or {}).get("version_number")
+            if self._version_row is None:
+                return FakeResult(rows=[])
+            # 让行回显被查询的版本号，否则 older/newer 都会落回默认版本号
+            self._version_row.version_number = vn
+            return FakeResult(rows=[self._version_row])
+        if "FROM assessment_input_snapshots" in sql and "version_number=:version_number" in sql:
+            version_number = (params or {}).get("version_number")
+            snap = self._input_snapshots.get(version_number)
+            if snap is None:
+                return FakeResult(rows=[])
+
+            class _SnapshotRow:
+                def __init__(self, data: dict[str, Any]) -> None:
+                    self.application_profile = data.get("application_profile")
+                    self.candidate_profiles = data.get("candidate_profiles")
+                    self.rules_version = data.get("rules_version")
+
+            return FakeResult(rows=[_SnapshotRow(snap)])
         if "FROM assessment_version_reviews" in sql and "ORDER BY decided_at" in sql:
             return FakeResult(rows=[Row(decision=d) for d in self._decisions])
         return await super().execute(statement, params)
@@ -402,3 +422,155 @@ async def test_extra_blockers_are_not_duplicated() -> None:
         extra_blockers=["同一条缺口", "同一条缺口"],
     )
     assert record.blockers.count("同一条缺口") == 1
+
+
+@pytest.mark.asyncio
+async def test_create_version_also_freezes_an_input_snapshot() -> None:
+    """版本创建时把输入档案冻结进快照表，diff 才能归因输入变化。"""
+    session = FakeSession(max_version=None)
+    await _service().create_version(
+        session, organization_id=uuid4(), case_id=uuid4(), payload=_input()
+    )
+    snap_inserts = [s for s in session.statements if "INSERT INTO assessment_input_snapshots" in s]
+    assert len(snap_inserts) == 1
+    # 与版本本身一致：输入快照同样只 INSERT，不 UPDATE/DELETE
+    assert all("UPDATE " not in s.upper() for s in snap_inserts)
+    snap_params = [p for p in session.params if "candidate_profiles" in p]
+    assert snap_params, "输入快照必须携带候选档案"
+    cand = json.loads(snap_params[0]["candidate_profiles"])
+    assert {c["publication_number"] for c in cand} == {"CN1A", "CN2A"}
+
+
+@pytest.mark.asyncio
+async def test_get_input_snapshot_returns_frozen_snapshot() -> None:
+    snapshot = {
+        "application_profile": {
+            "filing_date": "2025-06-01",
+            "application_type": "invention",
+            "priority_claims": [],
+        },
+        "candidate_profiles": [
+            {
+                "publication_number": "CN1A",
+                "filing_date": "2023-05-01",
+                "priority_date": None,
+                "filed_in_china": True,
+                "source_verified": True,
+            }
+        ],
+        "rules_version": "assessment-rules-v3",
+    }
+
+    class SnapshotRow:
+        application_profile = snapshot["application_profile"]
+        candidate_profiles = snapshot["candidate_profiles"]
+        rules_version = snapshot["rules_version"]
+
+    class SnapSession(FakeSession):
+        async def execute(self, statement: Any, params: Any = None) -> FakeResult:
+            if "FROM assessment_input_snapshots" in str(statement):
+                return FakeResult(rows=[SnapshotRow()])
+            return await super().execute(statement, params)
+
+    result = await _service().get_input_snapshot(
+        SnapSession(), organization_id=uuid4(), case_id=uuid4(), version_number=1
+    )
+    assert result is not None
+    assert result["application_profile"]["filing_date"] == "2025-06-01"
+    assert result["candidate_profiles"][0]["publication_number"] == "CN1A"
+    assert result["rules_version"] == "assessment-rules-v3"
+
+
+@pytest.mark.asyncio
+async def test_get_input_snapshot_is_none_when_absent() -> None:
+    """老版本（输入建档前创建）没有快照，返回 None 而非空默认。"""
+
+    class EmptySnapSession(FakeSession):
+        async def execute(self, statement: Any, params: Any = None) -> FakeResult:
+            if "FROM assessment_input_snapshots" in str(statement):
+                return FakeResult(rows=[])
+            return await super().execute(statement, params)
+
+    result = await _service().get_input_snapshot(
+        EmptySnapSession(), organization_id=uuid4(), case_id=uuid4(), version_number=99
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_diff_versions_returns_input_diff_when_snapshots_present() -> None:
+    snap1 = {
+        "application_profile": {
+            "filing_date": "2025-06-01",
+            "application_type": "invention",
+            "priority_claims": [],
+        },
+        "candidate_profiles": [
+            {
+                "publication_number": "CN1A",
+                "filing_date": "2023-05-01",
+                "priority_date": None,
+                "filed_in_china": True,
+                "source_verified": True,
+            }
+        ],
+        "rules_version": "assessment-rules-v3",
+    }
+    snap2 = {
+        "application_profile": {
+            "filing_date": "2025-07-01",
+            "application_type": "utility_model",
+            "priority_claims": [],
+        },
+        "candidate_profiles": [
+            {
+                "publication_number": "CN1A",
+                "filing_date": "2023-05-01",
+                "priority_date": None,
+                "filed_in_china": True,
+                "source_verified": False,
+            },
+            {
+                "publication_number": "CN2A",
+                "filing_date": "2023-08-01",
+                "priority_date": None,
+                "filed_in_china": True,
+                "source_verified": True,
+            },
+        ],
+        "rules_version": "assessment-rules-v3",
+    }
+    session = FakeAssessmentSession(
+        version_row=_version_row(blockers=[]),
+        decisions=[],
+        input_snapshots={1: snap1, 2: snap2},
+    )
+    diff = await _service().diff_versions(
+        session, organization_id=uuid4(), case_id=uuid4(), from_version=1, to_version=2
+    )
+    assert diff.inputs is not None
+    fields = {f["field"]: f for f in diff.inputs["application_profile"]["changed_fields"]}
+    assert fields["filing_date"]["from"] == "2025-06-01"
+    assert fields["application_type"]["to"] == "utility_model"
+    assert "CN2A" in diff.inputs["candidate_profiles"]["added"]
+    assert diff.inputs["candidate_profiles"]["removed"] == []
+    changed = {c["publication_number"]: c for c in diff.inputs["candidate_profiles"]["changed"]}
+    assert "CN1A" in changed
+    assert any(f["field"] == "source_verified" for f in changed["CN1A"]["changed_fields"])
+    # 关键：diff 展示输入变化，但绝不声称因果
+    assert any("不做自动因果判断" in note for note in diff.notes)
+
+
+@pytest.mark.asyncio
+async def test_diff_versions_inputs_none_when_snapshot_absent() -> None:
+    session = FakeAssessmentSession(
+        version_row=_version_row(blockers=[]),
+        decisions=[],
+        input_snapshots={},
+    )
+    diff = await _service().diff_versions(
+        session, organization_id=uuid4(), case_id=uuid4(), from_version=1, to_version=2
+    )
+    assert diff.inputs is None
+    assert any("不对照、不推断输入档案的变化" in note for note in diff.notes)
+

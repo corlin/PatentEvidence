@@ -28,6 +28,7 @@ from modules.assessment.approval import (
 from modules.assessment.diff import diff_packages
 from modules.assessment.package import AssessmentInput, AssessmentPackage, assess_case
 from modules.assessment.records import AssessmentVersionRecord, build_assessment_version_record
+from modules.assessment.snapshot import input_profile_snapshot
 
 
 class AssessmentService:
@@ -96,6 +97,35 @@ class AssessmentService:
                 "created_at": record.created_at,
             },
         )
+
+        # 冻结输入档案快照：版本不可改写，因此它「当时用了哪些输入」也必须冻结，
+        # 否则版本 diff 无法归因输入变化（只能猜测，那就是编造因果）。
+        snapshot = input_profile_snapshot(payload)
+        await session.execute(
+            text(
+                """INSERT INTO assessment_input_snapshots
+                (id, organization_id, case_id, assessment_version_id, version_number,
+                 application_profile, candidate_profiles, rules_version, created_at)
+                VALUES
+                (:id, :org_id, :case_id, :version_id, :version_number,
+                 :application_profile, :candidate_profiles, :rules_version, :created_at)"""
+            ),
+            {
+                "id": uuid4(),
+                "org_id": organization_id,
+                "case_id": case_id,
+                "version_id": record.id,
+                "version_number": record.version_number,
+                "application_profile": json.dumps(
+                    snapshot["application_profile"], ensure_ascii=False
+                ),
+                "candidate_profiles": json.dumps(
+                    snapshot["candidate_profiles"], ensure_ascii=False
+                ),
+                "rules_version": record.rules_version,
+                "created_at": record.created_at,
+            },
+        )
         return record
 
     async def get_version(
@@ -149,6 +179,51 @@ class AssessmentService:
         ).fetchall()
         return [self._row_to_record(row) for row in rows]
 
+    async def get_input_snapshot(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+        version_number: int,
+    ) -> dict[str, Any] | None:
+        """取某版本冻结时的输入档案快照。
+
+        老版本（输入建档功能上线前创建）没有快照，返回 None——此时版本 diff
+        无法归因输入变化，这是诚实的结果，不是缺陷。
+        """
+        row = (
+            await session.execute(
+                text(
+                    """SELECT application_profile, candidate_profiles, rules_version
+                    FROM assessment_input_snapshots
+                    WHERE organization_id=:org_id AND case_id=:case_id
+                    AND version_number=:version_number"""
+                ),
+                {
+                    "org_id": organization_id,
+                    "case_id": case_id,
+                    "version_number": version_number,
+                },
+            )
+        ).fetchone()
+        if not row:
+            return None
+
+        def load(value: Any) -> Any:
+            if isinstance(value, (str, bytes, bytearray)):
+                try:
+                    return json.loads(value)
+                except ValueError:
+                    return None
+            return value
+
+        return {
+            "application_profile": load(row.application_profile) or {},
+            "candidate_profiles": load(row.candidate_profiles) or [],
+            "rules_version": row.rules_version,
+        }
+
     async def diff_versions(
         self,
         session: AsyncSession,
@@ -158,10 +233,12 @@ class AssessmentService:
         from_version: int,
         to_version: int,
     ) -> Any:
-        """对比两个已冻结版本的 payload。
+        """对比两个已冻结版本的 payload，并在两版都有输入快照时对照输入变化。
 
-        只对比内容，不推断输入档案的变化：档案可变且未版本化，无法忠实重建
-        生成各版本时的输入。方向由版本号决定，调用方不必关心先后。
+        输入快照让 diff 能展示「这一版相比上一版，输入档案改了什么」，从而把结论
+        变化归因到输入变化；但本工具不做自动因果判断——输入变了不代表结论必然跟着
+        变，是否相关须人工核对。任一版本缺快照时 inputs 为 None，并明确说明无法归因。
+        方向由版本号决定，调用方不必关心先后。
         """
         older = await self.get_version(
             session,
@@ -175,6 +252,18 @@ class AssessmentService:
             case_id=case_id,
             version_number=max(from_version, to_version),
         )
+        older_snapshot = await self.get_input_snapshot(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=older.version_number,
+        )
+        newer_snapshot = await self.get_input_snapshot(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=newer.version_number,
+        )
         return diff_packages(
             older.payload,
             newer.payload,
@@ -182,6 +271,8 @@ class AssessmentService:
             to_version=newer.version_number,
             from_payload_sha256=older.payload_sha256,
             to_payload_sha256=newer.payload_sha256,
+            input_a=older_snapshot,
+            input_b=newer_snapshot,
         )
 
     @staticmethod
