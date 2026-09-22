@@ -21,6 +21,17 @@ def default_clock() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _load_json(value: Any) -> Any:
+    if isinstance(value, (str, bytes, bytearray)):
+        import json
+
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+    return value
+
+
 def _as_list(value: Any) -> list[str]:
     """blockers/flags 存成 JSONB，驱动层可能回传字符串。"""
     if value is None:
@@ -313,7 +324,8 @@ class EvidenceReportService:
         row = (
             await session.execute(
                 text(
-                    """SELECT id, version_number, payload_sha256, blockers
+                    """SELECT id, version_number, payload_sha256, blockers, flags,
+                    rules_version, prompt_versions, payload, created_at
                     FROM assessment_versions
                     WHERE organization_id = :org_id AND case_id = :case_id
                     ORDER BY version_number DESC
@@ -337,12 +349,21 @@ class EvidenceReportService:
             )
         ).fetchall()
 
+        # 完整 payload 一并封存：报告渲染的每一个字段都必须被根哈希绑住，
+        # 否则哈希证明不了报告里写的那些候选发现。
+        payload = _load_json(row.payload) if isinstance(row.payload, str) else row.payload
+        prompt_versions = _load_json(row.prompt_versions)
         return {
             "has_version": True,
             "version_number": int(row.version_number),
             "status": derive_status([str(d.decision) for d in decisions]),
             "blockers": _as_list(row.blockers),
+            "flags": _as_list(row.flags),
             "payload_sha256": row.payload_sha256,
+            "rules_version": row.rules_version,
+            "prompt_versions": prompt_versions if isinstance(prompt_versions, dict) else {},
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "payload": payload if isinstance(payload, dict) else {},
         }
 
     async def get_active_snapshot(

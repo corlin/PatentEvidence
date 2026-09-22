@@ -79,14 +79,17 @@ class AssessmentSummary:
         )
 
 
+STATUS_LABELS = {
+    "draft": "草稿",
+    "submitted": "待复核",
+    "approved": "复核通过",
+    "rejected": "复核未通过",
+    "changes_requested": "需修改",
+}
+
+
 def _status_label(status: str) -> str:
-    return {
-        "draft": "草稿",
-        "submitted": "待复核",
-        "approved": "复核通过",
-        "rejected": "复核未通过",
-        "changes_requested": "需修改",
-    }.get(status, status)
+    return STATUS_LABELS.get(status, status)
 
 
 def evaluate_conclusion_eligibility(

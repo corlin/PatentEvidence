@@ -75,7 +75,13 @@ class EvidenceSealer:
                 "version_number": (assessment_data or {}).get("version_number"),
                 "status": (assessment_data or {}).get("status"),
                 "blockers": list((assessment_data or {}).get("blockers") or []),
+                "flags": list((assessment_data or {}).get("flags") or []),
                 "payload_sha256": (assessment_data or {}).get("payload_sha256"),
+                "rules_version": (assessment_data or {}).get("rules_version"),
+                "prompt_versions": (assessment_data or {}).get("prompt_versions") or {},
+                "created_at": (assessment_data or {}).get("created_at"),
+                # 整个评估包一并封存：报告第 5 节渲染的每个字段都被根哈希绑住。
+                "payload": (assessment_data or {}).get("payload") or {},
             },
             sealed_at=sealed_at_iso,
             sealed_by=sealed_by_email,
