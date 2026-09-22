@@ -8,6 +8,7 @@ import { AssessmentReviewPanel } from '../components/AssessmentReviewPanel'
 import { AssessmentDiffPanel } from '../components/AssessmentDiffPanel'
 import type {
   AssessmentDeliverable,
+  AssessmentInputSnapshot,
   AssessmentVersionDetail,
   AssessmentVersionStatus,
   AssessmentVersionSummary,
@@ -68,6 +69,8 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
   const [versions, setVersions] = useState<AssessmentVersionSummary[]>([])
   const [detail, setDetail] = useState<AssessmentVersionDetail | null>(null)
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null)
+  // 版本冻结时的输入档案快照：老版本可能无快照（null），此时诚实展示、不做推断
+  const [inputSnapshot, setInputSnapshot] = useState<AssessmentInputSnapshot | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -120,6 +123,7 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
   useEffect(() => {
     if (selectedVersion === null) {
       setDetail(null)
+      setInputSnapshot(null)
       return
     }
     let cancelled = false
@@ -127,11 +131,21 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
       setDetailLoading(true)
       setError(null)
       try {
-        const res = await apiClient.getAssessmentVersion(orgId, caseId, selectedVersion)
-        if (!cancelled) setDetail(res.version)
+        const [versionRes, snapshotRes] = await Promise.all([
+          apiClient.getAssessmentVersion(orgId, caseId, selectedVersion),
+          // 快照拉取失败或不存在时诚实降级为 null，不回读可变档案表推断
+          apiClient
+            .getAssessmentInputSnapshot(orgId, caseId, selectedVersion)
+            .catch(() => ({ snapshot: null })),
+        ])
+        if (!cancelled) {
+          setDetail(versionRes.version)
+          setInputSnapshot(snapshotRes.snapshot)
+        }
       } catch (err) {
         if (!cancelled) {
           setDetail(null)
+          setInputSnapshot(null)
           setError(err instanceof ApiError ? err.message : '加载评估版本详情失败')
         }
       } finally {
@@ -282,6 +296,100 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
                   </div>
                 </div>
                 <p className="text-sm text-secondary mt-sm">{statusMeta(detail.status).note}</p>
+              </div>
+
+              {/* 冻结输入快照：版本创建时一并冻结的输入档案；老版本无快照时诚实展示，不做推断 */}
+              <div className="card p-md mb-md">
+                <h2 className="text-base font-bold mb-sm">冻结输入快照（只读）</h2>
+                {inputSnapshot ? (
+                  <>
+                    <div className="grid-2-cols text-sm mb-sm">
+                      <div>
+                        <span className="text-secondary">本案申请日：</span>
+                        {inputSnapshot.application_profile.filing_date || '—'}
+                      </div>
+                      <div>
+                        <span className="text-secondary">申请类型：</span>
+                        {inputSnapshot.application_profile.application_type || '—'}
+                      </div>
+                    </div>
+
+                    {inputSnapshot.application_profile.priority_claims.length > 0 && (
+                      <div className="mb-sm">
+                        <h3 className="text-sm font-bold mb-xs">优先权主张</h3>
+                        <table className="data-table w-full text-sm">
+                          <thead>
+                            <tr>
+                              <th>主张</th>
+                              <th>优先权日</th>
+                              <th>国家/地区</th>
+                              <th>首次申请</th>
+                              <th>相同主题</th>
+                              <th>证明已核验</th>
+                              <th>覆盖</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {inputSnapshot.application_profile.priority_claims.map((claim) => (
+                              <tr key={claim.claim_id}>
+                                <td className="font-mono text-xs">{claim.claim_id}</td>
+                                <td>{claim.priority_date || '—'}</td>
+                                <td>{claim.country}</td>
+                                <td>{claim.first_application ? '是' : '否'}</td>
+                                <td>{claim.same_subject ? '是' : '否'}</td>
+                                <td>{claim.proof_verified ? '是' : '否'}</td>
+                                <td className="font-mono text-xs">{claim.covers.join(', ') || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    <h3 className="text-sm font-bold mb-xs">对比文件档案</h3>
+                    {inputSnapshot.candidate_profiles.length > 0 ? (
+                      <table className="data-table w-full text-sm">
+                        <thead>
+                          <tr>
+                            <th>公开号</th>
+                            <th>申请日</th>
+                            <th>优先权日</th>
+                            <th>中国申请</th>
+                            <th>来源已核验</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {inputSnapshot.candidate_profiles.map((doc, idx) => (
+                            <tr key={`${doc.publication_number}-${idx}`}>
+                              <td className="font-mono text-xs">{doc.publication_number}</td>
+                              <td>{doc.filing_date || '—'}</td>
+                              <td>{doc.priority_date || '—'}</td>
+                              <td>{doc.filed_in_china ? '是' : '否'}</td>
+                              <td>
+                                {doc.source_verified ? (
+                                  <span className="badge badge-success">已核验</span>
+                                ) : (
+                                  <span className="badge badge-warning">未核验</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p className="text-sm text-secondary">快照中无对比文件档案。</p>
+                    )}
+                    <p className="text-xs text-secondary mt-sm">
+                      以上为版本 v{detail.version_number} 创建时冻结的输入档案，此后档案表若被修改
+                      不会反映在此处；版本间输入变化请以版本对比为准。
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-secondary">
+                    本版本创建于输入快照功能上线之前，无冻结快照；此处不回读可变档案表做推断。
+                    如需对照输入，请以之后创建的版本为基准。
+                  </p>
+                )}
               </div>
 
               <AssessmentDiffPanel

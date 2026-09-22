@@ -180,6 +180,36 @@ def create_assessment_router(
             return {"version": render_version(record, status=status)}
 
     @router.get(
+        "/{organization_id}/cases/{case_id}/assessments/{version_number}/input-snapshot"
+    )
+    async def get_assessment_input_snapshot(
+        organization_id: str, case_id: str, version_number: int, request: Request
+    ) -> dict[str, Any]:
+        """查看某版本冻结时的输入档案快照（本案申请信息 + 各对比文件档案）。
+
+        只读。老版本（输入快照功能上线前创建）没有快照，返回 {"snapshot": null}——
+        这是诚实的结果，不是缺陷；绝不从可变档案表回读推断。版本不存在时 404。
+        """
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.authorized(request, org_uuid) as (session, _):
+            # 先取版本：不存在时 get_version 抛 404，避免把「无快照」与「无版本」混淆
+            await assessment_service.get_version(
+                session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+                version_number=version_number,
+            )
+            snapshot = await assessment_service.get_input_snapshot(
+                session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+                version_number=version_number,
+            )
+            return {"snapshot": snapshot}
+
+    @router.get(
         "/{organization_id}/cases/{case_id}/assessments/{version_number}/deliverable"
     )
     async def get_assessment_deliverable(

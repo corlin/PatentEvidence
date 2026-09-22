@@ -123,6 +123,36 @@ class FakeService(AssessmentService):
     async def current_status(self, session: Any, **kwargs: Any) -> str:
         return "submitted"
 
+    async def get_input_snapshot(self, session: Any, **kwargs: Any) -> dict[str, Any] | None:
+        self.calls.append({"method": "get_input_snapshot", **kwargs})
+        return {
+            "application_profile": {
+                "filing_date": "2025-06-01",
+                "application_type": "invention",
+                "priority_claims": [
+                    {
+                        "claim_id": "P1",
+                        "priority_date": "2024-06-01",
+                        "country": "CN",
+                        "first_application": True,
+                        "same_subject": True,
+                        "proof_verified": True,
+                        "covers": ["F1"],
+                    }
+                ],
+            },
+            "candidate_profiles": [
+                {
+                    "publication_number": "CN1A",
+                    "filing_date": "2023-05-01",
+                    "priority_date": None,
+                    "filed_in_china": True,
+                    "source_verified": True,
+                }
+            ],
+            "rules_version": "assessment-rules-v3",
+        }
+
     async def submit_version(self, session: Any, **kwargs: Any) -> AssessmentDecisionRecord:
         self.calls.append({"method": "submit_version", **kwargs})
         return _decision("submitted")
@@ -520,3 +550,60 @@ def test_delivery_attachment_route_returns_null_without_versions() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"attachment": None}
+
+
+def test_input_snapshot_route_returns_200_with_snapshot_and_stays_read_only() -> None:
+    """查看冻结输入快照：只读、如实返回快照内容，绝不回读可变档案表推断。"""
+    client, access, service = _client()
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/1/input-snapshot"
+    )
+
+    assert response.status_code == 200
+    snapshot = response.json()["snapshot"]
+    assert snapshot["application_profile"]["filing_date"] == "2025-06-01"
+    assert snapshot["application_profile"]["priority_claims"][0]["claim_id"] == "P1"
+    assert snapshot["candidate_profiles"][0]["publication_number"] == "CN1A"
+    assert snapshot["rules_version"] == "assessment-rules-v3"
+    # 快照绝不携带任何结论
+    assert "conclusion" not in snapshot
+    # 只读路径：取版本（404 语义）+ 取快照，无任何写入
+    assert not access.actions
+    assert all(
+        call["method"] in {"get_version", "get_input_snapshot"} for call in service.calls
+    )
+
+
+def test_input_snapshot_route_returns_null_for_pre_snapshot_versions() -> None:
+    """输入快照功能上线前创建的老版本：如实返回 null，不推断、不报错。"""
+
+    class NoSnapshotService(FakeService):
+        async def get_input_snapshot(
+            self, session: Any, **kwargs: Any
+        ) -> dict[str, Any] | None:
+            return None
+
+    client, _, _ = _client(NoSnapshotService())
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/1/input-snapshot"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"snapshot": None}
+
+
+def test_input_snapshot_route_surfaces_a_missing_version_as_404() -> None:
+    """版本不存在时返回 404，避免把「无版本」与「无快照」混为一谈。"""
+
+    class MissingService(FakeService):
+        async def get_version(self, session: Any, **kwargs: Any) -> AssessmentVersionRecord:
+            raise HTTPException(status_code=404, detail="assessment_version_not_found")
+
+    client, _, _ = _client(MissingService())
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/99/input-snapshot"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "assessment_version_not_found"
+

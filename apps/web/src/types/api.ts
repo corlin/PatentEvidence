@@ -607,6 +607,31 @@ export interface AssessmentAssembleResult {
   disclaimer: string
 }
 
+/** 某版本创建时冻结的输入档案快照（老版本无快照，返回 null 是诚实结果）。 */
+export interface AssessmentInputSnapshot {
+  application_profile: {
+    filing_date: string | null
+    application_type: string | null
+    priority_claims: Array<{
+      claim_id: string
+      priority_date: string | null
+      country: string
+      first_application: boolean
+      same_subject: boolean
+      proof_verified: boolean
+      covers: string[]
+    }>
+  }
+  candidate_profiles: Array<{
+    publication_number: string
+    filing_date: string | null
+    priority_date: string | null
+    filed_in_china: boolean
+    source_verified: boolean
+  }>
+  rules_version?: string | null
+}
+
 /** 单版本冻结后导出的自包含候选意见交付物（非结论，须人工确认）。 */
 export interface AssessmentDeliverable {
   deliverable_version: string

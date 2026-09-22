@@ -3,6 +3,7 @@ import type {
   AssessmentAssembleResult,
   AssessmentCandidateProfile,
   AssessmentDeliverable,
+  AssessmentInputSnapshot,
   AssessmentDecisionRecord,
   AssessmentVersionDetail,
   AssessmentVersionDiff,
@@ -838,6 +839,16 @@ export const apiClient = {
   ): Promise<{ attachment: AssessmentDeliverable | null }> {
     return request(
       `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/delivery-attachment`
+    )
+  },
+
+  async getAssessmentInputSnapshot(
+    orgId: string,
+    caseId: string,
+    versionNumber: number
+  ): Promise<{ snapshot: AssessmentInputSnapshot | null }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${versionNumber}/input-snapshot`
     )
   },
 
