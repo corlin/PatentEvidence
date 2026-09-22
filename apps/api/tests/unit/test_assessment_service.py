@@ -574,3 +574,117 @@ async def test_diff_versions_inputs_none_when_snapshot_absent() -> None:
     assert diff.inputs is None
     assert any("不对照、不推断输入档案的变化" in note for note in diff.notes)
 
+
+def _rich_version_row(*, blockers: list[str], decisions: list[str]) -> Row:
+    """带完整 payload（证据/三步法/候选发现/实体观察项）的版本行，便于校验交付物映射。"""
+    payload = {
+        "rules_version": "assessment-rules-v3",
+        "evidence": {
+            "source_coverage": 0.8,
+            "verified_citations": 3,
+            "total_citations": 4,
+            "missing_anchors": ["D1/F2"],
+            "unverified_citations": ["D2/F1"],
+            "failed_sources": [],
+            "blocks_conclusion": False,
+        },
+        "three_step": {
+            "closest_prior_art": "CN1A",
+            "closest_prior_art_identical": 1,
+            "distinguishing_features": ["F2"],
+            "actual_technical_problem": "解决 X",
+        },
+        "findings": [
+            {
+                "risk_kind": "novelty",
+                "level": "high_novelty_risk",
+                "basis": [{"doc": "CN1A"}],
+                "requires_human_confirmation": True,
+            }
+        ],
+        "entity_observations": [
+            {
+                "kind": "numeric_range",
+                "feature_code": "F1",
+                "doc_id": "D1",
+                "effect": "may_defeat_novelty",
+                "reasoning": "范围重叠",
+                "requires_human_confirmation": True,
+            }
+        ],
+    }
+    return Row(
+        id=uuid4(),
+        organization_id=uuid4(),
+        case_id=uuid4(),
+        version_number=1,
+        rules_version="assessment-rules-v3",
+        prompt_versions=json.dumps({"assessment/novelty": "novelty-v2"}),
+        payload=json.dumps(payload),
+        payload_sha256="a" * 64,
+        blockers=json.dumps(blockers),
+        flags=json.dumps([]),
+        requires_human_confirmation=True,
+        created_by_identity_id=None,
+        created_at=datetime(2026, 9, 22, tzinfo=UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_build_deliverable_returns_structured_opinion_with_disclaimers() -> None:
+    """交付物从冻结版本生成，携带候选措辞、门禁结果与免责声明，且从不声称结论。"""
+    session = FakeAssessmentSession(
+        version_row=_rich_version_row(blockers=[], decisions=["submitted", "approved"]),
+        decisions=["submitted", "approved"],
+    )
+    deliverable = await _service().build_deliverable(
+        session, organization_id=uuid4(), case_id=uuid4(), version_number=1
+    )
+
+    assert deliverable["version_number"] == 1
+    assert deliverable["status"] == "approved"
+    assert deliverable["requires_human_confirmation"] is True
+    assert "候选" in deliverable["candidate_notice"]
+    assert "不构成专利性结论" in deliverable["publication_disclaimer"]
+    assert "冻结" in deliverable["version_freeze_declaration"]
+
+    # 证据/三步法/发现/实体观察项均按 payload 映射
+    assert deliverable["evidence"]["verified_citations"] == 3
+    assert deliverable["evidence"]["missing_anchors"] == 1
+    assert deliverable["three_step"]["closest_prior_art"] == "CN1A"
+    assert deliverable["findings"][0]["risk_kind"] == "novelty"
+    assert deliverable["findings"][0]["requires_human_confirmation"] is True
+    assert deliverable["entity_observations"][0]["feature_code"] == "F1"
+    assert deliverable["entity_observations"][0]["effect"] == "may_defeat_novelty"
+
+    # 门禁：已批准且无阻塞 → 允许发布候选判断
+    assert deliverable["eligibility"]["eligible"] is True
+    # 交付物是候选，绝不携带任何形式的「结论」
+    assert "conclusion" not in deliverable
+
+
+@pytest.mark.asyncio
+async def test_build_deliverable_gates_via_eligibility() -> None:
+    """未通过复核（草稿）的版本，交付物如实标记不允许发布候选判断。"""
+    session = FakeAssessmentSession(
+        version_row=_rich_version_row(blockers=[], decisions=[]),
+        decisions=[],
+    )
+    deliverable = await _service().build_deliverable(
+        session, organization_id=uuid4(), case_id=uuid4(), version_number=1
+    )
+
+    assert deliverable["status"] == "draft"
+    assert deliverable["eligibility"]["eligible"] is False
+    assert any("尚未通过内部复核" in reason for reason in deliverable["eligibility"]["reasons"])
+
+
+@pytest.mark.asyncio
+async def test_build_deliverable_missing_version_is_404() -> None:
+    session = FakeAssessmentSession(version_row=None, decisions=[])
+    with pytest.raises(HTTPException) as exc:
+        await _service().build_deliverable(
+            session, organization_id=uuid4(), case_id=uuid4(), version_number=99
+        )
+    assert exc.value.status_code == 404
+

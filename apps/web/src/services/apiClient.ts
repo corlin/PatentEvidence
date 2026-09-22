@@ -2,6 +2,7 @@ import type {
   AssessmentApplicationProfile,
   AssessmentAssembleResult,
   AssessmentCandidateProfile,
+  AssessmentDeliverable,
   AssessmentDecisionRecord,
   AssessmentVersionDetail,
   AssessmentVersionDiff,
@@ -817,6 +818,17 @@ export const apiClient = {
   ): Promise<{ diff: AssessmentVersionDiff }> {
     return request(
       `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${fromVersion}/diff/${toVersion}`
+    )
+  },
+
+  /** 导出某冻结版本的候选意见交付物（非结论，须人工确认）。 */
+  async getAssessmentDeliverable(
+    orgId: string,
+    caseId: string,
+    versionNumber: number
+  ): Promise<{ deliverable: AssessmentDeliverable }> {
+    return request(
+      `/api/v1/organizations/${orgId}/cases/${caseId}/assessments/${versionNumber}/deliverable`
     )
   },
 

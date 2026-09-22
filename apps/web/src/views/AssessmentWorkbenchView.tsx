@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { apiClient, ApiError } from '../services/apiClient'
 import { WorkbenchLayout } from '../components/WorkbenchLayout'
+import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { AssessmentInputPanel } from '../components/AssessmentInputPanel'
 import { AssessmentReviewPanel } from '../components/AssessmentReviewPanel'
 import { AssessmentDiffPanel } from '../components/AssessmentDiffPanel'
 import type {
+  AssessmentDeliverable,
   AssessmentVersionDetail,
   AssessmentVersionStatus,
   AssessmentVersionSummary,
@@ -72,6 +74,24 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
   const [error, setError] = useState<string | null>(null)
   // 只读版本区与输入准备区分开：写操作不混入「不可改写」的版本区
   const [tab, setTab] = useState<'versions' | 'prepare' | 'review'>('versions')
+
+  // 导出预评估意见（候选，非结论）：独立模态，不污染只读版本区
+  const [deliverable, setDeliverable] = useState<AssessmentDeliverable | null>(null)
+  const [deliverableLoading, setDeliverableLoading] = useState(false)
+  const [showDeliverable, setShowDeliverable] = useState(false)
+
+  const openDeliverable = async (versionNumber: number) => {
+    setDeliverableLoading(true)
+    try {
+      const res = await apiClient.getAssessmentDeliverable(orgId, caseId, versionNumber)
+      setDeliverable(res.deliverable)
+      setShowDeliverable(true)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '导出预评估意见失败')
+    } finally {
+      setDeliverableLoading(false)
+    }
+  }
 
   const loadVersions = async () => {
     setLoading(true)
@@ -229,6 +249,14 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
                     {detail.requires_human_confirmation && (
                       <span className="badge badge-danger">须人工确认</span>
                     )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={deliverableLoading}
+                      onClick={() => openDeliverable(detail.version_number)}
+                    >
+                      {deliverableLoading ? '导出中…' : '导出预评估意见'}
+                    </button>
                   </div>
                 </div>
                 <div className="grid-2-cols text-sm">
@@ -407,6 +435,144 @@ export const AssessmentWorkbenchView: React.FC<AssessmentWorkbenchViewProps> = (
           )}
         </>
       )}
+
+      {showDeliverable && deliverable && (
+        <DeliverableModal
+          deliverable={deliverable}
+          onClose={() => setShowDeliverable(false)}
+        />
+      )}
     </WorkbenchLayout>
+  )
+}
+
+/** 导出预评估意见模态：只读、候选措辞、带人工确认与免责声明，可下载 JSON。 */
+const DeliverableModal: React.FC<{
+  deliverable: AssessmentDeliverable
+  onClose: () => void
+}> = ({ deliverable, onClose }) => {
+  const downloadJson = () => {
+    const blob = new Blob([JSON.stringify(deliverable, null, 2)], {
+      type: 'application/json',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `assessment-deliverable-v${deliverable.version_number}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <Modal isOpen title="预评估意见（候选，非结论）" onClose={onClose} size="lg">
+      <div className="alert alert-warning mb-sm">
+        <div className="alert-content">
+          <strong>{deliverable.candidate_notice}</strong>
+        </div>
+      </div>
+
+      <div className="flex-row flex-wrap gap-sm mb-sm">
+        <span className="badge badge-neutral">版本 v{deliverable.version_number}</span>
+        <span className={deliverable.eligibility.eligible ? 'badge badge-success' : 'badge badge-danger'}>
+          {deliverable.eligibility.eligible ? '允许发布候选判断' : '不允许发布候选判断'}
+        </span>
+        <span className="badge badge-danger">须人工确认</span>
+      </div>
+
+      <div className="text-sm mb-sm">
+        <div>
+          <span className="text-secondary">复核状态：</span>
+          {deliverable.status_label} —— {deliverable.status_caveat}
+        </div>
+        <div className="break-all">
+          <span className="text-secondary">包摘要：</span>
+          <span className="font-mono text-xs">{deliverable.payload_sha256}</span>
+        </div>
+      </div>
+
+      <div className="card p-sm mb-sm">
+        <h3 className="text-sm font-bold mb-xs">是否允许发布候选判断（结论门禁）</h3>
+        <ul className="text-sm">
+          {deliverable.eligibility.reasons.map((reason, idx) => (
+            <li key={idx} className="mb-xs">
+              {reason}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {deliverable.blockers.length > 0 && (
+        <div className="card p-sm mb-sm">
+          <h3 className="text-sm font-bold mb-xs">尚未解决的阻塞项（因此不能给出结论）</h3>
+          <ul className="text-sm">
+            {deliverable.blockers.map((item, idx) => (
+              <li key={idx} className="mb-xs">
+                <span className="badge badge-danger">阻塞</span> {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {deliverable.findings.length > 0 && (
+        <div className="card p-sm mb-sm">
+          <h3 className="text-sm font-bold mb-xs">候选发现（须人工确认）</h3>
+          <table className="data-table w-full text-sm">
+            <thead>
+              <tr>
+                <th>类别</th>
+                <th>等级</th>
+                <th>人工确认</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deliverable.findings.map((finding, idx) => (
+                <tr key={idx}>
+                  <td>{RISK_KIND_LABEL[finding.risk_kind] || finding.risk_kind}</td>
+                  <td>{LEVEL_LABEL[finding.level] || finding.level}</td>
+                  <td>
+                    {finding.requires_human_confirmation ? (
+                      <span className="badge badge-danger">必需</span>
+                    ) : (
+                      <span className="badge badge-neutral">否</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {deliverable.entity_observations.length > 0 && (
+        <div className="card p-sm mb-sm">
+          <h3 className="text-sm font-bold mb-xs">实体级候选观察项</h3>
+          <ul className="text-sm">
+            {deliverable.entity_observations.map((obs, idx) => (
+              <li key={idx} className="mb-xs">
+                <span className="badge badge-warning">候选</span>{' '}
+                {obs.feature_code} / {obs.doc_id} — {obs.effect}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="alert alert-info mb-sm">
+        <div className="alert-content">{deliverable.publication_disclaimer}</div>
+      </div>
+      <div className="alert alert-info">
+        <div className="alert-content">{deliverable.version_freeze_declaration}</div>
+      </div>
+
+      <div className="modal-actions mt-md">
+        <button type="button" className="btn btn-primary btn-sm" onClick={downloadJson}>
+          下载 JSON
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+          关闭
+        </button>
+      </div>
+    </Modal>
   )
 }

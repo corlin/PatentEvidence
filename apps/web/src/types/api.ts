@@ -607,6 +607,62 @@ export interface AssessmentAssembleResult {
   disclaimer: string
 }
 
+/** 单版本冻结后导出的自包含候选意见交付物（非结论，须人工确认）。 */
+export interface AssessmentDeliverable {
+  deliverable_version: string
+  version_number: number
+  rules_version: string
+  prompt_versions: Record<string, string>
+  payload_sha256: string
+  status: string
+  status_label: string
+  status_caveat: string
+  requires_human_confirmation: boolean
+  candidate_notice: string
+  blockers: string[]
+  flags: string[]
+  evidence: {
+    source_coverage: unknown
+    verified_citations: number
+    total_citations: number
+    missing_anchors: number
+    unverified_citations: number
+    failed_sources: number
+    blocks_conclusion: boolean
+  }
+  three_step: {
+    closest_prior_art: string | null
+    closest_prior_art_identical: number
+    distinguishing_features: string[]
+    actual_technical_problem: string | null
+    note: string
+  }
+  findings: Array<{
+    risk_kind: string
+    level: string
+    basis: Record<string, string>[]
+    requires_human_confirmation: boolean
+  }>
+  entity_observations: Array<{
+    kind: string | null
+    feature_code: string | null
+    doc_id: string | null
+    effect: string | null
+    reasoning: string | null
+    requires_human_confirmation: boolean
+  }>
+  eligibility: {
+    eligible: boolean
+    reasons: string[]
+    version_number: number | null
+    payload_sha256: string | null
+    gate_version: string
+  }
+  publication_disclaimer: string
+  version_freeze_declaration: string
+  generated_at: string
+}
+
 // Delivery Types
 export interface DeliveryRecord {
   id: string

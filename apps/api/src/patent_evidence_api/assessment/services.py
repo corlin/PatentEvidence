@@ -25,10 +25,12 @@ from modules.assessment.approval import (
     AssessmentVersionStatus,
     derive_status,
 )
+from modules.assessment.deliverable import build_assessment_deliverable
 from modules.assessment.diff import diff_packages
 from modules.assessment.package import AssessmentInput, AssessmentPackage, assess_case
 from modules.assessment.records import AssessmentVersionRecord, build_assessment_version_record
 from modules.assessment.snapshot import input_profile_snapshot
+from modules.reports.conclusion import AssessmentSummary, evaluate_conclusion_eligibility
 
 
 class AssessmentService:
@@ -414,6 +416,42 @@ class AssessmentService:
             session, organization_id=organization_id, version_id=version.id
         )
         return derive_status(decisions)
+
+    async def build_deliverable(
+        self,
+        session: AsyncSession,
+        *,
+        organization_id: UUID,
+        case_id: UUID,
+        version_number: int,
+    ) -> dict[str, Any]:
+        """从冻结版本生成自包含、可导出、候选措辞的预评估意见交付物。
+
+        门禁复用 report 结论门禁：仅当版本已批准且无阻塞项才允许发布候选判断；
+        不论是否允许，交付物都如实携带 eligibility 与免责声明，绝不升级成结论。
+        version 不存在时由 get_version 抛 404。
+        """
+        version = await self.get_version(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=version_number,
+        )
+        status = await self.current_status(
+            session,
+            organization_id=organization_id,
+            case_id=case_id,
+            version_number=version_number,
+        )
+        summary = AssessmentSummary(
+            has_version=True,
+            version_number=version.version_number,
+            status=status,
+            blockers=tuple(version.blockers),
+            payload_sha256=version.payload_sha256,
+        )
+        eligibility = evaluate_conclusion_eligibility(summary)
+        return build_assessment_deliverable(version, status, eligibility)
 
     async def _insert_decision(
         self,

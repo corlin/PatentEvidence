@@ -149,6 +149,32 @@ def create_assessment_router(
             return {"version": render_version(record, status=status)}
 
     @router.get(
+        "/{organization_id}/cases/{case_id}/assessments/{version_number}/deliverable"
+    )
+    async def get_assessment_deliverable(
+        organization_id: str, case_id: str, version_number: int, request: Request
+    ) -> dict[str, Any]:
+        """导出某冻结版本的预评估意见交付物（候选措辞，非结论）。
+
+        与版本路由同为只读；响应携带人工确认标记与免责声明，避免被当成结论。
+        """
+        org_uuid = parse_uuid_or_404(organization_id)
+        case_uuid = parse_uuid_or_404(case_id)
+
+        async with access.authorized(request, org_uuid) as (session, _):
+            deliverable = await assessment_service.build_deliverable(
+                session,
+                organization_id=org_uuid,
+                case_id=case_uuid,
+                version_number=version_number,
+            )
+            deliverable["requires_human_confirmation"] = bool(
+                deliverable.get("requires_human_confirmation", True)
+            )
+            deliverable["disclaimer"] = DISCLAIMER
+            return {"deliverable": deliverable}
+
+    @router.get(
         "/{organization_id}/cases/{case_id}/assessments/{version_number}/diff/{other_version_number}"
     )
     async def diff_assessment_versions(

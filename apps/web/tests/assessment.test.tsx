@@ -274,4 +274,94 @@ describe('Pre-assessment Web Surface', () => {
       expect(apiClient.getAssessmentVersion).toHaveBeenCalledWith('org-1', 'case-1', 2)
     })
   })
+
+  it('exports a candidate-only deliverable and never presents it as a conclusion', async () => {
+    const deliverable = {
+      deliverable_version: 'assessment-deliverable-v1',
+      version_number: 1,
+      rules_version: 'assessment-rules-v3',
+      prompt_versions: { novelty: 'novelty-v2' },
+      payload_sha256: 'a'.repeat(64),
+      status: 'draft',
+      status_label: '草稿',
+      status_caveat:
+        '复核状态仅表示本候选评估包是否通过内部复核，不代表该方案具备专利性或可授权。',
+      requires_human_confirmation: true,
+      candidate_notice:
+        '本预评估意见全部内容为候选信号，须人工确认，不构成专利性结论或审查/授权前景意见。',
+      blockers: [],
+      flags: [],
+      evidence: {
+        source_coverage: 0.8,
+        verified_citations: 3,
+        total_citations: 4,
+        missing_anchors: 1,
+        unverified_citations: 0,
+        failed_sources: 0,
+        blocks_conclusion: false,
+      },
+      three_step: {
+        closest_prior_art: 'D1',
+        closest_prior_art_identical: 1,
+        distinguishing_features: ['F2'],
+        actual_technical_problem: 'x',
+        note: '三步法脚手架为待代理师填写的部分，照实留空，非结论。',
+      },
+      findings: [
+        {
+          risk_kind: 'novelty',
+          level: 'high_novelty_risk',
+          basis: [],
+          requires_human_confirmation: true,
+        },
+      ],
+      entity_observations: [
+        {
+          kind: 'numeric_range',
+          feature_code: 'F1',
+          doc_id: 'D1',
+          effect: 'may_defeat_novelty',
+          reasoning: '范围重叠',
+          requires_human_confirmation: true,
+        },
+      ],
+      eligibility: {
+        eligible: false,
+        reasons: ['预评估版本 v1 尚未通过内部复核（当前状态：草稿）。'],
+        version_number: 1,
+        payload_sha256: 'a'.repeat(64),
+        gate_version: 'report-conclusion-gate-v1',
+      },
+      publication_disclaimer:
+        '本节为基于当前比对矩阵的候选判断，不构成专利性结论或授权前景意见。',
+      version_freeze_declaration: '本意见基于冻结的预评估版本 v1（内容摘要 ...）生成于 ...。',
+      generated_at: new Date().toISOString(),
+    }
+    vi.spyOn(apiClient, 'getAssessmentDeliverable').mockResolvedValue({ deliverable })
+
+    render(
+      <Router>
+        <SessionProvider>
+          <AssessmentWorkbenchView orgId="org-1" caseId="case-1" />
+        </SessionProvider>
+      </Router>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /导出预评估意见/ })).toBeDefined()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /导出预评估意见/ }))
+
+    await waitFor(() => {
+      expect(screen.getByText('预评估意见（候选，非结论）')).toBeDefined()
+    })
+    // 交付物明确自称候选、不构成结论，且复用了结论门禁
+    expect(screen.getByText(/本预评估意见全部内容为候选信号/)).toBeDefined()
+    expect(screen.getByText(/不允许发布候选判断/)).toBeDefined()
+    // 候选声明与发布免责声明都重申「不构成专利性结论」，二者至少其一出现
+    expect(screen.getAllByText(/不构成专利性结论/).length).toBeGreaterThan(0)
+    // 草稿版本未过复核 → 交付物不得伪装成「已批准/可授权」
+    expect(screen.queryByText('已批准')).toBeNull()
+    expect(apiClient.getAssessmentDeliverable).toHaveBeenCalledWith('org-1', 'case-1', 1)
+  })
 })

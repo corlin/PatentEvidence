@@ -424,3 +424,36 @@ def test_diff_route_surfaces_a_missing_version_as_404() -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "assessment_version_not_found"
+
+
+def test_deliverable_route_returns_200_with_disclaimers() -> None:
+    """导出预评估意见：只读、候选措辞、携带人工确认与免责声明，且不是结论。"""
+    client, access, service = _client()
+    response = client.get(f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/1/deliverable")
+
+    assert response.status_code == 200
+    body = response.json()
+    d = body["deliverable"]
+    assert d["version_number"] == 1
+    assert d["requires_human_confirmation"] is True
+    assert "候选" in d["candidate_notice"]
+    assert "不构成专利性结论" in d["publication_disclaimer"]
+    assert "冻结" in d["version_freeze_declaration"]
+    assert isinstance(d["eligibility"], dict) and "eligible" in d["eligibility"]
+    # 路由层信封同样带人工确认与免责声明
+    assert d["disclaimer"] == DISCLAIMER
+    # 交付物永远是候选，绝不携带任何形式的结论
+    assert "conclusion" not in d
+    assert not access.actions
+
+
+def test_deliverable_route_surfaces_a_missing_version_as_404() -> None:
+    class MissingService(FakeService):
+        async def get_version(self, session: Any, **kwargs: Any) -> AssessmentVersionRecord:
+            raise HTTPException(status_code=404, detail="assessment_version_not_found")
+
+    client, _, _ = _client(MissingService())
+    response = client.get(f"/api/v1/organizations/{ORG}/cases/{CASE}/assessments/99/deliverable")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "assessment_version_not_found"
