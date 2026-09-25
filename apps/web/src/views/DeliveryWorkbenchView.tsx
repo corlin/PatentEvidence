@@ -360,6 +360,14 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
             >
               <Icon name="download" size={14} /> 导出报告 (.md)
             </button>
+            <a
+              href={`/api/v1/organizations/${orgId}/cases/${caseId}/reports/active/export.docx`}
+              download="analysis-report.docx"
+              className={`btn btn-secondary btn-xs ${!reportDetail?.report ? 'opacity-50 pointer-events-none' : ''}`}
+              aria-disabled={!reportDetail?.report}
+            >
+              <Icon name="download" size={14} /> 导出报告 (.docx)
+            </a>
           </div>
 
           {reportDetail?.report ? (
