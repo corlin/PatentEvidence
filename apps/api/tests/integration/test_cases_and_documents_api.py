@@ -1,4 +1,6 @@
+import base64
 import io
+import zipfile
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -8,6 +10,7 @@ from argon2 import PasswordHasher
 from cryptography.fernet import Fernet
 from docx import Document
 from httpx import ASGITransport, AsyncClient
+from pypdf import PdfWriter
 
 from adapters.object_storage.client import ObjectStorageClient
 from apps.worker.src.patent_evidence_worker.parse_worker import ParseTaskWorker
@@ -185,7 +188,6 @@ async def test_case_lifecycle_and_quota_enforcement() -> None:
         doc.save(buf)
         docx_bytes = buf.getvalue()
 
-        import base64
         upload_res = await client.post(
             f"/api/v1/organizations/{ORG_A}/cases/{case1_id}/documents",
             json={
@@ -230,3 +232,75 @@ async def test_case_lifecycle_and_quota_enforcement() -> None:
         final_res = await client.get(f"/api/v1/organizations/{ORG_A}/cases/{case1_id}")
         assert final_res.json()["status"] == "document_ready"
         assert final_res.json()["document_version"]["is_confirmed"] is True
+
+        # 11. Upload inspection (spec §6.2): weaponised or disguised files are
+        #     rejected and audited; common active content is accepted and recorded.
+        upload_url = f"/api/v1/organizations/{ORG_A}/cases/{case1_id}/documents"
+
+        macro_buf = io.BytesIO()
+        source_zip = zipfile.ZipFile(io.BytesIO(docx_bytes))
+        with zipfile.ZipFile(macro_buf, "w", zipfile.ZIP_DEFLATED) as macro_zip:
+            for info in source_zip.infolist():
+                macro_zip.writestr(info.filename, source_zip.read(info.filename))
+            macro_zip.writestr("word/vbaProject.bin", b"\xd0\xcf\x11\xe0")
+        macro_res = await client.post(
+            upload_url,
+            json={
+                "filename": "macro.docx",
+                "content_base64": base64.b64encode(macro_buf.getvalue()).decode("ascii"),
+            },
+        )
+        assert macro_res.status_code == 422
+        assert macro_res.json()["detail"] == "macros_not_allowed"
+
+        disguised_res = await client.post(
+            upload_url,
+            json={
+                "filename": "renamed.pdf",
+                "content_base64": base64.b64encode(docx_bytes).decode("ascii"),
+                "content_type": "application/pdf",
+            },
+        )
+        assert disguised_res.status_code == 422
+        assert disguised_res.json()["detail"] == "file_content_does_not_match_extension"
+
+        oversized_res = await client.post(
+            upload_url,
+            content=b"{}",
+            headers={"content-type": "application/json", "content-length": str(64 * 1024 * 1024)},
+        )
+        assert oversized_res.status_code == 413
+
+        # 客户端声称 text/plain；存储的是按内容判定的 MIME，并记录 PDF JavaScript
+        js_writer = PdfWriter()
+        js_writer.add_blank_page(width=200, height=200)
+        js_writer.add_js("app.alert('x');")
+        js_pdf = io.BytesIO()
+        js_writer.write(js_pdf)
+        js_res = await client.post(
+            upload_url, files={"file": ("spec.pdf", js_pdf.getvalue(), "text/plain")}
+        )
+        assert js_res.status_code == 201
+        js_document = js_res.json()["document"]
+        assert js_document["mime_type"] == "application/pdf"
+        assert js_document["security_findings"] == ["pdf_javascript"]
+
+        latest = (await client.get(f"/api/v1/organizations/{ORG_A}/cases/{case1_id}")).json()
+        assert latest["document"]["id"] == js_document["id"]
+        assert latest["document"]["security_findings"] == ["pdf_javascript"]
+
+        with psycopg.connect(migration_url) as conn:
+            audit_rows = conn.execute(
+                """SELECT result, safe_summary FROM audit_events
+                WHERE organization_id = %s AND action = 'case.document.upload'
+                ORDER BY created_at""",
+                (ORG_A,),
+            ).fetchall()
+            stored = conn.execute(
+                "SELECT mime_type, security_findings FROM source_documents WHERE id = %s",
+                (UUID(js_document["id"]),),
+            ).fetchone()
+        results = [row[0] for row in audit_rows]
+        assert results.count("denied") >= 2  # macro + disguised
+        assert any("findings=pdf_javascript" in row[1] for row in audit_rows if row[0] == "allowed")
+        assert stored == ("application/pdf", ["pdf_javascript"])

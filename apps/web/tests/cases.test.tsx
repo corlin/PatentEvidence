@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { apiClient } from '../src/services/apiClient'
+import { apiClient, ApiError } from '../src/services/apiClient'
 import { SessionProvider } from '../src/context/SessionContext'
 import { Router } from '../src/router/Router'
 import { CasesListView } from '../src/views/CasesListView'
@@ -28,6 +28,7 @@ const mockCaseDetail: CaseDetail = {
     file_size: 10240,
     mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     sha256: 'a1b2c3d4e5f6',
+    security_findings: [],
     created_at: new Date().toISOString(),
   },
   parse_run: {
@@ -123,6 +124,62 @@ describe('Cases and Document Web Surfaces', () => {
     fireEvent.click(screen.getByRole('button', { name: '确认锁定该版本' }))
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledWith('org-1', mockCaseDetail.id, 'ver-1')
+    })
+  })
+
+  it('warns about recorded active content on the current document', async () => {
+    vi.spyOn(apiClient, 'getCase').mockResolvedValue({
+      ...mockCaseDetail,
+      document: { ...mockCaseDetail.document!, security_findings: ['docx_ole_embedding'] },
+    })
+    render(
+      <Router>
+        <SessionProvider>
+          <CaseDetailView orgId="org-1" caseId={mockCaseDetail.id} />
+        </SessionProvider>
+      </Router>
+    )
+    await waitFor(() => {
+      expect(screen.getByText(/含有主动内容：文档内嵌 OLE 对象/)).toBeDefined()
+    })
+  })
+
+  it('does not warn when the document has no findings', async () => {
+    vi.spyOn(apiClient, 'getCase').mockResolvedValue(mockCaseDetail)
+    render(
+      <Router>
+        <SessionProvider>
+          <CaseDetailView orgId="org-1" caseId={mockCaseDetail.id} />
+        </SessionProvider>
+      </Router>
+    )
+    await waitFor(() => {
+      expect(screen.getByText('disclosure.docx')).toBeDefined()
+    })
+    expect(screen.queryByText(/含有主动内容/)).toBeNull()
+  })
+
+  it('explains a rejected upload in plain language', async () => {
+    vi.spyOn(apiClient, 'getCase').mockResolvedValue(mockCaseDetail)
+    vi.spyOn(apiClient, 'uploadDocument').mockRejectedValue(
+      new ApiError(422, 'macros_not_allowed')
+    )
+    render(
+      <Router>
+        <SessionProvider>
+          <CaseDetailView orgId="org-1" caseId={mockCaseDetail.id} />
+        </SessionProvider>
+      </Router>
+    )
+    await waitFor(() => {
+      expect(screen.getByText('disclosure.docx')).toBeDefined()
+    })
+    const input = document.getElementById('document-upload-input') as HTMLInputElement
+    fireEvent.change(input, {
+      target: { files: [new File(['x'], 'macro.docx')] },
+    })
+    await waitFor(() => {
+      expect(screen.getByText(/文件包含宏（VBA）/)).toBeDefined()
     })
   })
 })
