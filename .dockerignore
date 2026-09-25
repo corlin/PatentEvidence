@@ -1,0 +1,14 @@
+# 构建上下文是仓库根目录；镜像只按需 COPY 源码，这里排除本地运行时数据与产物，
+# 避免密钥、宿主机依赖和缓存进入构建上下文（见 AGENTS.md）。
+.git
+.env
+.env.*
+!.env.example
+.superpowers
+.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
