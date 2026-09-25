@@ -219,6 +219,13 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
                     >
                       下载 DOCX 报告
                     </a>
+                    <a
+                      className="btn btn-primary btn-xs"
+                      href={`/api/v1/organizations/${orgId}/cases/${caseId}/reports/active/export.pdf`}
+                      download="analysis-report.pdf"
+                    >
+                      下载 PDF 报告
+                    </a>
                     <button
                       type="button"
                       className="btn btn-secondary btn-xs"

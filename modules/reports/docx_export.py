@@ -5,13 +5,10 @@ The report pipeline stores reports as Markdown produced by
 Markdown into a Word document so agencies can deliver an editable file, as the
 MVP spec requires ("PDF/DOCX 报告").
 
-Scope is deliberately limited to the constructs the generator actually emits:
-``#``/``##``/``###`` headings, pipe tables with ``:---`` separator rows,
-``- `` bullets, ``> `` quotes, ``---`` rules, fenced ``` code blocks, and inline
-``**bold**`` / `` `code` ``. Anything else falls back to plain paragraph text —
-content is carried through verbatim; the converter adds no wording of its own
-(no conclusion language can sneak in here, and the report's own
-disclaimers/gates travel with the content).
+Block parsing lives in ``modules.reports.markdown_blocks`` (shared with the
+PDF exporter); this module only renders blocks. Content is carried through
+verbatim — the converter adds no wording of its own (no conclusion language can
+sneak in here, and the report's own disclaimers/gates travel with the content).
 
 python-docx is an existing project dependency; nothing new is introduced.
 
@@ -27,7 +24,6 @@ alongside (response header, audit record).
 from __future__ import annotations
 
 import io
-import re
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -35,13 +31,7 @@ from datetime import datetime, timezone
 from docx import Document
 from docx.shared import Pt
 
-_HEADING_RE = re.compile(r"^(#{1,3})\s+(.*)$")
-_BULLET_RE = re.compile(r"^-\s+(.*)$")
-_QUOTE_RE = re.compile(r"^>\s?(.*)$")
-_RULE_RE = re.compile(r"^---+\s*$")
-_FENCE_RE = re.compile(r"^```(\w*)\s*$")
-_TABLE_SEPARATOR_RE = re.compile(r"^\|?(\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$")
-_INLINE_TOKEN_RE = re.compile(r"(\*\*.+?\*\*|`.+?`)")
+from modules.reports.markdown_blocks import Block, parse_blocks, split_inline
 
 # zip 格式可表示的最早时间；无溯源信息时作为固定时间戳
 _ZIP_EPOCH = datetime(1980, 1, 1, tzinfo=timezone.utc)
@@ -84,37 +74,44 @@ def _pin_zip_timestamps(data: bytes, moment: datetime) -> bytes:
     return output.getvalue()
 
 
-def _split_table_row(line: str) -> list[str]:
-    """Split a pipe-table row into trimmed cell strings."""
-    stripped = line.strip()
-    if stripped.startswith("|"):
-        stripped = stripped[1:]
-    if stripped.endswith("|"):
-        stripped = stripped[:-1]
-    return [cell.strip() for cell in stripped.split("|")]
-
-
-def _is_table_start(lines: list[str], index: int) -> bool:
-    """A table needs a header row followed by a separator row."""
-    if index + 1 >= len(lines):
-        return False
-    header, separator = lines[index].strip(), lines[index + 1].strip()
-    return "|" in header and bool(_TABLE_SEPARATOR_RE.match(separator))
-
-
 def _add_inline_runs(paragraph, text: str) -> None:
     """Add runs to a paragraph, honoring **bold** and `code` inline tokens."""
-    for token in _INLINE_TOKEN_RE.split(text):
-        if not token:
-            continue
-        if token.startswith("**") and token.endswith("**") and len(token) > 4:
-            run = paragraph.add_run(token[2:-2])
+    for kind, token in split_inline(text):
+        run = paragraph.add_run(token)
+        if kind == "bold":
             run.bold = True
-        elif token.startswith("`") and token.endswith("`") and len(token) > 2:
-            run = paragraph.add_run(token[1:-1])
+        elif kind == "code":
             run.font.name = "Courier New"
-        else:
-            paragraph.add_run(token)
+
+
+def _render_block(document, block: Block) -> None:
+    if block.kind == "table":
+        table = document.add_table(rows=1, cols=len(block.header))
+        table.style = "Table Grid"
+        for col, cell_text in enumerate(block.header):
+            cell_paragraph = table.rows[0].cells[col].paragraphs[0]
+            _add_inline_runs(cell_paragraph, cell_text)
+            for run in cell_paragraph.runs:
+                run.bold = True
+        for row in block.rows:
+            cells = table.add_row().cells
+            for col, cell_text in enumerate(row):
+                _add_inline_runs(cells[col].paragraphs[0], cell_text)
+    elif block.kind == "heading":
+        document.add_heading(block.text, level=block.level)
+    elif block.kind == "rule":
+        # Word 没有水平线元素，用一个空段落隔开即可
+        document.add_paragraph("")
+    elif block.kind == "code":
+        for code_line in block.lines:
+            code_run = document.add_paragraph().add_run(code_line)
+            code_run.font.name = "Courier New"
+    elif block.kind == "bullet":
+        _add_inline_runs(document.add_paragraph(style="List Bullet"), block.text)
+    elif block.kind == "quote":
+        _add_inline_runs(document.add_paragraph(style="Intense Quote"), block.text)
+    else:
+        _add_inline_runs(document.add_paragraph(), block.text)
 
 
 def markdown_to_docx_bytes(
@@ -144,78 +141,8 @@ def markdown_to_docx_bytes(
 
     document.add_heading(title, level=0)
 
-    lines = markdown.splitlines()
-    index = 0
-    while index < len(lines):
-        raw = lines[index]
-        line = raw.strip()
-
-        if not line:
-            index += 1
-            continue
-
-        if _is_table_start(lines, index):
-            header = _split_table_row(lines[index])
-            index += 2  # 跳过表头与分隔行
-            rows: list[list[str]] = []
-            while index < len(lines) and "|" in lines[index].strip() and lines[index].strip():
-                rows.append(_split_table_row(lines[index]))
-                index += 1
-            table = document.add_table(rows=1, cols=len(header))
-            table.style = "Table Grid"
-            for col, cell_text in enumerate(header):
-                cell_paragraph = table.rows[0].cells[col].paragraphs[0]
-                _add_inline_runs(cell_paragraph, cell_text)
-                for run in cell_paragraph.runs:
-                    run.bold = True
-            for row in rows:
-                cells = table.add_row().cells
-                for col in range(len(header)):
-                    cell_text = row[col] if col < len(row) else ""
-                    _add_inline_runs(cells[col].paragraphs[0], cell_text)
-            continue
-
-        heading = _HEADING_RE.match(line)
-        if heading:
-            level = len(heading.group(1))
-            document.add_heading(heading.group(2).strip(), level=min(level, 3))
-            index += 1
-            continue
-
-        if _RULE_RE.match(line):
-            # Word 没有水平线元素，用一个空段落隔开即可
-            document.add_paragraph("")
-            index += 1
-            continue
-
-        if _FENCE_RE.match(line):
-            # 围栏代码块：逐行等宽渲染，直到闭合围栏（缺失则到文档尾）
-            index += 1
-            while index < len(lines) and not _FENCE_RE.match(lines[index].strip()):
-                code_paragraph = document.add_paragraph()
-                code_run = code_paragraph.add_run(lines[index])
-                code_run.font.name = "Courier New"
-                index += 1
-            index += 1  # 跳过闭合围栏
-            continue
-
-        bullet = _BULLET_RE.match(line)
-        if bullet:
-            paragraph = document.add_paragraph(style="List Bullet")
-            _add_inline_runs(paragraph, bullet.group(1))
-            index += 1
-            continue
-
-        quote = _QUOTE_RE.match(line)
-        if quote:
-            paragraph = document.add_paragraph(style="Intense Quote")
-            _add_inline_runs(paragraph, quote.group(1))
-            index += 1
-            continue
-
-        paragraph = document.add_paragraph()
-        _add_inline_runs(paragraph, line)
-        index += 1
+    for block in parse_blocks(markdown):
+        _render_block(document, block)
 
     buffer = io.BytesIO()
     document.save(buffer)
