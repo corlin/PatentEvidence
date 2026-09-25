@@ -11,6 +11,32 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { CaseDetail, ParagraphBlock } from '../types/api'
 import { Link } from '../router/Router'
 
+// 服务端上传检查（spec §6.2）的拒绝原因
+const UPLOAD_REJECTION_MESSAGES: Record<string, string> = {
+  empty_file: '文件为空。',
+  file_size_exceeds_30mb_limit: '文件超过 30MB 上限。',
+  unsupported_file_format_only_docx_and_pdf: '仅支持 DOCX 或 PDF 文件。',
+  file_content_does_not_match_extension: '文件内容与扩展名不符（例如改名后的其他格式文件）。',
+  macros_not_allowed: '文件包含宏（VBA），出于安全原因不予接收。请另存为不含宏的 .docx 后重新上传。',
+  embedded_active_content_not_allowed: '文件内嵌可执行程序或带宏的文档，不予接收。',
+  dde_field_not_allowed: '文件包含 DDE 自动执行域，不予接收。',
+  external_resource_reference_not_allowed: '文件引用了网络上的模板或对象（可被远程加载），不予接收。',
+  suspicious_archive_structure: '文件结构异常（如压缩炸弹或非法路径），不予接收。',
+  pdf_active_content_not_allowed: 'PDF 包含启动外部程序或外发数据的动作，不予接收。',
+  password_protected_pdf_not_supported: 'PDF 需要打开密码，请移除密码后重新上传。',
+  unreadable_pdf: 'PDF 文件已损坏或无法解析。',
+}
+
+// 已接收但记录在案的主动内容
+const SECURITY_FINDING_LABELS: Record<string, string> = {
+  pdf_javascript: 'PDF 内含 JavaScript',
+  pdf_embedded_files: 'PDF 内含附件',
+  pdf_rich_media: 'PDF 内含富媒体',
+  pdf_xfa_form: 'PDF 内含 XFA 表单',
+  docx_ole_embedding: '文档内嵌 OLE 对象（如 MathType 公式、Visio 图）',
+  docx_activex_control: '文档内含 ActiveX 控件',
+}
+
 interface CaseDetailViewProps {
   orgId: string
   caseId: string
@@ -79,7 +105,7 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
       fetchCaseDetail()
     } catch (err: any) {
       if (err instanceof ApiError) {
-        setError(err.detail || '文件上传失败')
+        setError(UPLOAD_REJECTION_MESSAGES[err.detail] || err.detail || '文件上传失败')
       } else {
         setError('文件上传失败，请检查网络连接')
       }
@@ -245,6 +271,16 @@ export const CaseDetailView: React.FC<CaseDetailViewProps> = ({ orgId, caseId })
                   {(caseData.document.file_size / 1024).toFixed(1)} KB)
                   <br />
                   <span className="font-mono text-xs">SHA-256: {caseData.document.sha256}</span>
+                </div>
+              )}
+              {caseData.document && caseData.document.security_findings.length > 0 && (
+                <div className="mt-sm">
+                  <Alert
+                    type="warning"
+                    message={`该文件已通过检查并接收，但含有主动内容：${caseData.document.security_findings
+                      .map((code) => SECURITY_FINDING_LABELS[code] || code)
+                      .join('、')}。系统仅提取文本、不会执行这些内容；在本机打开原文件时请注意。`}
+                  />
                 </div>
               )}
             </div>

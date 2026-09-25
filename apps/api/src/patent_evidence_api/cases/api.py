@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 from typing import Any, TypeVar
 from uuid import UUID
 
@@ -8,9 +10,14 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 
 from adapters.object_storage.client import ObjectStorageClient
+from modules.cases.upload_guard import MAX_FILE_SIZE
 from patent_evidence_api.cases.services import CaseService, DocumentService, DrawingService
 from patent_evidence_api.core.http import parse_json_body, parse_uuid_or_404
 from patent_evidence_api.organization.access import OrganizationAccess
+
+
+# 请求体上限：base64 JSON 膨胀约 4/3，另留 1 MB 给 multipart 边界与 JSON 包装
+MAX_UPLOAD_REQUEST_BYTES = MAX_FILE_SIZE * 4 // 3 + 1024 * 1024
 
 
 class CaseCreateBody(BaseModel):
@@ -104,28 +111,33 @@ def create_cases_router(
         org_uuid = parse_uuid_or_404(organization_id)
         c_uuid = parse_uuid_or_404(case_id)
 
-        # Handle both multipart and JSON base64 payloads
+        # 在鉴权前读取请求体，因此先按声明长度设上限，避免把超大请求整体读入内存
+        declared_length = request.headers.get("content-length")
+        if declared_length is None or not declared_length.isdigit():
+            raise HTTPException(status_code=411, detail="content_length_required")
+        if int(declared_length) > MAX_UPLOAD_REQUEST_BYTES:
+            raise HTTPException(status_code=413, detail="file_size_exceeds_30mb_limit")
+
+        # Handle both multipart and JSON base64 payloads. The client-declared
+        # Content-Type is ignored: the service decides the type from the bytes.
         content_type_header = request.headers.get("content-type", "")
         filename = "document.docx"
         file_bytes = b""
-        mime = "application/octet-stream"
 
         if "multipart/form-data" in content_type_header:
-            form = await request.form()
+            form = await request.form(max_files=1, max_fields=5)
             upload_file = form.get("file")
             if upload_file is None or not hasattr(upload_file, "read"):
                 raise HTTPException(status_code=422, detail="missing_file_in_form")
             filename = getattr(upload_file, "filename", None) or "document.docx"
-            mime = getattr(upload_file, "content_type", None) or mimetypes.guess_type(filename)[0] or "application/octet-stream"
-            file_bytes = await upload_file.read()
+            # 多读 1 字节即可判定超限，不必读完整个文件
+            file_bytes = await upload_file.read(MAX_FILE_SIZE + 1)
         else:
             try:
                 body = DirectUploadBody.model_validate(await request.json())
                 filename = body.filename
-                mime = body.content_type
                 if body.content_base64:
-                    import base64
-                    file_bytes = base64.b64decode(body.content_base64)
+                    file_bytes = base64.b64decode(body.content_base64, validate=True)
                 elif body.content_text:
                     file_bytes = body.content_text.encode("utf-8")
                 else:
@@ -152,12 +164,18 @@ def create_cases_router(
                 organization_id=org_uuid,
                 case_id=c_uuid,
                 filename=filename,
-                content_type=mime,
                 data=file_bytes,
             )
             operation.describe(
                 target_id=UUID(upload_result["document"]["id"]),
-                safe_summary=f"Uploaded source document {filename}",
+                safe_summary=(
+                    f"Uploaded source document {filename}"
+                    + (
+                        f" findings={','.join(upload_result['document']['security_findings'])}"
+                        if upload_result["document"]["security_findings"]
+                        else ""
+                    )
+                ),
             )
 
         return JSONResponse(status_code=201, content=upload_result)

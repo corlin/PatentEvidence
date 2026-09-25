@@ -159,6 +159,7 @@ export interface SourceDocument {
   file_size: number
   mime_type: string
   sha256: string
+  security_findings: string[]
   created_at: string
 }
 

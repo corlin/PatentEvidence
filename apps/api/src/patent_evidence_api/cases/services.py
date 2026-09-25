@@ -1,6 +1,5 @@
 import hashlib
 import json
-import mimetypes
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -12,14 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.object_storage.client import ObjectStorageClient, build_source_key
 from modules.cases.parser import DocumentParser
-
-ALLOWED_MIME_TYPES = {
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/pdf",
-    "application/octet-stream",  # Fallback when generic
-}
-ALLOWED_EXTENSIONS = {".docx", ".pdf"}
-MAX_FILE_SIZE = 30 * 1024 * 1024  # 30 MB
+from modules.cases.upload_guard import UploadRejected, inspect_upload
 
 
 class CaseService:
@@ -194,7 +186,8 @@ class CaseService:
             (
                 await session.execute(
                     text(
-                        """SELECT id, filename, file_size, mime_type, sha256, storage_key, created_at
+                        """SELECT id, filename, file_size, mime_type, sha256, storage_key,
+                               security_findings, created_at
                         FROM source_documents
                         WHERE case_id=:case_id AND organization_id=:org_id
                         ORDER BY created_at DESC LIMIT 1"""
@@ -259,6 +252,7 @@ class CaseService:
                     "file_size": doc_row["file_size"],
                     "mime_type": doc_row["mime_type"],
                     "sha256": doc_row["sha256"],
+                    "security_findings": list(doc_row["security_findings"] or []),
                     "created_at": doc_row["created_at"].isoformat(),
                 }
                 if doc_row
@@ -355,19 +349,18 @@ class DocumentService:
         organization_id: UUID,
         case_id: UUID,
         filename: str,
-        content_type: str,
         data: bytes,
     ) -> dict[str, Any]:
         now = self._clock()
 
-        # Validate file format and size
-        if len(data) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=422, detail="file_size_exceeds_30mb_limit")
-
-        dot_idx = filename.rfind(".")
-        ext = filename[dot_idx:].lower() if dot_idx != -1 else ""
-        if ext not in ALLOWED_EXTENSIONS:
-            raise HTTPException(status_code=422, detail="unsupported_file_format_only_docx_and_pdf")
+        # 服务端按内容检查大小、扩展名、真实类型与主动内容（spec §6.2）；
+        # 客户端声明的 Content-Type 不可信，只保留按内容判定的 MIME
+        try:
+            verdict = inspect_upload(filename, data)
+        except UploadRejected as rejected:
+            raise HTTPException(status_code=422, detail=rejected.code) from rejected
+        content_type = verdict.mime_type
+        findings = list(verdict.findings)
 
         # Compute SHA-256
         sha256 = self._parser.compute_sha256(data)
@@ -383,9 +376,11 @@ class DocumentService:
         await session.execute(
             text(
                 """INSERT INTO source_documents
-                (id, organization_id, case_id, filename, file_size, mime_type, sha256, storage_key, created_at)
+                (id, organization_id, case_id, filename, file_size, mime_type, sha256, storage_key,
+                 security_findings, created_at)
                 VALUES
-                (:id, :org_id, :case_id, :filename, :file_size, :mime_type, :sha256, :storage_key, :now)"""
+                (:id, :org_id, :case_id, :filename, :file_size, :mime_type, :sha256, :storage_key,
+                 CAST(:security_findings AS jsonb), :now)"""
             ),
             {
                 "id": doc_id,
@@ -393,9 +388,10 @@ class DocumentService:
                 "case_id": case_id,
                 "filename": filename,
                 "file_size": len(data),
-                "mime_type": content_type or "application/octet-stream",
+                "mime_type": content_type,
                 "sha256": sha256,
                 "storage_key": storage_key,
+                "security_findings": json.dumps(findings),
                 "now": now,
             },
         )
@@ -425,6 +421,7 @@ class DocumentService:
                 "mime_type": content_type,
                 "sha256": sha256,
                 "storage_key": storage_key,
+                "security_findings": findings,
             },
             "parse_run": {
                 "id": str(run_id),
