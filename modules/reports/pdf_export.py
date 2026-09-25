@@ -26,7 +26,7 @@ import os
 from datetime import datetime, timezone
 from html import escape
 
-from modules.reports.docx_export import ReportProvenance, provenance_footer_text
+from modules.reports.docx_export import ReportProvenance, format_sealed_at
 from modules.reports.markdown_blocks import Block, parse_blocks, split_inline
 
 _EPOCH = datetime(1980, 1, 1, tzinfo=timezone.utc)
@@ -45,12 +45,18 @@ _BASE_CSS = f"""
   margin: 20mm 18mm 22mm 18mm;
   @bottom-left {{
     content: var(--footer, "");
+    width: 86%;
+    white-space: pre;
     font-family: {_FONT_STACK};
     font-size: 7pt;
+    line-height: 1.5;
     color: #555;
   }}
   @bottom-right {{
     content: counter(page) " / " counter(pages);
+    width: 14%;
+    white-space: nowrap;
+    text-align: right;
     font-family: {_FONT_STACK};
     font-size: 7pt;
     color: #555;
@@ -73,8 +79,23 @@ ul {{ margin: 4pt 0; padding-left: 16pt; }}
 
 
 def _css_string(value: str) -> str:
-    """Quote a value for use as a CSS string literal."""
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ") + '"'
+    """Quote a value for use as a CSS string literal (newlines become CSS ``\\A``)."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return '"' + escaped.replace("\n", "\\A ") + '"'
+
+
+def pdf_footer_lines(provenance: ReportProvenance) -> tuple[str, str]:
+    """PDF 页脚两行：版本号与封存时间一行，64 位根校验值独占一行。
+
+    Noto Sans CJK（API 镜像字体）比开发机字体宽，单行页脚会被自动折行并挤压
+    页码；按固定两行排版可避免。分隔符用 ASCII "|"：中点 "·" 在 Noto 中提取
+    文本时会变成 "•"。DOCX 页脚保持单行原文不变，以免改变既有快照的导出字节。
+    """
+    return (
+        f"证据快照版本 #{provenance.snapshot_number} | "
+        f"封存时间 {format_sealed_at(provenance.sealed_at)}",
+        f"快照根校验值 SHA-256: {provenance.root_sha256}",
+    )
 
 
 def _inline_html(text: str) -> str:
@@ -133,7 +154,7 @@ def markdown_to_html(
     """生成供 PDF 打印的完整 HTML 文档（所有文本均已转义）。"""
     moment = (provenance.sealed_at if provenance else _EPOCH).astimezone(timezone.utc)
     stamp = moment.strftime("%Y-%m-%dT%H:%M:%SZ")
-    footer = provenance_footer_text(provenance) if provenance else ""
+    footer = "\n".join(pdf_footer_lines(provenance)) if provenance else ""
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
