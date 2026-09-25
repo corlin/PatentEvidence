@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 
 from pypdf import PdfReader
 
-from modules.reports.docx_export import ReportProvenance, provenance_footer_text
-from modules.reports.pdf_export import markdown_to_html, markdown_to_pdf_bytes
+from modules.reports.docx_export import ReportProvenance
+from modules.reports.pdf_export import markdown_to_html, markdown_to_pdf_bytes, pdf_footer_lines
 
 PROVENANCE = ReportProvenance(
     snapshot_number=7,
@@ -71,7 +71,11 @@ def test_pdf_carries_content_and_provenance_footer() -> None:
     assert "大模型量化 分析报告" in text
     assert "一种量化方法" in text
     assert "不构成专利性结论" in text
-    assert provenance_footer_text(PROVENANCE) in text
+    # 两行各自完整出现：若页脚被自动折行（如换用更宽的 CJK 字体），此断言会失败
+    first, second = pdf_footer_lines(PROVENANCE)
+    assert first == "证据快照版本 #7 | 封存时间 2026-09-01T08:30:00Z"
+    assert second == f"快照根校验值 SHA-256: {'ab' * 32}"
+    assert first in text and second in text
     meta = PdfReader(io.BytesIO(data)).metadata
     assert meta["/CreationDate"] == "D:20260901083000Z"
     assert meta["/Author"] == "PatentEvidence"

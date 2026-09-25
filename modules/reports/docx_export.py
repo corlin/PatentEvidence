@@ -46,11 +46,14 @@ class ReportProvenance:
     sealed_at: datetime
 
 
+def format_sealed_at(sealed_at: datetime) -> str:
+    """封存时间统一以 UTC、秒级 ISO 8601 呈现。"""
+    return sealed_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def provenance_footer_text(provenance: ReportProvenance) -> str:
     """页脚文本：版本号 + 快照根校验值 + 封存时间（spec：版本号和校验值）。"""
-    sealed = provenance.sealed_at.astimezone(timezone.utc).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    sealed = format_sealed_at(provenance.sealed_at)
     return (
         f"证据快照版本 #{provenance.snapshot_number} · "
         f"快照根校验值 SHA-256: {provenance.root_sha256} · 封存时间 {sealed}"
