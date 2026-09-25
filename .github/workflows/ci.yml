@@ -16,6 +16,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      # 报告 PDF 导出（WeasyPrint）需要 pango 与 CJK 字体，与 API 镜像保持一致
+      - name: Install PDF rendering system packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 fonts-noto-cjk
       - name: Install Python dependencies
         run: pip install uv && uv sync --no-install-project
       - name: Install Node dependencies
