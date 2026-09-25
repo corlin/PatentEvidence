@@ -9,6 +9,11 @@ verbatim; the renderer adds no wording beyond the provenance footer.
 Byte-level determinism: the PDF creation/modification dates come from the
 snapshot's ``sealed_at`` and the document identifier is fixed, so the same
 sealed snapshot always yields the same bytes and the same file SHA-256.
+Embedded font subsets are written by fontTools, which stamps each subset's
+``head.modified`` with the wall clock unless ``SOURCE_DATE_EPOCH`` is set
+(reproducible-builds convention); the renderer pins it. This only bites with
+OpenType/CFF fonts such as Noto Sans CJK in the API image, so it is easy to
+miss on a development host.
 
 Fonts: Chinese text needs a CJK font on the host. The API image installs
 ``fonts-noto-cjk``; development hosts fall back to the platform CJK fonts.
@@ -17,6 +22,7 @@ Fonts: Chinese text needs a CJK font on the host. The API image installs
 from __future__ import annotations
 
 import hashlib
+import os
 from datetime import datetime, timezone
 from html import escape
 
@@ -24,6 +30,8 @@ from modules.reports.docx_export import ReportProvenance, provenance_footer_text
 from modules.reports.markdown_blocks import Block, parse_blocks, split_inline
 
 _EPOCH = datetime(1980, 1, 1, tzinfo=timezone.utc)
+# 字体子集 head.modified 的固定时间戳（1980-01-01，秒）；运维方已设置时尊重其值
+_SOURCE_DATE_EPOCH = str(int(_EPOCH.timestamp()))
 
 _FONT_STACK = (
     '"Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", '
@@ -156,6 +164,8 @@ def markdown_to_pdf_bytes(
     """把生成器产出的 Markdown 报告渲染为 PDF 字节流（逐字节确定性）。"""
     from weasyprint import HTML  # 延迟导入：仅导出时需要系统 pango 库
 
+    # fontTools 写字体子集时用 SOURCE_DATE_EPOCH 代替当前时间，否则同一输入字节不同
+    os.environ.setdefault("SOURCE_DATE_EPOCH", _SOURCE_DATE_EPOCH)
     document_html = markdown_to_html(markdown, title=title, provenance=provenance)
     # 固定文档标识：由内容派生，而非随机值，保证同一输入产出同一文件
     identifier = hashlib.sha256(document_html.encode("utf-8")).hexdigest()[:32].encode()

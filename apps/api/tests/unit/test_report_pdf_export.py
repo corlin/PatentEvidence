@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import itertools
 from datetime import datetime, timezone
 
 from pypdf import PdfReader
@@ -77,6 +78,25 @@ def test_pdf_carries_content_and_provenance_footer() -> None:
 
 
 def test_same_input_yields_identical_bytes() -> None:
+    first = markdown_to_pdf_bytes(REPORT, provenance=PROVENANCE)
+    second = markdown_to_pdf_bytes(REPORT, provenance=PROVENANCE)
+    assert first == second
+
+
+def test_bytes_do_not_depend_on_the_wall_clock(monkeypatch) -> None:
+    """字体子集时间戳不得随墙钟变化（API 镜像内 Noto CJK 曾因此逐次不同）。
+
+    WeasyPrint 有 hb-subset 时走 HarfBuzz 子集化（开发机 Homebrew），否则回退到
+    fontTools（API 镜像）；后者会写入当前时间。这里强制走 fontTools 路径复现镜像行为。
+    """
+    import fontTools.misc.timeTools as time_tools
+    import weasyprint.pdf.fonts as weasy_fonts
+
+    monkeypatch.setattr(weasy_fonts, "harfbuzz_subset", None)
+    # 每次读取墙钟都前进约 17 分钟，确保任何写入当前时间的地方都会产生差异
+    clock = itertools.count(1_900_000_000, 997)
+    monkeypatch.setattr(time_tools.time, "time", lambda: float(next(clock)))
+    monkeypatch.delenv("SOURCE_DATE_EPOCH", raising=False)
     first = markdown_to_pdf_bytes(REPORT, provenance=PROVENANCE)
     second = markdown_to_pdf_bytes(REPORT, provenance=PROVENANCE)
     assert first == second
