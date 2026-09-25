@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
+from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from modules.reports.docx_export import ReportProvenance, markdown_to_docx_bytes
+from modules.reports.pdf_export import markdown_to_pdf_bytes
 from patent_evidence_api.core.http import parse_uuid_or_404
 from patent_evidence_api.organization.access import OrganizationAccess
 from patent_evidence_api.reports.services import EvidenceReportService
@@ -101,13 +104,19 @@ def create_reports_router(
                 raise HTTPException(status_code=404, detail="no_report_found")
             return snapshot_data
 
-    @router.get("/{organization_id}/cases/{case_id}/reports/active/export.docx")
-    async def export_active_report_docx(
-        organization_id: str, case_id: str, request: Request
+    async def _export_active_report(
+        organization_id: str,
+        case_id: str,
+        request: Request,
+        *,
+        fmt: str,
+        render: Callable[..., bytes],
+        media_type: str,
+        filename: str,
     ) -> Response:
-        """把当前生效报告导出为 DOCX（spec 要求的交付格式之一）。
+        """导出当前生效报告的共用路径：取封存快照 → 渲染 → 计算文件哈希 → 审计。
 
-        只读：转换的是已封存的 Markdown 内容本身，导出器不新增任何措辞，
+        只读：渲染的是已封存的 Markdown 内容本身，导出器不新增任何措辞，
         报告内的结论门禁结果与免责声明随内容原样携带。页脚写入快照版本号与
         根校验值；文件字节对同一快照是确定的，其 SHA-256 经响应头返回并写入
         审计记录，使交付出去的文件可被核验。
@@ -117,7 +126,7 @@ def create_reports_router(
         async with access.mutation(
             request,
             org_uuid,
-            action="case.report.export_docx",
+            action=f"case.report.export_{fmt}",
             target_type="evidence_snapshot",
         ) as operation:
             snapshot_data = await report_service.get_active_snapshot(
@@ -132,27 +141,59 @@ def create_reports_router(
                 root_sha256=snapshot["root_sha256"],
                 sealed_at=datetime.fromisoformat(snapshot["sealed_at"]),
             )
-            docx_bytes = markdown_to_docx_bytes(
+            # 渲染是 CPU 密集的同步调用（PDF 约数百毫秒），放到线程池避免阻塞事件循环
+            file_bytes = await run_in_threadpool(
+                render,
                 report["content"] or "",
                 title=report["title"] or "专利证据分析报告",
                 provenance=provenance,
             )
-            file_sha256 = hashlib.sha256(docx_bytes).hexdigest()
+            file_sha256 = hashlib.sha256(file_bytes).hexdigest()
             operation.describe(
                 target_id=UUID(snapshot["id"]),
                 safe_summary=(
-                    f"Exported report DOCX for snapshot #{provenance.snapshot_number}"
-                    f" file_sha256={file_sha256}"
+                    f"Exported report {fmt.upper()} for snapshot "
+                    f"#{provenance.snapshot_number} file_sha256={file_sha256}"
                 ),
             )
             return Response(
-                content=docx_bytes,
-                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                content=file_bytes,
+                media_type=media_type,
                 headers={
-                    "Content-Disposition": 'attachment; filename="analysis-report.docx"',
+                    "Content-Disposition": f'attachment; filename="{filename}"',
                     "X-Content-SHA256": file_sha256,
                     "X-Snapshot-Root-SHA256": provenance.root_sha256,
                 },
             )
+
+    @router.get("/{organization_id}/cases/{case_id}/reports/active/export.docx")
+    async def export_active_report_docx(
+        organization_id: str, case_id: str, request: Request
+    ) -> Response:
+        """把当前生效报告导出为 DOCX（spec 要求的交付格式之一）。"""
+        return await _export_active_report(
+            organization_id,
+            case_id,
+            request,
+            fmt="docx",
+            render=markdown_to_docx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename="analysis-report.docx",
+        )
+
+    @router.get("/{organization_id}/cases/{case_id}/reports/active/export.pdf")
+    async def export_active_report_pdf(
+        organization_id: str, case_id: str, request: Request
+    ) -> Response:
+        """把当前生效报告导出为 PDF（spec 要求的交付格式之一）。"""
+        return await _export_active_report(
+            organization_id,
+            case_id,
+            request,
+            fmt="pdf",
+            render=markdown_to_pdf_bytes,
+            media_type="application/pdf",
+            filename="analysis-report.pdf",
+        )
 
     return router

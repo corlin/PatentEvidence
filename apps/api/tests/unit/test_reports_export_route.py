@@ -1,4 +1,4 @@
-"""Route tests for the DOCX export of the active analysis report."""
+"""Route tests for the DOCX/PDF exports of the active analysis report."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any, AsyncIterator
 from uuid import UUID, uuid4
 
 from docx import Document
+from pypdf import PdfReader
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -184,3 +185,43 @@ def test_docx_export_is_404_when_snapshot_has_no_report() -> None:
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "no_report_found"
+
+
+def test_pdf_export_returns_a_hashed_audited_pdf() -> None:
+    client, access = _client(FakeReportService(_snapshot_payload()))
+    url = f"/api/v1/organizations/{ORG}/cases/{CASE}/reports/active/export.pdf"
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "analysis-report.pdf" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF-")
+
+    text = "".join(page.extract_text() for page in PdfReader(io.BytesIO(response.content)).pages)
+    assert "一种量化方法" in text
+    assert "不构成专利性结论" in text
+    assert "证据快照版本 #4" in text and ROOT_SHA in text
+
+    file_sha = hashlib.sha256(response.content).hexdigest()
+    assert response.headers["x-content-sha256"] == file_sha
+    assert access.mutations == [
+        {
+            "action": "case.report.export_pdf",
+            "target_type": "evidence_snapshot",
+            "result": "allowed",
+            "target_id": SNAPSHOT_ID,
+            "safe_summary": f"Exported report PDF for snapshot #4 file_sha256={file_sha}",
+        }
+    ]
+    # 同一快照再次导出，字节与哈希不变
+    assert client.get(url).content == response.content
+
+
+def test_pdf_export_is_404_when_no_report_exists() -> None:
+    client, access = _client(FakeReportService(None))
+    response = client.get(
+        f"/api/v1/organizations/{ORG}/cases/{CASE}/reports/active/export.pdf"
+    )
+    assert response.status_code == 404
+    assert access.mutations[0]["result"] == "denied"
