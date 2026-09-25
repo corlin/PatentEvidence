@@ -211,13 +211,29 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
                   <h2 className="text-lg font-bold">
                     {snapshotDetail.report?.title || '专利证据分析与法律评估报告'}
                   </h2>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-xs"
-                    onClick={handleCopyMarkdown}
-                  >
-                    {copiedMarkdown ? '✓ 已复制 Markdown 源码！' : '复制报告 Markdown 源码'}
-                  </button>
+                  <div className="flex-row gap-sm">
+                    <a
+                      className="btn btn-primary btn-xs"
+                      href={`/api/v1/organizations/${orgId}/cases/${caseId}/reports/active/export.docx`}
+                      download="analysis-report.docx"
+                    >
+                      下载 DOCX 报告
+                    </a>
+                    <a
+                      className="btn btn-primary btn-xs"
+                      href={`/api/v1/organizations/${orgId}/cases/${caseId}/reports/active/export.pdf`}
+                      download="analysis-report.pdf"
+                    >
+                      下载 PDF 报告
+                    </a>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-xs"
+                      onClick={handleCopyMarkdown}
+                    >
+                      {copiedMarkdown ? '✓ 已复制 Markdown 源码！' : '复制报告 Markdown 源码'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-md bg-surface border rounded">

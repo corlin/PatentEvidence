@@ -60,6 +60,16 @@ describe('Reports & Evidence Snapshots Web Surface', () => {
       expect(screen.getByText('复制根哈希')).toBeDefined()
       expect(screen.getByText('专利证据分析与法律评估报告 (2026-CASE-001)')).toBeDefined()
     })
+
+    // 增量 16：DOCX/PDF 导出链接指向只读导出端点
+    const docxLink = screen.getByRole('link', { name: /下载 DOCX 报告/ }) as HTMLAnchorElement
+    expect(docxLink.href).toContain(
+      '/api/v1/organizations/org-1/cases/case-1/reports/active/export.docx'
+    )
+    const pdfLink = screen.getByRole('link', { name: /下载 PDF 报告/ }) as HTMLAnchorElement
+    expect(pdfLink.href).toContain(
+      '/api/v1/organizations/org-1/cases/case-1/reports/active/export.pdf'
+    )
   })
 
   it('switches between report preview and evidence audit timeline', async () => {
