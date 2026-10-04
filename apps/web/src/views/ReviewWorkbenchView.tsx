@@ -49,7 +49,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
   const [overallComments, setOverallComments] = useState('')
   const [itemizedFeedback, setItemizedFeedback] = useState<Record<string, string>>({})
   const [showSelfAuditModal, setShowSelfAuditModal] = useState(false)
-  // P0：复核签署产生不可变 SHA-256 决策签名，签署前必须显式二次确认
+  // P0：复核签署产生不可变的 SHA-256 决定摘要，签署前必须显式二次确认
   const [showDecisionConfirm, setShowDecisionConfirm] = useState(false)
 
   const loadData = async () => {
@@ -127,7 +127,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
 
       setSuccess(
         decisionType === 'approved'
-          ? '案件已终审批准！证据与分析报告已完成不可变签名封存。'
+          ? '案件已终审批准！证据与分析报告已按根哈希封存。'
           : decisionType === 'changes_requested'
           ? '已退回代理师修改，逐项批注已同步至比对工作台。'
           : '已拒绝该提审轮次。'
@@ -219,7 +219,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                 </span>
               </div>
               <div className="border-l pl-md">
-                <span className="text-xs text-secondary block mb-xs">不可变 Merkle Root</span>
+                <span className="text-xs text-secondary block mb-xs">证据快照根哈希 (SHA-256)</span>
                 <span className="font-mono text-xs font-bold text-text bg-subtle px-xs py-1 rounded border">
                   {reportDetail?.snapshot.root_sha256
                     ? `${reportDetail.snapshot.root_sha256.slice(0, 20)}...`
@@ -356,7 +356,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
               <div className="card p-md">
                 <h2 className="text-md font-bold mb-xs"><Icon name="sign" size={14} /> 复核结论签署 (Review Decision)</h2>
                 <p className="text-xs text-secondary mb-md">
-                  独立复核确认后签署决定，系统将生成不可变 SHA-256 数字决策签名。
+                  独立复核确认后签署决定，系统将记录不可变的 SHA-256 决定摘要。
                 </p>
 
                 {isPending ? (
@@ -489,7 +489,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
               <div>
                 <h2 className="text-lg font-bold"><Icon name="scroll" size={14} /> 多轮复核历史追溯 (Audit Trail)</h2>
                 <p className="text-xs text-secondary">
-                  不可变历史审计链，记录历次提审说明、专家批注、增量差异与数字防伪签名。
+                  不可变历史审计链，记录历次提审说明、专家批注、增量差异与决定摘要。
                 </p>
               </div>
             </div>
@@ -539,7 +539,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                           <strong>复核决策评语：</strong> {rev.decision.overall_comments || '无'}
                         </div>
                         <div className="font-mono text-muted text-xs">
-                          <strong>SHA-256 签名：</strong> {rev.decision.decision_signature}
+                          <strong>决定摘要 (SHA-256)：</strong> {rev.decision.decision_signature}
                         </div>
                       </div>
                     )}
@@ -630,7 +630,7 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
           </Modal>
         )}
 
-        {/* P0：复核决策签署的不可变签名二次确认 */}
+        {/* P0：复核决策签署的二次确认 */}
         <ConfirmDialog
           isOpen={showDecisionConfirm}
           title="确认签署复核决定？"
@@ -651,10 +651,10 @@ export const ReviewWorkbenchView: React.FC<ReviewWorkbenchViewProps> = ({
                 ? '【要求退回修改】'
                 : '【拒绝】'}
             </strong>
-            将生成不可变 SHA-256 数字决策签名并写入审计链。
+            将记录不可变的 SHA-256 决定摘要并写入审计链。
           </p>
           <p className="text-xs text-secondary mt-xs">
-            此操作<b>不可撤销</b>：决策签名与审计记录将永久保留，后续调整需发起新一轮提审。
+            此操作<b>不可撤销</b>：决定摘要与审计记录将永久保留，后续调整需发起新一轮提审。
           </p>
         </ConfirmDialog>
     </WorkbenchLayout>

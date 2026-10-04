@@ -92,7 +92,7 @@ describe('Reports & Evidence Snapshots Web Surface', () => {
     await waitFor(() => {
       expect(screen.getByText('全流程不可变证据链审计时序 (Evidence Audit Chain)')).toBeDefined()
       expect(screen.getByText('原始技术交底文档存证')).toBeDefined()
-      expect(screen.getByText('不可变全包 Merkle 根哈希封存印章')).toBeDefined()
+      expect(screen.getByText('证据快照根哈希封存')).toBeDefined()
     })
   })
 })

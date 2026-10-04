@@ -168,7 +168,7 @@ export const DeliveryWorkbenchView: React.FC<DeliveryWorkbenchViewProps> = ({
 
           <div className="grid-3-cols gap-md p-md bg-surface border rounded mt-sm">
             <div className="min-w-0">
-              <span className="text-xs text-secondary block mb-xs font-semibold">不可变 Merkle Root SHA-256</span>
+              <span className="text-xs text-secondary block mb-xs font-semibold">证据快照根哈希 (SHA-256)</span>
               <div className="font-mono text-xs font-bold text-text break-all bg-subtle p-xs rounded border">
                 {deliveryRecord?.root_sha256 || reportDetail?.snapshot.root_sha256 || '待生成'}
               </div>

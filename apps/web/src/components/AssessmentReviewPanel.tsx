@@ -131,7 +131,7 @@ export const AssessmentReviewPanel: React.FC<AssessmentReviewPanelProps> = ({
           包摘要 <span className="font-mono">{detail.payload_sha256}</span>
           {last && (
             <>
-              {' · 决策签名 '}
+              {' · 决定摘要 '}
               <span className="font-mono">{last.decision_signature.slice(0, 16)}…</span>
             </>
           )}

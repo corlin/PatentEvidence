@@ -323,7 +323,7 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
                     <div className="flex-between mb-xs">
                       <div className="flex-row gap-xs align-center">
                         <span className="badge badge-success font-bold">6</span>
-                        <span className="font-bold text-sm text-green-900">不可变全包 Merkle 根哈希封存印章</span>
+                        <span className="font-bold text-sm text-green-900">证据快照根哈希封存</span>
                       </div>
                       <span className="badge badge-success text-xs">全案完结归档</span>
                     </div>
@@ -331,7 +331,7 @@ export const ReportsWorkbenchView: React.FC<ReportsWorkbenchViewProps> = ({
                       Root SHA-256: <code>{snapshotDetail.snapshot.root_sha256}</code>
                     </p>
                     <p className="text-xs text-secondary mt-xs">
-                      签署人: {snapshotDetail.snapshot.sealed_by_identity_id} 于 {snapshotDetail.snapshot.sealed_at}
+                      封存人: {snapshotDetail.snapshot.sealed_by_identity_id} 于 {snapshotDetail.snapshot.sealed_at}
                     </p>
                   </div>
                 </div>

@@ -75,7 +75,14 @@ class ReviewWorkflowEngine:
         root_sha256: str,
         decided_at: str,
     ) -> str:
-        """Create a cryptographic SHA-256 signature binding the reviewer, decision, and evidence Merkle root."""
+        """Digest binding the reviewer, decision and evidence root hash (unkeyed SHA-256).
+
+        Despite the historical ``decision_signature`` name, this is not a digital
+        signature: every input is stored alongside it, so anyone can recompute it.
+        It detects accidental alteration but does not prove authorship (ADR 0004).
+        The ``merkle_root:`` label in the payload is kept as-is so existing digests
+        stay reproducible; the value is the flat snapshot root hash, not a Merkle root.
+        """
         payload = f"submission:{submission_id}|case:{case_id}|reviewer:{reviewer_identity_id}|decision:{decision}|merkle_root:{root_sha256}|timestamp:{decided_at}"
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

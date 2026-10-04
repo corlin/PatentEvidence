@@ -1,6 +1,12 @@
 # 锂电与储能领域“证据级” FTO 与竞品规避平台设计与实施蓝图
 ## PatentEvidence · Enterprise Evidence-Grade IP & Design-Around Platform
 
+> **实施勘误（2026-10-04）**：本规划已被采纳为产品主线（[ADR 0004](../adr/0004-fto-design-around-supersedes-agency-assessment.md)）。
+> 经与代码核对，§5 / §6 中部分工程假设与现状不符（例如第 1–2 周的 PatentQ 治理移植已在 P0-02 完成；
+> RLS 设置项为 `app.current_organization_id`；前端为 React + Vite）。以 ADR 0004“核对结果”为准。
+> ADR 0004“待核实事项”所列内容（数据件数与来源、中国法律状态来源、各类供应方、判例基准集、M1 日程）
+> 在取得实测数据或明确决定前不视为既定事实。
+
 ---
 
 ## 1. 战略定位与四重竞争壁垒
