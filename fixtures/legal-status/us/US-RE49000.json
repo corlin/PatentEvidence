@@ -1,0 +1,34 @@
+{
+ "applicationNumberText": "16141512",
+ "lastIngestionDateTime": "2026-08-13T08:16:03",
+ "applicationMetaData": {
+  "filingDate": "2018-09-25",
+  "grantDate": "2022-03-29",
+  "patentNumber": "RE49000",
+  "applicationStatusDescriptionText": "Patented Case",
+  "applicationStatusDate": "2022-03-09",
+  "effectiveFilingDate": "2018-09-25",
+  "applicationTypeCategory": "REISSUE"
+ },
+ "eventDataBag": [
+  {
+   "eventCode": "M1552",
+   "eventDescriptionText": "Payment of Maintenance Fee, 8th Year, Large Entity",
+   "eventDate": "2025-01-09"
+  }
+ ],
+ "parentContinuityBag": [
+  {
+   "parentApplicationStatusCode": 150,
+   "firstInventorToFileIndicator": true,
+   "claimParentageTypeCode": "REI",
+   "claimParentageTypeCodeDescriptionText": "is a Reissue of",
+   "parentApplicationStatusDescriptionText": "Patented Case",
+   "parentApplicationNumberText": "14948226",
+   "parentApplicationFilingDate": "2015-11-20",
+   "childApplicationNumberText": "16141512",
+   "parentPatentNumber": "9755310"
+  }
+ ],
+ "patentTermAdjustmentData": null
+}
