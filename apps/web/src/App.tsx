@@ -32,6 +32,9 @@ const CaseDetailView = lazy(() =>
 const FeaturesWorkbenchView = lazy(() =>
   import('./views/FeaturesWorkbenchView').then((m) => ({ default: m.FeaturesWorkbenchView }))
 )
+const ProductFeaturesWorkbenchView = lazy(() =>
+  import('./views/ProductFeaturesWorkbenchView').then((m) => ({ default: m.ProductFeaturesWorkbenchView }))
+)
 const SearchWorkbenchView = lazy(() =>
   import('./views/SearchWorkbenchView').then((m) => ({ default: m.SearchWorkbenchView }))
 )
@@ -230,6 +233,12 @@ const AppRoutes: React.FC = () => {
       patterns: ['/organizations/:orgId/cases/:caseId/search', '/cases/:caseId/search'],
       render: (p: Record<string, string>) => (
         <SearchWorkbenchView orgId={p.orgId || activeOrgId!} caseId={p.caseId} />
+      ),
+    },
+    {
+      patterns: ['/organizations/:orgId/cases/:caseId/product', '/cases/:caseId/product'],
+      render: (p: Record<string, string>) => (
+        <ProductFeaturesWorkbenchView orgId={p.orgId || activeOrgId!} caseId={p.caseId} />
       ),
     },
     {

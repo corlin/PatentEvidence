@@ -40,6 +40,9 @@ import type {
   SearchStrategy,
   SessionInfo,
   TotpConfirmResult,
+  ProductDescription,
+  ProductFeatureSet,
+  ProductFeatureSetSummary,
   MfaChallengeResult,
   TotpEnrollResult,
   TriageStatus,
@@ -381,6 +384,78 @@ export const apiClient = {
   },
 
   // Technical Features
+  // ---- Product description & features (ADR 0010) ----
+  async listProductDescriptions(orgId: string, caseId: string): Promise<{ items: ProductDescription[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/descriptions`)
+  },
+
+  async addProductDescription(orgId: string, caseId: string, text: string): Promise<{ id: string; version_number: number }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/descriptions`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    })
+  },
+
+  async createProductFeatureDraft(orgId: string, caseId: string, descriptionId: string): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/descriptions/${descriptionId}/feature-sets`, {
+      method: 'POST',
+    })
+  },
+
+  async listProductFeatureSets(orgId: string, caseId: string): Promise<{ items: ProductFeatureSetSummary[] }> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets`)
+  },
+
+  async getProductFeatureSet(orgId: string, caseId: string, setId: string): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets/${setId}`)
+  },
+
+  async editProductFeature(orgId: string, caseId: string, setId: string, code: string, text: string): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets/${setId}/features/${code}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ text }),
+    })
+  },
+
+  async addProductFeature(orgId: string, caseId: string, setId: string, text: string): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets/${setId}/features`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    })
+  },
+
+  async deleteProductFeature(orgId: string, caseId: string, setId: string, code: string): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets/${setId}/features/${code}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async splitProductFeature(orgId: string, caseId: string, setId: string, code: string, at: number): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets/${setId}/features/${code}/split`, {
+      method: 'POST',
+      body: JSON.stringify({ at }),
+    })
+  },
+
+  async mergeProductFeatures(orgId: string, caseId: string, setId: string, codes: string[]): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets/${setId}/merge`, {
+      method: 'POST',
+      body: JSON.stringify({ codes }),
+    })
+  },
+
+  async confirmProductFeatureSet(orgId: string, caseId: string, setId: string): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets/${setId}/confirm`, {
+      method: 'POST',
+    })
+  },
+
+  async reviseProductFeatureSet(orgId: string, caseId: string, setId: string): Promise<ProductFeatureSet> {
+    return request(`/api/v1/organizations/${orgId}/cases/${caseId}/product/feature-sets/${setId}/revisions`, {
+      method: 'POST',
+    })
+  },
+
   async extractFeatures(orgId: string, caseId: string): Promise<FeatureSetDetail> {
     return request<FeatureSetDetail>(`/api/v1/organizations/${orgId}/cases/${caseId}/features/extract`, {
       method: 'POST',

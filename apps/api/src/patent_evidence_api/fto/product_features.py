@@ -213,6 +213,44 @@ class ProductFeatureService:
             ],
         }
 
+    async def list_descriptions(self, session: AsyncSession, *, organization_id: UUID, case_id: UUID) -> list[dict[str, Any]]:
+        rows = (
+            await session.execute(
+                text(
+                    """SELECT id, version_number, description_text, text_sha256, created_at
+                    FROM product_descriptions WHERE case_id = :case AND organization_id = :org
+                    ORDER BY version_number DESC"""
+                ),
+                {"case": case_id, "org": organization_id},
+            )
+        ).mappings().all()
+        return [
+            {"id": str(r["id"]), "version_number": r["version_number"], "text": r["description_text"],
+             "text_sha256": r["text_sha256"], "created_at": r["created_at"].isoformat()}
+            for r in rows
+        ]
+
+    async def list_sets(self, session: AsyncSession, *, organization_id: UUID, case_id: UUID) -> list[dict[str, Any]]:
+        rows = (
+            await session.execute(
+                text(
+                    """SELECT s.id, s.version_number, s.status, s.description_id, s.parent_set_id, s.confirmed_at,
+                              (SELECT count(*) FROM product_features f WHERE f.feature_set_id = s.id) AS feature_count
+                    FROM product_feature_sets s WHERE s.case_id = :case AND s.organization_id = :org
+                    ORDER BY s.version_number DESC"""
+                ),
+                {"case": case_id, "org": organization_id},
+            )
+        ).mappings().all()
+        return [
+            {"id": str(r["id"]), "version_number": r["version_number"], "status": r["status"],
+             "description_id": str(r["description_id"]),
+             "parent_set_id": str(r["parent_set_id"]) if r["parent_set_id"] else None,
+             "confirmed_at": r["confirmed_at"].isoformat() if r["confirmed_at"] else None,
+             "feature_count": r["feature_count"]}
+            for r in rows
+        ]
+
     # ------------------------------------------------------------ internals
 
     async def _require_case(self, session: AsyncSession, organization_id: UUID, case_id: UUID) -> None:
