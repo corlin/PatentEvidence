@@ -4,9 +4,20 @@ PatentEvidence is an independent commercial repository. Do not import Git
 history, credentials, runtime data, databases, cookies, real case files, or
 generated artifacts from source repositories.
 
-Keep P0 limited to runnable process and governance scaffolding. Product work
-must preserve tenant isolation, provenance, immutable approval boundaries, and
-the CNIPR manual-handoff constraint described in the product specification.
+The product direction is the evidence-grade FTO and design-around platform:
+`docs/plans/2026-fto-design-around-master-plan.md`, as corrected by
+`docs/adr/0004-fto-design-around-supersedes-agency-assessment.md`. The former
+agency spec (`docs/product/mvp-implementation-spec.md`) is superseded; the
+patentability-assessment module is frozen (keep its tests passing, do not
+extend it).
+
+Product work must preserve tenant isolation, provenance, immutable approval
+boundaries, the CNIPR manual-handoff constraint (no automated CNIPR access),
+verifiable exports, and server-side upload inspection.
+
+Be rigorous: state only what is verified by code, measured data, or a cited
+source. Mark everything else as unverified (see ADR 0004 "待核实事项") instead
+of presenting it as fact.
 
 Before committing, run the validation commands in `README.md`. Never commit
 `.env`, secrets, local runtime data, or the `.superpowers/` workspace.

@@ -1,12 +1,16 @@
 # PatentEvidence 🛡️
 
-PatentEvidence is a high-assurance, multi-tenant enterprise SaaS platform engineered for **Enterprise IP & R&D departments in the New Energy & Energy Storage industry (covering structural assemblies & chemical formulations)**. It delivers end-to-end traceable "evidence-grade" patent workflows, automated claim feature modeling, intelligent Claim Chart infringement comparison matrices, **closed-loop auto-validated Design-Around engines**, **dual-role Stage-Gate clearance workflows**, **dual-track judicial & RFC 3161 TSA trusted timestamping**, and verifiable client delivery gateways.
+PatentEvidence is a high-assurance, multi-tenant enterprise SaaS platform engineered for **Enterprise IP & R&D departments in the New Energy & Energy Storage industry (covering structural assemblies & chemical formulations)**. Its target product is an evidence-grade FTO and design-around workflow: claim charts against third-party claims, closed-loop design-around validation, dual-role Stage-Gate clearance, and dual-track trusted timestamping ([ADR 0004](./docs/adr/0004-fto-design-around-supersedes-agency-assessment.md)).
+
+> **Implementation status:** many of these capabilities are **planned, not built**. The platform base (tenancy, RLS, MFA, audit), case intake, feature modeling, comparison matrix, review/delivery gates, sealed snapshots and verifiable DOCX/PDF exports exist today. Hybrid retrieval, FTO infringement rule packs, design-around, trusted timestamping, BYOK and Stage-Gate clearance passes do not. Each capability below is labelled **【已实现】**, **【部分实现】** or **【规划中】**, based on the code as checked on 2026-10-04.
 
 > **Language note:** Product capability descriptions are written in Chinese (the platform's primary operating language), while section headings, technical commands, and tooling references are kept in English. Domain terminology is defined authoritatively in [`CONTEXT.md`](./CONTEXT.md). Master implementation blueprint is in [`docs/plans/2026-fto-design-around-master-plan.md`](./docs/plans/2026-fto-design-around-master-plan.md).
 
 ---
 
-## 🏛️ Strategic Moats (四重竞争壁垒)
+## 🏛️ Strategic Moats (四重竞争壁垒) — 目标，均为【规划中】
+
+These are the intended competitive moats from the master plan. None of them is implemented yet, and the corpus size below is a planning figure that has not been verified (see ADR 0004 "待核实事项").
 
 1. **Data Moat (Vertical Feature-Level Corpus)**: Focused on top 15 litigious battery/storage giants over the past 5 years (5,000~8,000 core valid patents), establishing an off-the-shelf fine-grained claim element taxonomy.
 2. **Algorithmic Moat (Closed-Loop Auto-Validated Design-Around)**: Once redesign proposals are generated, the engine automatically re-checks them against the competitor's full claim tree and patent family to eliminate secondary infringement.
@@ -28,48 +32,40 @@ graph LR
 ```
 
 1. **多租户与平台治理（Identity & Platform Governance）**
-   - 机构隔离（PostgreSQL Row-Level Security 强制隔离）与单向审计日志不可变性；
-   - 12 小时安全会话、TOTP 双因素认证（MFA Step-Up）、一次性恢复码与 72 小时单次邀请生命周期；
-   - 支持客户自管密钥（BYOK）与密文存储，配合大模型敏感度双路由实现零数据留存。
+   - 【已实现】机构隔离（PostgreSQL FORCE RLS）、只追加审计日志；12 小时会话、TOTP 双因素（MFA Step-Up）、一次性恢复码、72 小时单次邀请。
+   - 【规划中】客户自管密钥（BYOK）与密文存储（`adapters/secret-store` 目前仅为占位）；大模型敏感度双路由与零数据留存（当前为单一 OpenAI 兼容客户端）。
 
-2. **Case Intake & Patent Drawings Gallery (案件交底与说明书附图高精度提炼)**
-   - **High-Fidelity Drawing Extraction & Cryptographic Sealing**: Automated vector and raster image separation from DOCX/PDF with independent SHA-256 tamper-evident digest per drawing;
-   - **Visual OCR & Specification Cross-Verification**: Local visual OCR engine cross-referenced with specification dictionary, supporting uppercase alphanumeric marks (e.g. `218A`~`218E`, `150A`~`150D`) and eliminating background noise marks to achieve 100% true alignment with drawing lead lines;
-   - **Hierarchical Claim Linkage & Badges (独权 vs 从权)**: Deep claim number extraction (`claim_numbers: number[]`) distinguishing Independent Claim features (golden **`[独权1]`**) from Dependent Claim refinements (indigo-purple **`[从权6]`**), with canonical legal claim terminology prioritization;
-   - **In-Situ Patent Compliance Linter (附图规范静态体检)**: Automated static audit for cross-figure naming drift (术语漂移), dangling claim marks (权项悬空标号), and undefined marks, rendered via an unobtrusive collapsible drawer above the gallery;
-   - **Split CAD-Grade Workbench Layout**: 1140px split layout with left high-res canvas (zoom/pan, locked viewport `<= 66vh` to prevent vertical overflow) and right inspection panel with live search and filter pills.
+2. **案件录入与说明书附图（Case Intake & Drawings）**
+   - 【已实现】DOCX/PDF 上传与服务端内容检查（真实类型、大小、宏/DDE/远程模板/PDF 动作等；常见主动内容接收并记录）；解析版本与 SHA-256。
+   - 【已实现】附图提取（每幅附图独立 SHA-256）、权利要求编号关联（独权/从权标识）、附图规范静态检查（术语漂移、悬空标号、未定义标号）。
+   - 【部分实现】附图 OCR 依赖宿主机 `tesseract`；API 镜像未安装该程序，生产镜像中 OCR 不运行。附图标号识别准确率尚无评测数据，不作表述。
 
-3. **权利要求技术特征建模（Claim Feature Modeling）**
-   - 权利要求层级拆解（F1~Fn）、前序/表征特征分类与交底书段落原文锚定；
-   - 支持草稿态在线拆分、合并与新增，一键确认并锁定为不可变基准版本。
+3. **技术特征建模（Feature Modeling）**
+   - 【已实现】特征拆解（F1~Fn）、前序/表征分类与段落原文锚定；草稿态拆分/合并/新增，确认后锁定为不可变版本。
+   - 【规划中】FTO 所需的“第三方权利要求要素”模型（按权利要求树逐要素拆解）。
 
-4. **候选专利初筛与混合检索（Hybrid Retrieval & Screening）**
-   - 研发白话方案自动解构（提取核心部件、空间装配与功能功效）；
-   - 密集向量检索（Dense Embedding） + 稀疏关键词（BM25） + 分类号过滤的多路并行召回，结合 Cross-Encoder 深度重排，输出 Top 20~30 件竞品高危专利。
+4. **检索与候选初筛（Retrieval & Screening）**
+   - 【已实现】检索策略与任务、EPO / USPTO 适配器、CNIPR 人工交接、候选文献初筛记录。
+   - 【规划中】垂直专利库；向量检索 + BM25 + 分类号过滤的混合召回与 Cross-Encoder 重排（目前无 pgvector、无中文分词）；研发白话方案自动解构。
 
-5. **2D 特征深度比对矩阵（Claim Chart Comparison Matrix）**
-   - 权利要求特征与对比文献（D1~Dm）二维交叉比对矩阵，适配中国（全面覆盖+等同）、美国（全要素+等同+审查历史禁反悔）、欧洲（UPC + 德国）法域规则包；
-   - 三态侵权判定（`相同公开` / `等同替代` / `存在差异`）、引证位置与法律论据结构化录入；
-   - 特征文本附图标注智能匹配，全局新颖性与创造性风险 Banner 实时评估。
+5. **逐特征比对矩阵（Comparison Matrix）**
+   - 【已实现】特征 × 对比文献的二维比对矩阵，三态判定（相同公开 / 等同替代 / 存在差异）及引证位置录入。当前语义为可专利性比对（申请方案特征 vs 现有技术）。
+   - 【规划中】FTO 侵权比对（他人有效权利要求各要素 vs 己方方案）及中国 / 美国 / 欧洲（UPC、德国）法域规则包。具体判定规则须由规则包定义并经专业人员审定。
 
-6. **闭环反向验真规避设计（Design-Around & Auto-Validation Engine）**
-   - 针对 Claim Chart 中识别的断点特征，生成结构化替代/削减工程改动建议；
-   - **反向闭环排查**：自动将改动方案放回竞品从属权利要求树与同族专利池重新比对，严防“二次落入”风险。
+6. **闭环反向验真规避设计（Design-Around & Auto-Validation）**
+   - 【规划中】针对断点特征生成替代/削减建议，并自动回比从属权利要求树与同族专利池。
 
-7. **确定性可专利性与侵权预评估规则层（Patentability & Assessment Rules）**
-   - 确定性门禁（版本 `assessment-rules-v3`）：优先权核验（多项 / 部分优先权、期限、首次申请、证明核验）→ 文献日期门禁（现有技术 / 抵触申请 / 不可用 / 日期未知，按特征逐项判断）→ 新颖性单篇全覆盖门禁、组合覆盖筛查、证据完备度核查与创造性三步法脚手架；
-   - 证据完备度区分「阻塞项」与「提示项」，统一编排入口 `assess_case()`，产出评估包与评估版本快照（`assessment_versions`，仅追加不可改）。
+7. **可专利性预评估规则层（Patentability Assessment Rules）** — 【已实现，已冻结】
+   - 确定性规则（`assessment-rules-v3`）：优先权核验 → 文献日期门禁 → 新颖性单篇全覆盖门禁、组合覆盖筛查、证据完备度核查与创造性三步法脚手架；评估版本快照仅追加不可改。按 ADR 0004，该模块不再扩展。
 
-8. **研发 Stage-Gate 门禁流与双角色协同（Dual-Role Stage-Gate Clearance）**
-   - 研发工程师提方案与整改，IP 工程师复核打标与终审放行；
-   - 签发不可逆的《FTO 清障通行凭证》，嵌入企业 ERP/PLM 立项、开模节点；
-   - 多轮提审流转（Round 1, Round 2...）、逐特征专家修改批注与退回高亮标记。
+8. **复核门禁与双角色协同（Review & Stage-Gate）**
+   - 【已实现】多轮提审（`round_number`）、复核决定与逐项批注、案件级交付门禁（须有已批准且无阻塞项的评估版本）。
+   - 【规划中】研发/IP 双角色 Stage-Gate、《FTO 清障通行凭证》、与 ERP/PLM 的集成。
 
-9. **双轨证据链存证与客户交付（Merkle Tree, TSA & Delivery Gateway）**
-   - 全案 Merkle Root SHA-256 根哈希计算与快照封存；
-   - 国内权威司法链（如天平链）与国际 RFC 3161 TSA / 公链哈希双轨时间戳存证；
-   - 生成专用防伪交付证书（Delivery Certificate）与受控下载令牌（Token），支持外部持证律师入驻复核签署。
-
+9. **证据封存与交付（Evidence Sealing & Delivery）**
+   - 【已实现】证据快照封存：对规范化（键排序）JSON 计算单一 SHA-256 根哈希。注意：这不是 Merkle 树，不提供逐项包含性证明。
+   - 【已实现】可复核导出：DOCX / PDF / 可打印 HTML，页脚含快照版本号与根哈希；同一快照导出字节确定，文件 SHA-256 经响应头返回并写入审计日志。交付记录含受控下载令牌。
+   - 【规划中】国内司法链 / 可信时间戳与 RFC 3161 TSA 双轨存证、交付证书、外部持证律师复核签署。
 
 ---
 
@@ -131,13 +127,13 @@ pnpm install
 ### 3. Running Validation Suite
 
 ```sh
-# Run API unit tests (261/261 passed)
+# Run API unit tests
 .venv/bin/pytest apps/api/tests/unit/
 
-# Run PostgreSQL RLS integration tests (81/81 passed)
+# Run PostgreSQL RLS integration tests
 ./scripts/test-postgres.sh
 
-# Run frontend Vitest suite (59/59 passed)
+# Run frontend Vitest suite
 pnpm test:web
 
 # Build production frontend bundle
