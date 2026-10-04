@@ -148,7 +148,7 @@ def test_section_numbering_stays_sequential() -> None:
         "## 6. 专利性与法律风险论证"
     )
     assert content.index("## 6. 专利性与法律风险论证") < content.index(
-        "## 7. 证据链防伪验真与审计溯源声明"
+        "## 7. 证据完整性与审计溯源说明"
     )
 
 
