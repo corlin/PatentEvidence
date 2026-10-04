@@ -1,0 +1,29 @@
+{
+ "applicationNumberText": "17342340",
+ "lastIngestionDateTime": "2026-08-12T17:07:31",
+ "applicationMetaData": {
+  "filingDate": "2021-06-08",
+  "grantDate": "2025-10-21",
+  "patentNumber": "12451529",
+  "applicationStatusDescriptionText": "Patented Case",
+  "applicationStatusDate": "2025-10-08",
+  "effectiveFilingDate": "2021-06-08",
+  "applicationTypeCategory": "REGULAR"
+ },
+ "eventDataBag": [],
+ "parentContinuityBag": [
+  {
+   "parentApplicationStatusCode": 161,
+   "firstInventorToFileIndicator": true,
+   "claimParentageTypeCode": "CON",
+   "claimParentageTypeCodeDescriptionText": "is a Continuation of",
+   "parentApplicationStatusDescriptionText": "Abandoned  --  Failure to Respond to an Office Action",
+   "parentApplicationNumberText": "14747568",
+   "parentApplicationFilingDate": "2015-06-23",
+   "childApplicationNumberText": "17342340"
+  }
+ ],
+ "patentTermAdjustmentData": {
+  "adjustmentTotalQuantity": 1171
+ }
+}

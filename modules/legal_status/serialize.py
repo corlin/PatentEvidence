@@ -18,7 +18,7 @@ from typing import Any
 from modules.legal_status.models import LegalStatusAssessment
 
 # Bump when any rule in us.py / ep.py changes meaning; old assessments stay as recorded.
-RULES_VERSION = "legal-status-rules/1"
+RULES_VERSION = "legal-status-rules/2"  # /2: reissues are undetermined
 
 _US_META_FIELDS = (
     "filingDate",
@@ -27,6 +27,7 @@ _US_META_FIELDS = (
     "applicationStatusDescriptionText",
     "applicationStatusDate",
     "effectiveFilingDate",
+    "applicationTypeCategory",
 )
 _US_EVENT_PREFIXES = ("M155", "M255", "M355", "EXP", "REM", "DIST", "P574")
 _EP_KEEP_CODES = {"AK", "PGFP", "PGRI", "26N", "P01"}

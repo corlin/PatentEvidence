@@ -1,0 +1,34 @@
+{
+ "applicationNumberText": "14381767",
+ "lastIngestionDateTime": "2026-04-21T08:00:03",
+ "applicationMetaData": {
+  "filingDate": "2014-08-28",
+  "grantDate": "2019-12-10",
+  "patentNumber": "10505211",
+  "applicationStatusDescriptionText": "Patented Case",
+  "applicationStatusDate": "2019-11-20",
+  "effectiveFilingDate": "2014-08-28",
+  "applicationTypeCategory": "REGULAR"
+ },
+ "eventDataBag": [
+  {
+   "eventCode": "M1551",
+   "eventDescriptionText": "Payment of Maintenance Fee, 4th Year, Large Entity",
+   "eventDate": "2023-05-24"
+  }
+ ],
+ "parentContinuityBag": [
+  {
+   "parentApplicationStatusCode": 150,
+   "claimParentageTypeCode": "NST",
+   "claimParentageTypeCodeDescriptionText": "is a National Stage Entry of",
+   "parentApplicationStatusDescriptionText": "Patented Case",
+   "parentApplicationNumberText": "PCTIB2013000196",
+   "parentApplicationFilingDate": "2013-02-15",
+   "childApplicationNumberText": "14381767"
+  }
+ ],
+ "patentTermAdjustmentData": {
+  "adjustmentTotalQuantity": 1220
+ }
+}

@@ -50,9 +50,15 @@ class RefreshResult:
 
 
 def parse_publication_number(publication_number: str) -> tuple[str, str, str]:
-    """``US-7252747-B2`` -> ("US", "7252747", "B2"); only US and EP are supported."""
+    """``US-7252747-B2`` -> ("US", "7252747", "B2"); US reissues look like ``US-RE49000-E1``.
+
+    Only US and EP are supported.
+    """
     parts = publication_number.split("-")
-    if len(parts) != 3 or parts[0] not in ("US", "EP") or not parts[1].isdigit():
+    number_ok = len(parts) == 3 and (
+        parts[1].isdigit() or (parts[0] == "US" and parts[1].startswith("RE") and parts[1][2:].isdigit())
+    )
+    if not number_ok or parts[0] not in ("US", "EP"):
         raise ValueError(f"unsupported publication number: {publication_number!r}")
     return parts[0], parts[1], parts[2]
 

@@ -17,6 +17,11 @@ ADR 0005) and in statute (to be confirmed by qualified counsel):
   corroborated by the ``EXP.`` event (the two agreed on all 16 lapsed sample
   patents).
 
+- Reissues (``applicationTypeCategory`` "REISSUE"): under 35 U.S.C. §251 a
+  reissued patent runs for the unexpired part of the *original* patent's term,
+  which this record does not give. Until the original is looked up, a reissue
+  that is not explicitly lapsed is ``undetermined``.
+
 Uncertainty resolves toward keeping the patent in the risk set (presumed in
 force or undetermined, with a review reason). For FTO, wrongly treating a live
 patent as dead is the costly error.
@@ -149,6 +154,11 @@ def assess_us(
         return result("lapsed")
     if EXPIRY_EVENT in event_codes:
         reasons.append("EXP. event present but status is not lapsed (possible reinstatement)")
+        return result("undetermined")
+    if (meta.get("applicationTypeCategory") or "").upper() == "REISSUE":
+        reasons.append(
+            "reissue: the term follows the original patent (35 U.S.C. §251), which is not looked up yet"
+        )
         return result("undetermined")
     if status_text != IN_FORCE_STATUS:
         reasons.append(f"unrecognised ODP status: {status_text!r}")
