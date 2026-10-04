@@ -1,0 +1,23 @@
+{
+ "applicationNumberText": "11309858",
+ "lastIngestionDateTime": "2026-04-29T07:00:08",
+ "applicationMetaData": {
+  "filingDate": "2006-10-13",
+  "grantDate": "2007-12-04",
+  "patentNumber": "7303424",
+  "applicationStatusDescriptionText": "Patent Expired Due to NonPayment of Maintenance Fees Under 37 CFR 1.362",
+  "applicationStatusDate": "2015-12-31",
+  "effectiveFilingDate": "2006-10-13"
+ },
+ "eventDataBag": [
+  {
+   "eventCode": "EXP.",
+   "eventDescriptionText": "Expire Patent",
+   "eventDate": "2015-12-31"
+  }
+ ],
+ "parentContinuityBag": [],
+ "patentTermAdjustmentData": {
+  "adjustmentTotalQuantity": 0
+ }
+}

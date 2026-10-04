@@ -1,0 +1,43 @@
+{
+ "applicationNumberText": "11689364",
+ "lastIngestionDateTime": "2026-01-26T23:00:03",
+ "applicationMetaData": {
+  "filingDate": "2007-03-21",
+  "grantDate": "2008-09-23",
+  "patentNumber": "7427369",
+  "applicationStatusDescriptionText": "Patented Case",
+  "applicationStatusDate": "2008-09-03",
+  "effectiveFilingDate": "2007-03-21"
+ },
+ "eventDataBag": [
+  {
+   "eventCode": "M1553",
+   "eventDescriptionText": "Payment of Maintenance Fee, 12th Year, Large Entity",
+   "eventDate": "2020-02-19"
+  }
+ ],
+ "parentContinuityBag": [
+  {
+   "parentApplicationStatusCode": 161,
+   "firstInventorToFileIndicator": false,
+   "claimParentageTypeCode": "CON",
+   "claimParentageTypeCodeDescriptionText": "is a Continuation of",
+   "parentApplicationStatusDescriptionText": "Abandoned  --  Failure to Respond to an Office Action",
+   "parentApplicationNumberText": "10311535",
+   "parentApplicationFilingDate": "2003-06-25",
+   "childApplicationNumberText": "11689364"
+  },
+  {
+   "parentApplicationStatusCode": 150,
+   "claimParentageTypeCode": "NST",
+   "claimParentageTypeCodeDescriptionText": "is a National Stage Entry of",
+   "parentApplicationStatusDescriptionText": "Patented Case",
+   "parentApplicationNumberText": "PCTCA0100897",
+   "parentApplicationFilingDate": "2001-06-15",
+   "childApplicationNumberText": "10311535"
+  }
+ ],
+ "patentTermAdjustmentData": {
+  "adjustmentTotalQuantity": 0
+ }
+}

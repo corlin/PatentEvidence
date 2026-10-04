@@ -1,0 +1,25 @@
+{
+ "applicationNumberText": "18687843",
+ "lastIngestionDateTime": "2026-04-24T00:53:21",
+ "applicationMetaData": {
+  "filingDate": "2024-02-29",
+  "grantDate": "2024-10-01",
+  "patentNumber": "12107219",
+  "applicationStatusDescriptionText": "Patented Case",
+  "applicationStatusDate": "2024-09-11",
+  "effectiveFilingDate": "2024-02-29"
+ },
+ "eventDataBag": [],
+ "parentContinuityBag": [
+  {
+   "parentApplicationStatusCode": 150,
+   "claimParentageTypeCode": "NST",
+   "claimParentageTypeCodeDescriptionText": "is a National Stage Entry of",
+   "parentApplicationStatusDescriptionText": "Patented Case",
+   "parentApplicationNumberText": "PCTCN2023111158",
+   "parentApplicationFilingDate": "2023-08-04",
+   "childApplicationNumberText": "18687843"
+  }
+ ],
+ "patentTermAdjustmentData": null
+}

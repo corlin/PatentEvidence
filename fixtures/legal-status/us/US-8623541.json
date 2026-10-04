@@ -1,0 +1,53 @@
+{
+ "applicationNumberText": "12920720",
+ "lastIngestionDateTime": "2026-04-29T00:00:03",
+ "applicationMetaData": {
+  "filingDate": "2010-11-29",
+  "grantDate": "2014-01-07",
+  "patentNumber": "8623541",
+  "applicationStatusDescriptionText": "Patented Case",
+  "applicationStatusDate": "2013-12-18",
+  "effectiveFilingDate": "2010-09-02"
+ },
+ "eventDataBag": [
+  {
+   "eventCode": "M1553",
+   "eventDescriptionText": "Payment of Maintenance Fee, 12th Year, Large Entity",
+   "eventDate": "2025-06-23"
+  },
+  {
+   "eventCode": "M1552",
+   "eventDescriptionText": "Payment of Maintenance Fee, 8th Year, Large Entity",
+   "eventDate": "2021-06-28"
+  },
+  {
+   "eventCode": "DIST",
+   "eventDescriptionText": "Terminal Disclaimer Filed",
+   "eventDate": "2013-07-29"
+  },
+  {
+   "eventCode": "P574",
+   "eventDescriptionText": "PARALEGAL OR ELECTRONIC TERMINAL DISCLAIMER APPROVED",
+   "eventDate": "2013-07-30"
+  },
+  {
+   "eventCode": "DIST",
+   "eventDescriptionText": "Terminal Disclaimer Filed",
+   "eventDate": "2013-07-29"
+  }
+ ],
+ "parentContinuityBag": [
+  {
+   "parentApplicationStatusCode": 150,
+   "claimParentageTypeCode": "NST",
+   "claimParentageTypeCodeDescriptionText": "is a National Stage Entry of",
+   "parentApplicationStatusDescriptionText": "Patented Case",
+   "parentApplicationNumberText": "PCTKR2009001143",
+   "parentApplicationFilingDate": "2009-03-07",
+   "childApplicationNumberText": "12920720"
+  }
+ ],
+ "patentTermAdjustmentData": {
+  "adjustmentTotalQuantity": 580
+ }
+}

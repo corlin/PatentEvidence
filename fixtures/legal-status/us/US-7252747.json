@@ -1,0 +1,44 @@
+{
+ "applicationNumberText": "11543692",
+ "lastIngestionDateTime": "2026-04-29T12:00:08",
+ "applicationMetaData": {
+  "filingDate": "2006-10-05",
+  "grantDate": "2007-08-07",
+  "patentNumber": "7252747",
+  "applicationStatusDescriptionText": "Patented Case",
+  "applicationStatusDate": "2007-07-18",
+  "effectiveFilingDate": "2006-10-05"
+ },
+ "eventDataBag": [
+  {
+   "eventCode": "M2553",
+   "eventDescriptionText": "Payment of Maintenance Fee, 12th Yr, Small Entity",
+   "eventDate": "2019-02-12"
+  }
+ ],
+ "parentContinuityBag": [
+  {
+   "parentApplicationStatusCode": 250,
+   "firstInventorToFileIndicator": false,
+   "claimParentageTypeCode": "DIV",
+   "claimParentageTypeCodeDescriptionText": "is a Division of",
+   "parentApplicationStatusDescriptionText": "Patent Expired Due to NonPayment of Maintenance Fees Under 37 CFR 1.362",
+   "parentApplicationNumberText": "10627229",
+   "parentApplicationFilingDate": "2003-07-25",
+   "childApplicationNumberText": "11543692",
+   "parentPatentNumber": "7326736"
+  },
+  {
+   "parentApplicationStatusCode": 159,
+   "claimParentageTypeCode": "PRO",
+   "claimParentageTypeCodeDescriptionText": "Claims priority from a provisional application",
+   "parentApplicationStatusDescriptionText": "Provisional Application Expired",
+   "parentApplicationNumberText": "60423506",
+   "parentApplicationFilingDate": "2002-11-04",
+   "childApplicationNumberText": "10627229"
+  }
+ ],
+ "patentTermAdjustmentData": {
+  "adjustmentTotalQuantity": 0
+ }
+}
