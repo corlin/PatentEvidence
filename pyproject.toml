@@ -25,6 +25,11 @@ dependencies = [
   "weasyprint>=66,<67",
 ]
 
+[project.optional-dependencies]
+ingest = [
+    "google-cloud-bigquery>=3.25,<4",
+]
+
 [dependency-groups]
 dev = [
   "psycopg[binary]>=3.2,<4.0",
