@@ -14,6 +14,9 @@ from typing import Any
 
 from modules.fto.model import Claim, ClaimFeature, ClaimSet
 
+# Recorded with every chart snapshot; bump when parsing output can change.
+PARSER_ID = "fto-ep-claims/1"
+
 _CLAIM_START = re.compile(r"^\s*(\d+)\s*\.\s+")
 _REFERENCE = re.compile(
     r"\bclaims?\s+(\d+(?:\s*(?:,|or|and|to|-|–)\s*\d+)*)", re.IGNORECASE

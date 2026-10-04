@@ -13,6 +13,9 @@ from xml.etree import ElementTree as ET
 
 from modules.fto.model import Claim, ClaimFeature, ClaimSet
 
+# Recorded with every chart snapshot; bump when parsing output can change.
+PARSER_ID = "fto-us-claims/1"
+
 _LEADING_NUMBER = re.compile(r"^\s*\d+\s*\.\s*")
 _CLAIM_ID = re.compile(r"CLM-0*(\d+)$")
 # Review hint only, not a rule: a clause this long usually bundles several features.
