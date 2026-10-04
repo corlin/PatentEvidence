@@ -113,3 +113,44 @@ def test_ops_token_failure_raises() -> None:
     client = EpoOpsLegalClient("id", "s", transport=httpx.MockTransport(lambda r: httpx.Response(401)), backoff_seconds=0)
     with pytest.raises(LegalStatusSourceError):
         _run(client.legal("EP", "1", "B1"))
+
+
+# ------------------------------------------------------------- claim documents (ADR 0009)
+
+GRANT_URI = "https://api.uspto.gov/api/v1/datasets/products/files/PTGRXML-SPLT/2026/ipg260519/1_2.xml"
+
+
+def test_grant_xml_refuses_urls_outside_uspto() -> None:
+    client = UsptoOdpClient("k", transport=httpx.MockTransport(lambda r: httpx.Response(200)), backoff_seconds=0)
+    with pytest.raises(LegalStatusSourceError):
+        _run(client.grant_xml_response("https://evil.example/files/x.xml"))
+
+
+def test_grant_xml_follows_signed_redirect_without_key_or_signature() -> None:
+    seen: list[tuple[str, str | None]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((str(request.url), request.headers.get("X-API-KEY")))
+        if request.url.host == "api.uspto.gov":
+            return httpx.Response(302, headers={"location": "https://data.uspto.gov/files/1_2.xml?Expires=1&Signature=secret"})
+        return httpx.Response(200, content=b"<claims/>")
+
+    client = UsptoOdpClient("k", transport=httpx.MockTransport(handler), backoff_seconds=0)
+    response = _run(client.grant_xml_response(GRANT_URI))
+    assert response.raw == b"<claims/>"
+    assert seen[0][1] == "k" and seen[1][1] is None  # key only to api.uspto.gov
+    assert "Signature" not in response.request_ref and "secret" not in response.request_ref
+
+
+def test_grant_xml_refuses_redirect_to_other_host() -> None:
+    handler = lambda r: httpx.Response(302, headers={"location": "https://evil.example/x"})  # noqa: E731
+    client = UsptoOdpClient("k", transport=httpx.MockTransport(handler), backoff_seconds=0)
+    with pytest.raises(LegalStatusSourceError):
+        _run(client.grant_xml_response(GRANT_URI))
+
+
+def test_ops_claims_not_found_is_none() -> None:
+    client = EpoOpsLegalClient("id", "s", transport=httpx.MockTransport(_ops_handler(httpx.Response(404), {})), backoff_seconds=0)
+    response = _run(client.claims_response("EP", "1819002", "A1"))
+    assert response.data is None and response.raw is None
+    assert response.request_ref.endswith("/EP.1819002.A1/claims")
