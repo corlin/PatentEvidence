@@ -27,6 +27,10 @@ class SourceResponse:
     request_ref: str  # method + URL + parameters, never credentials
 
 
+GRANT_XML_URL_PREFIX = "https://api.uspto.gov/api/v1/datasets/products/files/"
+GRANT_XML_REDIRECT_PREFIX = "https://data.uspto.gov/files/"
+
+
 class LegalStatusSourceError(Exception):
     """The source could not answer (transport, server, auth or quota)."""
 
@@ -110,6 +114,39 @@ class UsptoOdpClient:
             return SourceResponse(None, None, request_ref)
         return SourceResponse(bag[0], response.content, request_ref)
 
+    async def grant_xml_response(self, file_location_uri: str) -> SourceResponse:
+        """Download one patent's grant full-text XML (URI from grantDocumentMetaData).
+
+        The URI comes from external data, so only USPTO dataset file URLs are
+        followed (SSRF guard). ``data`` is ``{"uri": ...}``; the XML is in ``raw``.
+        """
+        if not file_location_uri.startswith(GRANT_XML_URL_PREFIX):
+            raise LegalStatusSourceError(f"refusing grant XML URL outside {GRANT_XML_URL_PREFIX}")
+        refs = [f"GET {file_location_uri}"]
+        response = await _get_with_retries(
+            self._client,
+            file_location_uri,
+            headers={"X-API-KEY": self.api_key or ""},
+            backoff_seconds=self._backoff,
+        )
+        if response.status_code in (301, 302, 303, 307, 308):
+            # USPTO answers with one redirect to a signed, time-limited data.uspto.gov URL
+            # (observed 2026-10-04). Follow it only to that host, without the API key, and
+            # record it without the signature query string (a temporary credential).
+            location = response.headers.get("location", "")
+            if not location.startswith(GRANT_XML_REDIRECT_PREFIX):
+                raise LegalStatusSourceError("grant XML redirected outside the expected USPTO host")
+            refs.append(f"GET {location.split('?', 1)[0]} (signed redirect)")
+            response = await _get_with_retries(self._client, location, headers={}, backoff_seconds=self._backoff)
+        request_ref = " -> ".join(refs)
+        if response.status_code == 404:
+            return SourceResponse(None, None, request_ref)
+        if response.status_code in (401, 403):
+            raise LegalStatusSourceError(f"USPTO refused the grant XML request (HTTP {response.status_code})")
+        if response.status_code != 200:
+            raise LegalStatusSourceError(f"USPTO grant XML HTTP {response.status_code}")
+        return SourceResponse({"uri": file_location_uri}, response.content, request_ref)
+
 
 class EpoOpsLegalClient:
     """EPO OPS 3.2 INPADOC legal events for one publication (docdb format)."""
@@ -164,7 +201,15 @@ class EpoOpsLegalClient:
         return (await self.legal_response(country, number, kind)).data
 
     async def legal_response(self, country: str, number: str, kind: str) -> SourceResponse:
-        url = f"{self.BASE_URL}/rest-services/legal/publication/docdb/{country}.{number}.{kind}"
+        return await self._get_json(f"{self.BASE_URL}/rest-services/legal/publication/docdb/{country}.{number}.{kind}")
+
+    async def claims_response(self, country: str, number: str, kind: str) -> SourceResponse:
+        """Claims of one publication (all languages). 404 = no claim text (e.g. A1, unknown number)."""
+        return await self._get_json(
+            f"{self.BASE_URL}/rest-services/published-data/publication/docdb/{country}.{number}.{kind}/claims"
+        )
+
+    async def _get_json(self, url: str) -> SourceResponse:
         request_ref = f"GET {url}"
         token = await self._access_token()
         response = await _get_with_retries(
