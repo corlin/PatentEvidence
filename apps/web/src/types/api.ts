@@ -134,9 +134,14 @@ export interface TotpEnrollResult {
 }
 
 export interface TotpConfirmResult {
-  status: 'verified'
+  status: 'confirmed'
   expires_at: string
   recovery_codes?: string[]
+}
+
+export interface MfaChallengeResult {
+  status: 'verified'
+  expires_at: string
 }
 
 // Case & Document Types
