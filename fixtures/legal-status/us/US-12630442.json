@@ -1,0 +1,27 @@
+{
+ "applicationNumberText": "17780957",
+ "lastIngestionDateTime": "2026-07-21T03:00:06",
+ "applicationMetaData": {
+  "filingDate": "2022-05-27",
+  "grantDate": "2026-05-19",
+  "patentNumber": "12630442",
+  "applicationStatusDescriptionText": "Patented Case",
+  "applicationStatusDate": "2026-05-06",
+  "effectiveFilingDate": "2022-05-27"
+ },
+ "eventDataBag": [],
+ "parentContinuityBag": [
+  {
+   "parentApplicationStatusCode": 150,
+   "claimParentageTypeCode": "NST",
+   "claimParentageTypeCodeDescriptionText": "is a National Stage Entry of",
+   "parentApplicationStatusDescriptionText": "Patented Case",
+   "parentApplicationNumberText": "PCTCN2020123614",
+   "parentApplicationFilingDate": "2020-10-26",
+   "childApplicationNumberText": "17780957"
+  }
+ ],
+ "patentTermAdjustmentData": {
+  "adjustmentTotalQuantity": 811
+ }
+}

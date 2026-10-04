@@ -1,0 +1,246 @@
+{
+ "ops:legal": [
+  {
+   "@code": "AK  ",
+   "@desc": "DESIGNATED CONTRACTING STATES",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    06126978A  2007-06-27AK  +DESIGNATED CONTRACTING STATES Kind Code of Ref Document A1",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    06126978A  2007-06-27AK  +DESIGNATED CONTRACTING STATES Designated State(s) AT BE BG CH CY CZ DE DK EE ES FI FR GB GR HU IE IS IT LI LT LU LV MC NL PL PT RO SE SI SK TR",
+     "@line": "00002"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2007-06-27",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "AK  ",
+   "@desc": "DESIGNATED CONTRACTING STATES",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    06126978A  2008-07-16AK  +DESIGNATED CONTRACTING STATES Kind Code of Ref Document B1",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    06126978A  2008-07-16AK  +DESIGNATED CONTRACTING STATES Designated State(s) DE FR GB",
+     "@line": "00002"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2008-07-16",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "26N ",
+   "@desc": "NO OPPOSITION FILED",
+   "@infl": "+",
+   "ops:pre": {
+    "$": "EP    06126978A  2009-06-2426N +NO OPPOSITION FILED Effective DATE 20090417",
+    "@line": "00001"
+   },
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2009-06-24",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PGFP",
+   "@desc": "ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    06126978A  2016-01-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code GB",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    06126978A  2016-01-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Payment DATE 20151216",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    06126978A  2016-01-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Year of Fee Payment 10",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2016-01-29",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PGFP",
+   "@desc": "ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    06126978A  2016-01-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code DE",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    06126978A  2016-01-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Payment DATE 20151215",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    06126978A  2016-01-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Year of Fee Payment 10",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2016-01-29",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PGFP",
+   "@desc": "ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    06126978A  2016-02-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code FR",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    06126978A  2016-02-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Payment DATE 20151123",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    06126978A  2016-02-29PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Year of Fee Payment 10",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2016-02-29",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "GBPC",
+   "@desc": "GB: EUROPEAN PATENT CEASED THROUGH NON-PAYMENT OF RENEWAL FEE",
+   "@infl": "-",
+   "ops:pre": {
+    "$": "EP    06126978A  2017-08-23GBPC-GB: EUROPEAN PATENT CEASED THROUGH NON-PAYMENT OF RENEWAL FEE Effective DATE 20161222",
+    "@line": "00001"
+   },
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2017-08-23",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    06126978A  2017-10-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code FR",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    06126978A  2017-10-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF NON-PAYMENT OF DUE FEES",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    06126978A  2017-10-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20170102",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2017-10-31",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    06126978A  2017-11-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code DE",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    06126978A  2017-11-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF NON-PAYMENT OF DUE FEES",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    06126978A  2017-11-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20170701",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2017-11-30",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    06126978A  2017-11-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code GB",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    06126978A  2017-11-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF NON-PAYMENT OF DUE FEES",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    06126978A  2017-11-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20161222",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2017-11-30",
+    "@desc": "Gazette DATE"
+   }
+  }
+ ]
+}

@@ -1,0 +1,770 @@
+{
+ "ops:legal": [
+  {
+   "@code": "AK  ",
+   "@desc": "DESIGNATED CONTRACTING STATES",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2019-04-10AK  +DESIGNATED CONTRACTING STATES Kind Code of Ref Document A1",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2019-04-10AK  +DESIGNATED CONTRACTING STATES Designated State(s) AL AT BE BG CH CY CZ DE DK EE ES FI FR GB GR HR HU IE IS IT LI LT LU LV MC MK MT NL NO PL PT RO RS SE SI SK SM TR",
+     "@line": "00002"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2019-04-10",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "AK  ",
+   "@desc": "DESIGNATED CONTRACTING STATES",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2023-08-16AK  +DESIGNATED CONTRACTING STATES Kind Code of Ref Document B1",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2023-08-16AK  +DESIGNATED CONTRACTING STATES Designated State(s) AL AT BE BG CH CY CZ DE DK EE ES FI FR GB GR HR HU IE IS IT LI LT LU LV MC MK MT NL NO PL PT RO RS SE SI SK SM TR",
+     "@line": "00002"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2023-08-16",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "U01 ",
+   "@desc": "REQUEST FOR UNITARY EFFECT FILED",
+   "@infl": "+",
+   "ops:pre": {
+    "$": "EP    17806916A  2023-09-20U01 +REQUEST FOR UNITARY EFFECT FILED Effective DATE 20230816",
+    "@line": "00001"
+   },
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2023-09-20",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "U07 ",
+   "@desc": "UNITARY EFFECT REGISTERED",
+   "@infl": " ",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2023-09-20U07  UNITARY EFFECT REGISTERED Designated State(s) AT BE BG DE DK EE FI FR IT LT LU LV MT NL PT SE SI",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2023-09-20U07  UNITARY EFFECT REGISTERED Effective DATE 20230822",
+     "@line": "00002"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2023-09-20",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-01-18PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code GR",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-01-18PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-01-18PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20231117",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-01-18",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-01-23PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code IS",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-01-23PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-01-23PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20231216",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-01-23",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code GR",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20231117",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-01-31",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code HR",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-01-31",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code IS",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20231216",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-01-31",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code NO",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20231116",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-01-31",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code RS",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-01-31",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-02-29PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code PL",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-02-29PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-02-29PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-02-29",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-04-26PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code ES",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-04-26PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-04-26PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-04-26",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code SK",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-04-30",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code CZ",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-04-30",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code ES",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-04-30",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code RO",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-04-30",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code SM",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2024-04-30PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-04-30",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "U20 ",
+   "@desc": "RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID ",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2024-06-26U20 +RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID  Year of Fee Payment 08",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2024-06-26U20 +RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID  Effective DATE 20240522",
+     "@line": "00002"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-06-26",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "26N ",
+   "@desc": "NO OPPOSITION FILED",
+   "@infl": "+",
+   "ops:pre": {
+    "$": "EP    17806916A  2024-07-2426N +NO OPPOSITION FILED Effective DATE 20240517",
+    "@line": "00001"
+   },
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2024-07-24",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2025-01-08PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code MC",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2025-01-08PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2025-01-08PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2025-01-08",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2025-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code CH",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2025-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF NON-PAYMENT OF DUE FEES",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2025-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20240531",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2025-01-31",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2025-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code MC",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2025-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2025-01-31PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2025-01-31",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2025-04-22PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code IE",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2025-04-22PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF NON-PAYMENT OF DUE FEES",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2025-04-22PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20240522",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2025-04-22",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "U20 ",
+   "@desc": "RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID ",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2025-07-02U20 +RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID  Year of Fee Payment 09",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2025-07-02U20 +RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID  Effective DATE 20250523",
+     "@line": "00002"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2025-07-02",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2025-09-02PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code CY",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2025-09-02PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT; INVALID AB INITIO",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2025-09-02PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20170522",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2025-09-02",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2025-09-03PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code HU",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2025-09-03PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT; INVALID AB INITIO",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2025-09-03PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20170522",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2025-09-03",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PGFP",
+   "@desc": "ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2026-04-09PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code GB",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2026-04-09PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Payment DATE 20260324",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2026-04-09PGFP+ANNUAL FEE PAID TO NATIONAL OFFICE  [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Year of Fee Payment 10",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2026-04-09",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "PG25",
+   "@desc": "LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO]",
+   "@infl": "-",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2026-06-01PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Ref Country Code TR",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2026-06-01PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Free Format Text LAPSE BECAUSE OF FAILURE TO SUBMIT A TRANSLATION OF THE DESCRIPTION OR TO PAY THE FEE WITHIN THE PRESCRIBED TIME-LIMIT",
+     "@line": "00002"
+    },
+    {
+     "$": "EP    17806916A  2026-06-01PG25-LAPSED IN A CONTRACTING STATE [ANNOUNCED VIA POSTGRANT INFORMATION FROM NATIONAL OFFICE TO EPO] Effective DATE 20230816",
+     "@line": "00003"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2026-06-01",
+    "@desc": "Gazette DATE"
+   }
+  },
+  {
+   "@code": "U20 ",
+   "@desc": "RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID ",
+   "@infl": "+",
+   "ops:pre": [
+    {
+     "$": "EP    17806916A  2026-07-01U20 +RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID  Year of Fee Payment 10",
+     "@line": "00001"
+    },
+    {
+     "$": "EP    17806916A  2026-07-01U20 +RENEWAL FEE FOR THE EUROPEAN PATENT WITH UNITARY EFFECT PAID  Effective DATE 20260522",
+     "@line": "00002"
+    }
+   ],
+   "ops:L001EP": {
+    "$": "EP",
+    "@desc": "Country Code"
+   },
+   "ops:L007EP": {
+    "$": "2026-07-01",
+    "@desc": "Gazette DATE"
+   }
+  }
+ ]
+}
