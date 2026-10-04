@@ -26,3 +26,13 @@
 - **Platform Audit Event** — immutable, secret-safe evidence of an attempted platform-wide privileged action, whether allowed, denied, or failed.
 - **Organization Audit Event** — immutable, tenant-scoped, secret-safe evidence of an attempted Organization mutation, whether allowed, denied, or failed.
 - **Request Correlation ID** — a safe identifier connecting one attempted action to its Platform Audit Event.
+
+## FTO and Design-Around (Stage-Gate Evidence)
+
+- **FTO (Freedom to Operate)** — a structured risk analysis assessing whether making, using, offering to sell, selling, or importing an enterprise product infringes valid patent claims in target jurisdictions (China, US, Europe/UPC/Germany).
+- **Design-Around (规避设计)** — an intentional engineering redesign breaking at least one essential technical feature of an asserted independent claim under the All-Elements Rule (全面覆盖原则) while eliminating risks under the Doctrine of Equivalents (等同原则).
+- **Closed-Loop Auto-Validation (闭环反向验真)** — automated re-execution of the comparison engine that tests a proposed design-around against the competitor's full claim tree (including all dependent claims) and family patent thicket to guarantee zero secondary infringement before presenting suggestions to engineers.
+- **Dual-Role Stage-Gate Pass (双角色门禁通行凭证)** — an immutable, cryptographically sealed clearance certificate produced after IP Counsel final approval of the Claim Chart and design-around, required for engineering projects to clear phase-gate milestones in PLM/ERP systems.
+- **Dual-Track Trusted Timestamping (双轨可信时间戳存证)** — the cryptographic anchor binding a sealed evidence snapshot simultaneously to domestic judicial preservation chains (e.g., Tianping Chain / NTSC) and international RFC 3161 TSA / public blockchain state hashes for court admissibility in domestic litigation, cross-border disputes, and US ITC Section 337 investigations.
+- **Broken Element (特征断点)** — a technical element in an asserted claim where the candidate engineering design is determined to be non-infringing (missing, structurally differentiated, or operating on fundamentally different physical principles).
+
