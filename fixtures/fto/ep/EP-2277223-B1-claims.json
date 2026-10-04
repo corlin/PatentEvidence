@@ -1,0 +1,117 @@
+{
+ "ops:world-patent-data": {
+  "@xmlns": {
+   "ops": "http://ops.epo.org",
+   "$": "http://www.epo.org/exchange",
+   "xlink": "http://www.w3.org/1999/xlink"
+  },
+  "ftxt:fulltext-documents": {
+   "ftxt:fulltext-document": {
+    "@system": "ops.epo.org",
+    "@fulltext-format": "text-only",
+    "bibliographic-data": {
+     "publication-reference": {
+      "@data-format": "docdb",
+      "document-id": {
+       "country": {
+        "$": "EP"
+       },
+       "doc-number": {
+        "$": "2277223"
+       },
+       "kind": {
+        "$": "B1"
+       }
+      }
+     }
+    },
+    "claims": [
+     {
+      "@lang": "DE",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. Verfahren zum Begrenzen der Ausgangsspannung eines PEM-Brennstoffzellensystems, das unter Null-Ausgangslast-Bedingungen (Leerlaufzustand) in der Weise arbeitet, dass eine zeitliche Verschlechterung der Leistung minimiert wird, wobei das PEM-Brennstoffzellensystem dafür ausgelegt ist, reinen Wasserstoff als Brennstoff und reinen Sauerstoff als Oxidationsmittel zu verwenden, und eine steuerbare Wasserstoffumwälzpumpe und eine steuerbare Sauerstoffumwälzpumpe enthält, wobei das Verfahren umfasst:"
+        },
+        {
+         "$": "- Zuführen eines Stroms von Wasserstoff zu der Anode der Brennstoffzelle;\n- Zuführen eines Stroms von Sauerstoff zu der Katode der Brennstoffzelle;\n- Überwachen einer Ausgangsspannung der Brennstoffzelle;\n- Überwachen eines Wasserstoffdrucks in der Brennstoffzelle;\n- Überwachen eines Sauerstoffdrucks in der Brennstoffzelle;\n- Begrenzen des Stroms von Wasserstoff und des Stroms von Sauerstoff und Betätigen der Wasserstoff- und der Sauerstoffumwälzpumpe in der Weise, dass der Wasserstoff- und der Sauerstoffdruck unter 0,7 bar<absolut> gebracht und gehalten werden, wobei der Wasserstoffdruck im Bereich von 70 bis 130 % des Sauerstoffdrucks gehalten wird, so dass die Ausgangsspannung im Bereich von 0,65 bis 0,90 Volt bleibt."
+        },
+        {
+         "$": "2. Verfahren nach Anspruch 1, wobei das Verfahren das Einstellen des Wasserstoffstroms und des Sauerstoffstroms in der Weise, das die Ausgangsspannung im Bereich von 0,70 bis 0,85 Volt bleibt, umfasst."
+        },
+        {
+         "$": "3. Verfahren nach Anspruch 1 oder 2, wobei das Verfahren ferner umfasst, dass der Wasserstoffdruck und der Sauerstoffdruck im Bereich von 0,2 bis 0,7 bar<absolut> gehalten werden."
+        },
+        {
+         "$": "4. Verfahren nach Anspruch 3, wobei das Verfahren das Halten des Wasserstoffdrucks und des Sauerstoffdrucks im Bereich von 0,5 bis 0,7 bar<absolut> umfasst."
+        },
+        {
+         "$": "5. Verfahren nach Anspruch 1, wobei die Brennstoffzelle ein Teil eines Brennstoffzellensystems ist und das Verfahren das Verringern des Wasserstoffdrucks und des Sauerstoffdrucks auf unter 0,7 bar<absolut> umfasst, derart, dass die Zellenspannung im Bereich von 0,65 bis 0,90 Volt gehalten wird, wenn das Brennstoffzellensystem in einem Leerlaufzustand (Zustand ohne angeschlossene Last) ist."
+        },
+        {
+         "$": "6. Verfahren nach einem der vorhergehenden Ansprüche, wobei die steuerbaren Umwälzpumpen Membranpumpen sind."
+        }
+       ]
+      }
+     },
+     {
+      "@lang": "FR",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. Procédé pour limiter la tension de sortie d'un système de cellules à combustible à membrane échangeuse de protons (PEM) dans les situations où la charge connectée est zéro (marche à vide) de manière à minimiser la dégradation progressive des performances, le système de cellules à combustible PEM étant adapté pour utiliser de l'hydrogène pur comme carburant et de l'oxygène pur comme comburant et comportant une pompe variable de recirculation de l'hydrogène et une pompe variable de recirculation de l'oxygène, et le procédé comprenant :"
+        },
+        {
+         "$": "- fournir un flux d'hydrogène à l'anode de ladite cellule à combustible ;\n- fournir un flux d'oxygène à la cathode de ladite cellule à combustible ;\n- contrôler une tension de sortie de la cellule à combustible ;\n- contrôler la pression de l'hydrogène dans la cellule à combustible ;\n- contrôler la pression de l'oxygène dans la cellule à combustible ;\n- limiter le flux d'hydrogène et le flux d'oxygène et actionner les pompes de recirculation de l'hydrogène et de l'oxygène de manière à amener et à maintenir les pressions respectives de l'hydrogène et de l'oxygène au-dessous de 0.7 bar<absolue> , tout en maintenant ladite pression de l'hydrogène entre 70 et 130 % de ladite pression de l'oxygène, de sorte que la tension de sortie soit maintenue entre 0,65 et 0,90 volts."
+        },
+        {
+         "$": "2. Procédé selon la revendication 1, dans lequel ledit procédé comprend d'ajuster ledit flux d'hydrogène et ledit flux d'oxygène de telle sorte que ladite tension de sortie demeure entre 0,70 et 0,85 volts."
+        },
+        {
+         "$": "3. Procédé selon la revendication 1 ou 2, comprenant en outre l'étape de de maintenir ladite pression de l'hydrogène et ladite pression de l'oxygène entre 0, 2 et 0,7 bar<absolue> ."
+        },
+        {
+         "$": "4. Procédé selon la revendication 3, comprenant l'étape de de maintenir ladite pression de l'hydrogène et ladite pression de l'oxygène entre 0, 5 et 0,7 bar<absolue> ."
+        },
+        {
+         "$": "5. Procédé selon la revendication 1, dans lequel ladite cellule à combustible fait partie d'un système de cellules à combustible et ledit procédé comprend d'abaisser la pression de l'hydrogène et ladite pression de l'oxygène au-dessous de 0.7 bar<absolue> , de manière à maintenir la tension de cellule dans l'intervalle entre 0,65 et 0,90 volts lorsque ledit système de cellules à combustible marche à vide (situation où la charge connectée est zéro)."
+        },
+        {
+         "$": "6. Procédé selon l'une quelconque des revendications précédentes, dans lequel les pompes variables de recirculation sont des pompes à membrane."
+        }
+       ]
+      }
+     },
+     {
+      "@lang": "EN",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. A method for limiting the output voltage of a PEM fuel cell system operating in zero output load conditions (idling state) in such a way as to minimize degradation of performance over time, the PEM fuel cell system being adapted to use pure hydrogen as fuel and pure oxygen as oxidizer and comprising a controllable hydrogen recirculating pump and a controllable oxygen recirculating pump and the method comprising :"
+        },
+        {
+         "$": "- supplying a stream of hydrogen to the anode of said fuel cell;\n- supplying a stream of oxygen to the cathode of said fuel cell;\n- monitoring an output voltage of the fuel cell;\n- monitoring a hydrogen pressure in the fuel cell;\n- monitoring an oxygen pressure in the fuel cell;\n- limiting the stream of hydrogen and the stream of oxygen and actuating the hydrogen and oxygen recirculating pumps in such a way as to bring and maintain the hydrogen and oxygen pressures below .7 bar<absolute> while maintaining said hydrogen pressure between 70 and 130 % of said oxygen pressure, so that the output voltage remains between .65 and .90 volts."
+        },
+        {
+         "$": "2. The method of claim 1, wherein said method comprises adjusting said hydrogen stream and said oxygen stream in such a way that said output voltage remains between .70 and .85 volts."
+        },
+        {
+         "$": "3. The method of claim 1 or 2, wherein said method further comprises maintaining said hydrogen pressure and said oxygen pressure between 0.2 and .7 bar<absolute> ."
+        },
+        {
+         "$": "4. The method of claim 3, wherein said method comprises maintaining said hydrogen pressure and said oxygen pressure between .5 and .7 bar<absolute> ."
+        },
+        {
+         "$": "5. The method of claim 1, wherein said fuel cell is part of a fuel cell system and said method comprises reducing the hydrogen pressure and said oxygen pressure to below .7 bar<absolute> , in such a way as to keep the cell voltage in the range between .65 and .90 volts when said fuel cell system is in an idling state (zero connected load condition)."
+        },
+        {
+         "$": "6. The method according to any one of the preceding claims, wherein the controllable recirculating pumps are diaphragm pumps."
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ }
+}

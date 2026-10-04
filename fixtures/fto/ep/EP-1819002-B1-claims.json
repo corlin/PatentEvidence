@@ -1,0 +1,216 @@
+{
+ "ops:world-patent-data": {
+  "@xmlns": {
+   "ops": "http://ops.epo.org",
+   "$": "http://www.epo.org/exchange",
+   "xlink": "http://www.w3.org/1999/xlink"
+  },
+  "ftxt:fulltext-documents": {
+   "ftxt:fulltext-document": {
+    "@system": "ops.epo.org",
+    "@fulltext-format": "text-only",
+    "bibliographic-data": {
+     "publication-reference": {
+      "@data-format": "docdb",
+      "document-id": {
+       "country": {
+        "$": "EP"
+       },
+       "doc-number": {
+        "$": "1819002"
+       },
+       "kind": {
+        "$": "B1"
+       }
+      }
+     }
+    },
+    "claims": [
+     {
+      "@lang": "DE",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. Aufladbare Nickel-Zink-Batteriezelle, beinhaltend"
+        },
+        {
+         "$": "eine negative Elektrode mit Zink oder einer Zinkverbindung,\neine positive Elektrode mit Nickeloxid, -hydroxid und/oder -oxyhydroxid, und\neinen Elektrolyt, umfassend"
+        },
+        {
+         "$": "zwischen 0.025 und 0.25 mol/L Phosphat und\nzwischen 4 und 9 mol/L freie Alkalität,\nwobei der Elektrolyt nicht mehr als 1 mol/L Borat enthält."
+        },
+        {
+         "$": "2. Batteriezelle nach Anspruch 1, wobei das Phosphat im Elektrolyt in einer Konzentration von 0,05 bis 0,15 mol/L vorliegt."
+        },
+        {
+         "$": "3. Batteriezelle nach Anspruch 1 oder 2, wobei die freie Alkalität im Elektrolyt in einer Konzentration von 4 bis 6 mol/L vorliegt."
+        },
+        {
+         "$": "4. Batteriezelle nach Anspruch 1 oder 2, wobei die freie Alkalität im Elektrolyt in einer Konzentration von 6 bis 9 mol/L vorliegt."
+        },
+        {
+         "$": "5. Batteriezelle nach einem der vorherigen Ansprüche, wobei die freie Alkalität in Form von ein oder mehreren Hydroxiden von Natrium, Lithium oder Kalium vorliegt."
+        },
+        {
+         "$": "6. Batteriezelle nach Anspruch 5, wobei der Elektrolyt 0 bis 4 mol/L Lithiumhydroxid, 1,5 bis 3,5 mol/L Natriumhydroxid und 4 bis 7 mol/L Kaliumhydroxid enthält."
+        },
+        {
+         "$": "7. Batteriezelle nach einem der vorherigen Ansprüche, wobei der Elektrolyt zudem eine Indiumverbindung enthält."
+        },
+        {
+         "$": "8. Batteriezelle nach Anspruch 7, wobei die Indiumverbindung Indiumsulfat, Indiumazetat oder Indiumfluorid ist."
+        },
+        {
+         "$": "9. Batteriezelle nach Anspruch 7, wobei die Indiumverbindung im Elektrolyt in einer Konzentration von 0,0003 bis 0,01 mol/L vorliegt."
+        },
+        {
+         "$": "10. Batteriezelle nach einem der vorherigen Ansprüche, wobei der Elektrolyt zudem enthält eine Verbindung aus der Gruppe Polyethylenglykol, Tetrabutylammoniumhydroxid und Alkylphosphatester."
+        },
+        {
+         "$": "11. Batteriezelle nach einem der vorherigen Ansprüche, wobei die positive Elektrode außer fluoriniertem Polyolefin oder einem Dispersionsmittel, oder beiden davon, keine organische Verbindung enthält."
+        },
+        {
+         "$": "12. Batteriezelle nach einem der vorherigen Ansprüche, wobei die aufladbare Nickel-Zink-Batteriezelle eine Batteriezelle mit begrenzter Aufnahme ist."
+        },
+        {
+         "$": "13. Batteriezelle nach einem der vorherigen Ansprüche, wobei die beschriebene Elektrolytzusammensetzung vor der Bildung der aufladbaren Nickel-Zink-Zelle besteht."
+        },
+        {
+         "$": "14. Batteriezelle nach einem der vorherigen Ansprüche, wobei der Elektrolyt zudem umfasst zwischen 0,01 und 1 mol/L Fluorid."
+        },
+        {
+         "$": "15. Verfahren zum Bereitstellen einer aufladbaren Nickel-Zink-Batteriezelle gemäß den Ansprüchen 1 bis 14, umfassend"
+        },
+        {
+         "$": "Bereitstellen eines Elektrolyts gemäß den Ansprüchen 1 bis 10 und 14,\nBereitstellen einer negativen Elektrode, enthaltend Zink oder eine Zinkverbindung,\nBereitstellen einer positiven Elektrode, enthaltend Nickeloxid, -hydroxid und/oder -oxyhydroxid, und\nZusammensetzen der Elektroden und des Elektrolyts in der Batteriezelle."
+        }
+       ]
+      }
+     },
+     {
+      "@lang": "FR",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. Élément de batterie rechargeable au nickel-zinc comprenant:"
+        },
+        {
+         "$": "une électrode négative comprenant du zinc ou un composé de zinc;\nune électrode positive comprenant de l'oxyde de nickel, de l'hydroxyde de nickel ou de l'oxyhydroxyde de nickel ; et\nun électrolyte comprenant :\nentre 0,025 et 0,25 mol/L de phosphate ; et\nentre 4 et 9 mol/L d'alcalinité libre,"
+        },
+        {
+         "$": "dans lequel l'électrolyte ne comprend pas plus que 1 mol/L de borate."
+        },
+        {
+         "$": "2. Élément de batterie selon la revendication 1 dans lequel le phosphate est présent dans l'électrolyte avec une concentration entre 0,05 et 0,15 mol/L."
+        },
+        {
+         "$": "3. Élément de batterie selon la revendication 1 ou 2 dans lequel l'alcalinité libre est présente dans l'électrolyte avec une concentration entre 4 et 6 mol/L."
+        },
+        {
+         "$": "4. Élément de batterie selon la revendication 1 ou 2 dans lequel l'alcalinité libre est présente dans l'électrolyte avec une concentration entre 6 et 9 mol/L."
+        },
+        {
+         "$": "5. Élément de batterie selon l'une des revendications précédentes dans lequel l'alcalinité libre est fournie sous forme d'un ou plusieurs hydroxydes de sodium, de lithium et de potassium."
+        },
+        {
+         "$": "6. Élément de batterie selon la revendication 5 dans lequel l'électrolyte comprend entre 0 et 4 mol/L d'hydroxyde de lithium, entre 1,5 et 3,5 mol/L d'hydroxyde de sodium et entre 4 et 7 mol/L d'hydroxyde de potassium."
+        },
+        {
+         "$": "7. Élément de batterie selon l'une des revendications précédentes dans lequel l'électrolyte comprend en plus un composé d'indium."
+        },
+        {
+         "$": "8. Élément de batterie selon la revendication 7 dans lequel le composé d'indium est le sulfate d'indium, l'acétate d'indium ou le fluorure d'indium."
+        },
+        {
+         "$": "9. Élément de batterie selon la revendication 7 dans lequel le composé d'indium est présent dans l'électrolyte avec une concentration entre 0,0003 et 0,01 mol/L."
+        },
+        {
+         "$": "10. Élément de batterie selon l'une des revendication précédentes dans lequel l'électrolyte comprend en plus un composé choisi parmi le groupe comprenant le glycol polyéthylénique, l'hydroxyde de tétrabutylammonium et un ester d'alkylphosphate."
+        },
+        {
+         "$": "11. Élément de batterie selon l'une des revendications précédentes dans lequel l'électrode positive ne comprend pas de composé organique à part un où les deux de polyoléfine fluorée et un agent de dispersion."
+        },
+        {
+         "$": "12. Élément de batterie selon l'une des revendications précédentes dans lequel l'élément de batterie au nickel-zinc est un élément à format restreint."
+        },
+        {
+         "$": "13. Élément de batterie selon l'une des revendications précédentes dans lequel la composition d'électrolyte décrite existe avant la formation de l'élément de batterie rechargeable au nickel-zinc."
+        },
+        {
+         "$": "14. Élément de batterie selon l'une des revendications précédentes dans lequel l'électrolyte comprend en plus entre 0,01 et 1 mol/L fluorure."
+        },
+        {
+         "$": "15. Procédé de production d'un élément de batterie rechargeable au nickel-zinc d'après l'une des revendications 1 à 14, comprenant les étapes de :"
+        },
+        {
+         "$": "mise à disposition d'un électrolyte comme défini dans les revendications 1 à 14 ;\nmise à disposition d'une électrode négative comprenant du zinc où un composé de zinc ;\nmise à disposition d'une électrode positive comprenant de l'oxyde de nickel, de l'hydroxyde de nickel et/ou de l'oxyhydroxyde de nickel ; et\nassemblage des électrodes et de l'électrolyte en élément de batterie."
+        }
+       ]
+      }
+     },
+     {
+      "@lang": "EN",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. A rechargeable nickel-zinc battery cell comprising:"
+        },
+        {
+         "$": "a negative electrode comprising zinc or a zinc compound;\na positive electrode comprising nickel oxide, hydroxide, and/or oxyhydroxide; and\nan electrolyte comprising:\nbetween 0.025 and .25 M phosphate; and\nbetween 4 and 9 M free alkalinity,"
+        },
+        {
+         "$": "wherein the electrolyte contains not more than 1M borate."
+        },
+        {
+         "$": "2. The battery cell of claim 1, wherein the phosphate is present in the electrolyte in a concentration of between 0.05 and .15M."
+        },
+        {
+         "$": "3. The battery cell of claim 1 or 2, wherein the free alkalinity is present in the electrolyte in a concentration of between 4M and 6M."
+        },
+        {
+         "$": "4. The battery cell of claim 1 or 2, wherein the free alkalinity is present in the electrolyte in a concentration of between 6M and 9M."
+        },
+        {
+         "$": "5. The battery cell of any of the preceding claims, wherein the free alkalinity is provided as one or more hydroxides of sodium, lithium, and potassium."
+        },
+        {
+         "$": "6. The battery cell of claim 5, wherein electrolyte comprises lithium hydroxide at 0-4M, sodium hydroxide at 1.5 to 3.5M, and potassium hydroxide at 4-7M."
+        },
+        {
+         "$": "7. The battery cell of any of the preceding claims, wherein the electrolyte further comprises an indium compound."
+        },
+        {
+         "$": "8. The battery cell of claim 7, wherein the indium compound is indium sulfate, indium acetate, or indium fluoride."
+        },
+        {
+         "$": "9. The battery cell of claim 7, wherein the indium compound is present in the electrolyte in a concentration of between 0.0003 and 0.01M."
+        },
+        {
+         "$": "10. The battery cell of any of the preceding claims, wherein the electrolyte further comprises a compound selected from the group consisting of a polyethylene glycol, tetrabutylammonium hydroxide, and an alkyl phosphate ester."
+        },
+        {
+         "$": "11. The battery cell of any of the preceding claims, wherein the positive electrode comprises no organic compound other than one or both of a fluorinated polyolefin and a dispersion agent."
+        },
+        {
+         "$": "12. The battery cell of any of the preceding claims, wherein the rechargeable nickel-zinc battery cell is a starved format cell."
+        },
+        {
+         "$": "13. The battery cell of any of the preceding claims, wherein the recited electrolyte composition exists prior to formation of the rechargeable nickel-zinc cell."
+        },
+        {
+         "$": "14. The battery cell of any of the preceding claims, wherein the electrolyte further comprises between 0.01 and 1 M fluoride."
+        },
+        {
+         "$": "15. A method of providing a rechargeable nickel-zinc battery cell as claimed in any of claims 1 to 14, comprising:"
+        },
+        {
+         "$": "providing an electrolyte as defined in any of claims 1-10 and 14;\nproviding a negative electrode comprising zinc or a zinc compound;\nproviding a positive electrode comprising nickel oxide, hydroxide, and/or oxyhydroxide; and\nassembling the electrodes and electrolyte in the battery cell."
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ }
+}

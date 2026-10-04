@@ -1,0 +1,55 @@
+<claims id="claims">
+<claim id="CLM-00001" num="00001">
+<claim-text><b>1</b>. A method for preparing a lithium-rich carbonate precursor comprising:
+<claim-text>(1) mixing a soluble nickel salt, a soluble cobalt salt, and a soluble manganese salt to obtain a mixed metal salt;</claim-text>
+<claim-text>(2) mixing part of the mixed metal salt with a precipitating agent in the presence of a protective agent and a conductive agent to obtain a mixture, performing stirring at a predetermined temperature according to a predetermined stirring speed, lowering temperature from the predetermined temperature to a normal temperature, and sealing the mixture and allowing to stand, so as to obtain preformed particles;</claim-text>
+<claim-text>(3) with stirring, mixing the preformed particles, another part of the mixed metal salt, and the precipitating agent to perform a co-precipitation reaction to obtain a reacted material;</claim-text>
+<claim-text>(4) with stirring, mixing the reacted material and a detergent to obtain a primary washed material;</claim-text>
+<claim-text>(5) performing primary dehydration on the primary washed material to obtain a primary dehydrated material;</claim-text>
+<claim-text>(6) with stirring, performing second washing and dehydration on the primary dehydrated material respectively to obtain a secondary dehydrated material; and</claim-text>
+<claim-text>(7) drying the secondary dehydrated material to obtain a dried secondary dehydrated material, and sieving the dried secondary dehydrated material to remove iron to obtain a lithium-rich carbonate precursor;</claim-text>
+<claim-text>wherein the lithium-rich carbonate precursor has a solid spherical structure and has a chemical formula of Ni<sub>x</sub>Co<sub>y</sub>Mn<sub>(1-x-y)</sub>CO<sub>3</sub>, wherein x is 0.1 to 0.25, and y is 0.1 to 0.25.</claim-text>
+</claim-text>
+</claim>
+<claim id="CLM-00002" num="00002">
+<claim-text><b>2</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (1), the soluble nickel salt, the soluble cobalt salt, and the soluble manganese salt are in a molar ratio of (0.1 to 0.25):(0.1 to 0.25):(0.5 to 0.8) according to nickel, cobalt, and manganese.</claim-text>
+</claim>
+<claim id="CLM-00003" num="00003">
+<claim-text><b>3</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (1), the soluble nickel salt, the soluble cobalt salt, and the soluble manganese salt in the mixed metal salt are each independently at a concentration of 80 g/L to 130 g/L.</claim-text>
+</claim>
+<claim id="CLM-00004" num="00004">
+<claim-text><b>4</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (1), the soluble nickel salt is at least one selected from the group consisting of nickel chloride, nickel nitrate, and nickel sulfate;
+<claim-text>the soluble cobalt salt is at least one selected from the group consisting of cobalt chloride, cobalt nitrate, and cobalt sulfate; and</claim-text>
+<claim-text>the soluble manganese salt is at least one selected from the group consisting of manganese chloride, manganese nitrate, and manganese sulfate.</claim-text>
+</claim-text>
+</claim>
+<claim id="CLM-00005" num="00005">
+<claim-text><b>5</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (2), the protective agent is at least one selected from the group consisting of ascorbic acid and sodium sulfite.</claim-text>
+</claim>
+<claim id="CLM-00006" num="00006">
+<claim-text><b>6</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (2), the conductive agent is at least one selected from the group consisting of glucose and fructose.</claim-text>
+</claim>
+<claim id="CLM-00007" num="00007">
+<claim-text><b>7</b>. The method according to <claim-ref idref="CLM-00001">claims 1</claim-ref>, wherein, in step (2), the mixed metal salt and the precipitating agent are in a molar ratio of 1:(2.0 to 3.5).</claim-text>
+</claim>
+<claim id="CLM-00008" num="00008">
+<claim-text><b>8</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (2), based on 1 L of the total amount of the mixed metal salt and the precipitating agent, the protective agent is used in an amount of 1 g to 20 g, and the conductive agent is used in an amount of 10 g to 100 g.</claim-text>
+</claim>
+<claim id="CLM-00009" num="00009">
+<claim-text><b>9</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (2), the precipitating agent is at least one selected from the group consisting of sodium carbonate, sodium bicarbonate, ammonium carbonate, ammonium bicarbonate, and ammonia water;
+<claim-text>optionally the sodium carbonate is at a concentration of 50 g/L to 200 g/L;</claim-text>
+<claim-text>optionally the sodium bicarbonate is at a concentration of 50 g/L to 100 g/L;</claim-text>
+<claim-text>optionally the ammonium carbonate is at a concentration of 150 g/L to 200 g/L;</claim-text>
+<claim-text>optionally the ammonium bicarbonate is at a concentration of 50 g/L to 200 g/L; and</claim-text>
+<claim-text>optionally the ammonia water is at a concentration of 50 g/L to 200 g/L.</claim-text>
+</claim-text>
+</claim>
+<claim id="CLM-00010" num="00010">
+<claim-text><b>10</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (2), the preformed particles have a particle size of 1 &#x3bc;m to 3 &#x3bc;m.</claim-text>
+</claim>
+<claim id="CLM-00011" num="00011">
+<claim-text><b>11</b>. The method according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein, in step (3), the preformed particles, the mixed metal salt, and the precipitating agent are in a mass ratio of 1:(2 to 8):(6 to 20);
+<claim-text>wherein in step (3), the stirring is performed at a rotational speed of 400 rpm to 1000 rpm and at a temperature of 50&#xb0; C. to 70&#xb0; C. for 5 hours to 60 hours, the reacted material has a pH of 8 to 9.5, and solid content of the reacted material is 100 g/L to 300 g/L.</claim-text>
+</claim-text>
+</claim>
+</claims>
