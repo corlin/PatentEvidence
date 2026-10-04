@@ -56,6 +56,8 @@ from patent_evidence_api.cases.services import CaseService, DocumentService, Dra
 from patent_evidence_api.features.api import create_features_router
 from patent_evidence_api.features.services import FeatureService
 from patent_evidence_api.fto.api import create_product_features_router
+from patent_evidence_api.fto.charts import FtoChartService
+from patent_evidence_api.fto.charts_api import create_fto_chart_router
 from patent_evidence_api.fto.product_features import ProductFeatureService
 from patent_evidence_api.search.api import create_search_router
 from patent_evidence_api.search.services import (
@@ -207,6 +209,12 @@ def create_app(
         create_product_features_router(
             organization_access,
             ProductFeatureService(resolved_clock),
+        )
+    )
+    application.include_router(
+        create_fto_chart_router(
+            organization_access,
+            FtoChartService(resolved_clock),
         )
     )
     application.include_router(
