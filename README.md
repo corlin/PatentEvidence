@@ -1,8 +1,17 @@
 # PatentEvidence 🛡️
 
-PatentEvidence is a high-assurance, multi-tenant enterprise SaaS platform designed for professional patent practitioners, litigation attorneys, and enterprise IP departments. It provides end-to-end traceable patent evidence workflows, automated claim modeling, intelligent prior art comparison matrices (Claim Charts), cryptographic Merkle Root SHA-256 evidence sealing, multi-round peer review approval flows, and secure client delivery gateways.
+PatentEvidence is a high-assurance, multi-tenant enterprise SaaS platform engineered for **Enterprise IP & R&D departments in the New Energy & Energy Storage industry (covering structural assemblies & chemical formulations)**. It delivers end-to-end traceable "evidence-grade" patent workflows, automated claim feature modeling, intelligent Claim Chart infringement comparison matrices, **closed-loop auto-validated Design-Around engines**, **dual-role Stage-Gate clearance workflows**, **dual-track judicial & RFC 3161 TSA trusted timestamping**, and verifiable client delivery gateways.
 
-> **Language note:** Product capability descriptions are written in Chinese (the platform's primary operating language), while section headings, technical commands, and tooling references are kept in English. Domain terminology is defined authoritatively in [`CONTEXT.md`](./CONTEXT.md).
+> **Language note:** Product capability descriptions are written in Chinese (the platform's primary operating language), while section headings, technical commands, and tooling references are kept in English. Domain terminology is defined authoritatively in [`CONTEXT.md`](./CONTEXT.md). Master implementation blueprint is in [`docs/plans/2026-fto-design-around-master-plan.md`](./docs/plans/2026-fto-design-around-master-plan.md).
+
+---
+
+## 🏛️ Strategic Moats (四重竞争壁垒)
+
+1. **Data Moat (Vertical Feature-Level Corpus)**: Focused on top 15 litigious battery/storage giants over the past 5 years (5,000~8,000 core valid patents), establishing an off-the-shelf fine-grained claim element taxonomy.
+2. **Algorithmic Moat (Closed-Loop Auto-Validated Design-Around)**: Once redesign proposals are generated, the engine automatically re-checks them against the competitor's full claim tree and patent family to eliminate secondary infringement.
+3. **Trust & Compliance Moat (Dual-Track Judicial Timestamping)**: Integrates Chinese judicial chains (e.g. Tianping Chain) for domestic proceedings, alongside international RFC 3161 TSA & public blockchain state hashes for US ITC Section 337 and European litigations.
+4. **Workflow Moat (Dual-Role Stage-Gate Clearance)**: R&D submits and modifies designs, while IP Counsel verifies and signs off on immutable FTO Clearance Passes embedded into corporate PLM/ERP phase-gate milestones.
 
 ---
 
@@ -11,16 +20,17 @@ PatentEvidence is a high-assurance, multi-tenant enterprise SaaS platform design
 ```mermaid
 graph LR
     A["1. 文档交底与附图<br/>Case Detail & Drawings"] --> B["2. 权利要求特征建模<br/>Features Workbench"]
-    B --> C["3. 检索规划与候选初筛<br/>Search & CNIPR Handoff"]
-    C --> D["4. Claim Chart 深度比对<br/>Comparison Matrix"]
-    D --> E["5. 证据封存与报告<br/>Reports & Root SHA-256"]
-    E --> F["6. 独立专业复核审批<br/>Review & Audit Trail"]
-    F --> G["7. 客户交付与证书网关<br/>Delivery & Verification"]
+    B --> C["3. 检索规划与候选初筛<br/>Hybrid Retrieval & Screening"]
+    C --> D["4. Claim Chart 深度比对<br/>Comparison Matrix (CN/US/EP)"]
+    D --> E["5. 闭环规避设计<br/>Design-Around & Auto-Validation"]
+    E --> F["6. 研发 Stage-Gate 协同<br/>Dual-Role Review & Clearance Pass"]
+    F --> G["7. 双轨存证封存与交付<br/>Judicial Chain / TSA / Delivery"]
 ```
 
-1. **多租户与身份安全（Identity & Multi-Tenancy）**
+1. **多租户与平台治理（Identity & Platform Governance）**
    - 机构隔离（PostgreSQL Row-Level Security 强制隔离）与单向审计日志不可变性；
-   - 12 小时安全会话、TOTP 双因素认证（MFA Step-Up）、一次性恢复码与 72 小时单次邀请生命周期。
+   - 12 小时安全会话、TOTP 双因素认证（MFA Step-Up）、一次性恢复码与 72 小时单次邀请生命周期；
+   - 支持客户自管密钥（BYOK）与密文存储，配合大模型敏感度双路由实现零数据留存。
 
 2. **Case Intake & Patent Drawings Gallery (案件交底与说明书附图高精度提炼)**
    - **High-Fidelity Drawing Extraction & Cryptographic Sealing**: Automated vector and raster image separation from DOCX/PDF with independent SHA-256 tamper-evident digest per drawing;
@@ -33,37 +43,33 @@ graph LR
    - 权利要求层级拆解（F1~Fn）、前序/表征特征分类与交底书段落原文锚定；
    - 支持草稿态在线拆分、合并与新增，一键确认并锁定为不可变基准版本。
 
-4. **检索策略规划与 CNIPR 规范交接包（Search & CNIPR Handoff）**
-   - 关键词矩阵、IPC 分类扩展与 CNIPR 规范布尔表达式生成；
-   - 导出规范 Markdown / JSON 人工离线交接包，支持公开数据源检索初筛与法定排除理由留痕。
+4. **候选专利初筛与混合检索（Hybrid Retrieval & Screening）**
+   - 研发白话方案自动解构（提取核心部件、空间装配与功能功效）；
+   - 密集向量检索（Dense Embedding） + 稀疏关键词（BM25） + 分类号过滤的多路并行召回，结合 Cross-Encoder 深度重排，输出 Top 20~30 件竞品高危专利。
 
 5. **2D 特征深度比对矩阵（Claim Chart Comparison Matrix）**
-   - 权利要求特征与对比文献（D1~Dm）二维交叉比对矩阵；
+   - 权利要求特征与对比文献（D1~Dm）二维交叉比对矩阵，适配中国（全面覆盖+等同）、美国（全要素+等同+审查历史禁反悔）、欧洲（UPC + 德国）法域规则包；
    - 三态侵权判定（`相同公开` / `等同替代` / `存在差异`）、引证位置与法律论据结构化录入；
    - 特征文本附图标注智能匹配，全局新颖性与创造性风险 Banner 实时评估。
 
-6. **可专利性预评估规则层（Patentability Pre-Assessment Rules）**
-   - 确定性门禁（版本 `assessment-rules-v3`）：优先权核验（多项 / 部分优先权、期限、首次申请、证明核验）→ 文献日期门禁（现有技术 / 抵触申请 / 不可用 / 日期未知，按特征逐项判断）→ 新颖性单篇全覆盖门禁、组合覆盖筛查、证据完备度核查与创造性三步法脚手架；全部由应用代码控制，不含模型或厂商调用；
-   - 证据完备度区分「阻塞项」与「提示项」：引证未定位、引用未逐字核验、数据源失败 → 禁止输出结论；仅摘要级引用、数据源部分成功、缺失法律状态时点 → 标记并要求人工判断；
-   - 三步法第 3 步为结构化人工填写清单（公知常识、明确教导、技术偏见/相反教导、结合障碍、效果可预期性），代码只校验完整性并标记阻塞项，不代替人判断；辅助性审查基准须举证，商业成功还须证明由技术特征直接带来；内置事后诸葛亮风险提示；
-   - 版本化评估提示词（`prompts/assessment/`：`novelty-v2` 单独对比原则与实体级例外、`inventive-step-v2` 三步法与结合启示清单），结论可回溯具体提示词版本；
-   - 评估版本快照（`assessment_versions`，仅追加不可改）：落库即固化规则版本、提示词版本、评估包与 SHA-256 摘要，修订产生新版本号而非改写既有版本；运行时角色仅授予 `SELECT, INSERT`；
-   - 版本级复核批准（`assessment_version_reviews`，仅追加）：草稿 → 待复核 → 已批准／已驳回，打回修改回到草稿；状态由追加的决策事件流推导而非存字段，已批准版本为终态；存在未解决阻塞项时拒绝批准，除非复核人显式接受「证据不足」结论并写明理由；每个决定带绑定 `payload_sha256` 的决策签名；
-   - 统一编排入口 `assess_case()`：一次调用跑完全部门禁，产出评估包（候选结论、三步法、第 3 步清单状态、证据完备度、阻塞项、提示项、规则版本与提示词版本），可直接序列化供后续 API 层与复核流消费；
-   - 输出仅为候选判断：系统建议的组合恒需人工确认，最终结论由代理师提交、复核人批准。
+6. **闭环反向验真规避设计（Design-Around & Auto-Validation Engine）**
+   - 针对 Claim Chart 中识别的断点特征，生成结构化替代/削减工程改动建议；
+   - **反向闭环排查**：自动将改动方案放回竞品从属权利要求树与同族专利池重新比对，严防“二次落入”风险。
 
-7. **证据链哈希封存与预评估报告（Merkle Root SHA-256 & Reports）**
-   - 全案多源证据 Merkle Root SHA-256 不可变防伪根哈希计算与快照封存；
-   - 结构化富文本 Markdown 分析与预评估报告在线生成与预览。
-   - 图纸、文档与报告原件统一存放于 MinIO 对象存储，内容寻址并绑定内容哈希，与数据库中的证据记录形成可交叉核验的完整证据链。
+7. **确定性可专利性与侵权预评估规则层（Patentability & Assessment Rules）**
+   - 确定性门禁（版本 `assessment-rules-v3`）：优先权核验（多项 / 部分优先权、期限、首次申请、证明核验）→ 文献日期门禁（现有技术 / 抵触申请 / 不可用 / 日期未知，按特征逐项判断）→ 新颖性单篇全覆盖门禁、组合覆盖筛查、证据完备度核查与创造性三步法脚手架；
+   - 证据完备度区分「阻塞项」与「提示项」，统一编排入口 `assess_case()`，产出评估包与评估版本快照（`assessment_versions`，仅追加不可改）。
 
-7. **独立专业复核与三审流转（Multi-round Review & Governance）**
-   - 多轮提审流转（Round 1, Round 2...）、逐特征专家修改批注与退回高亮标记；
-   - 单人执业自审合规警示与 SHA-256 决策数字签名防篡改留痕。
+8. **研发 Stage-Gate 门禁流与双角色协同（Dual-Role Stage-Gate Clearance）**
+   - 研发工程师提方案与整改，IP 工程师复核打标与终审放行；
+   - 签发不可逆的《FTO 清障通行凭证》，嵌入企业 ERP/PLM 立项、开模节点；
+   - 多轮提审流转（Round 1, Round 2...）、逐特征专家修改批注与退回高亮标记。
 
-8. **客户交付网关与防伪下载凭证（Client Delivery & Verification Gateway）**
-   - 登记客户委托方全称并一键锁定全案状态为已交付（`delivered`）；
-   - 生成专用防伪交付证书（Delivery Certificate）与受控下载令牌（Token）。
+9. **双轨证据链存证与客户交付（Merkle Tree, TSA & Delivery Gateway）**
+   - 全案 Merkle Root SHA-256 根哈希计算与快照封存；
+   - 国内权威司法链（如天平链）与国际 RFC 3161 TSA / 公链哈希双轨时间戳存证；
+   - 生成专用防伪交付证书（Delivery Certificate）与受控下载令牌（Token），支持外部持证律师入驻复核签署。
+
 
 ---
 
@@ -189,7 +195,7 @@ More detailed, authoritative documentation lives under [`docs/`](./docs):
 | Compliance & validation notes | [`docs/compliance/`](./docs/compliance), [`docs/validation/`](./docs/validation) |
 | Operations runbooks & local dev | [`docs/operations/`](./docs/operations) |
 | Planning & product specs | [`docs/plans/`](./docs/plans), [`docs/product/`](./docs/product) |
-| Verification & release evidence | [`docs/verification/`](./docs/verification) |
+| **Master Implementation Blueprint** | [`docs/plans/2026-fto-design-around-master-plan.md`](./docs/plans/2026-fto-design-around-master-plan.md) |
 | Domain language glossary | [`CONTEXT.md`](./CONTEXT.md) |
 
 Release provenance and source-lock artifacts are retained in [`provenance/`](./provenance).
