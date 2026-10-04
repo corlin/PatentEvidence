@@ -4,6 +4,7 @@ import type { CaseStatus } from '../types/api'
 
 export type CaseStepKey =
   | 'intake'
+  | 'product'
   | 'features'
   | 'search'
   | 'comparisons'
@@ -24,6 +25,13 @@ const STEPS: StepConfig[] = [
     label: '文档交底与附图',
     pathSuffix: '',
     isDone: (s) => s !== 'draft',
+  },
+  {
+    key: 'product',
+    label: '产品技术特征',
+    pathSuffix: '/product',
+    // FTO step (ADR 0010): case status does not track it yet, so it never shows as done.
+    isDone: () => false,
   },
   {
     key: 'features',

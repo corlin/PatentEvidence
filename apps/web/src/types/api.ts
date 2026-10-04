@@ -712,3 +712,44 @@ export interface DeliveryRecord {
 
 
 
+
+// Product description & features (ADR 0010)
+export interface ProductDescription {
+  id: string
+  version_number: number
+  text: string
+  text_sha256: string
+  created_at: string
+}
+
+export type ProductFeatureOrigin = 'split' | 'manual' | 'edited'
+
+export interface ProductFeature {
+  code: string
+  text: string
+  spans: number[][]
+  origin: ProductFeatureOrigin
+}
+
+export interface ProductFeatureSet {
+  id: string
+  case_id: string
+  description_id: string
+  version_number: number
+  status: 'draft' | 'confirmed'
+  parent_set_id: string | null
+  splitter_version: string
+  confirmed_at: string | null
+  features: ProductFeature[]
+  warnings?: string[]
+}
+
+export interface ProductFeatureSetSummary {
+  id: string
+  version_number: number
+  status: 'draft' | 'confirmed'
+  description_id: string
+  parent_set_id: string | null
+  confirmed_at: string | null
+  feature_count: number
+}
