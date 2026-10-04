@@ -40,6 +40,7 @@ import type {
   SearchStrategy,
   SessionInfo,
   TotpConfirmResult,
+  MfaChallengeResult,
   TotpEnrollResult,
   TriageStatus,
 } from '../types/api'
@@ -162,8 +163,8 @@ export const apiClient = {
     })
   },
 
-  async challengeMfa(params: { code?: string; recovery_code?: string }): Promise<TotpConfirmResult> {
-    return request<TotpConfirmResult>('/api/v1/auth/mfa/challenge', {
+  async challengeMfa(params: { code?: string; recovery_code?: string }): Promise<MfaChallengeResult> {
+    return request<MfaChallengeResult>('/api/v1/auth/mfa/challenge', {
       method: 'POST',
       body: JSON.stringify(params),
     })

@@ -20,7 +20,7 @@ from patent_evidence_api.core.database import (
     create_worker_session_factory,
 )
 from patent_evidence_api.main import create_app
-from test_support import api_settings, login_with_totp, postgres_url
+from test_support import reset_database, seed_admin_tenants, api_settings, login_with_totp, login_with_existing_totp, postgres_url
 
 ORG_A = UUID("60000000-0000-4000-8000-000000000001")
 ORG_B = UUID("60000000-0000-4000-8000-000000000002")
@@ -43,68 +43,22 @@ class Clock:
 def _seed_org_and_identities(migration_url: str, now: datetime) -> None:
     password_hash = PasswordHasher().hash(PASSWORD)
     with psycopg.connect(migration_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """INSERT INTO global_identities
-                (id, email_normalized, status, security_version, created_at, updated_at)
-                VALUES
-                (%s, 'admin_a@tenant.com', 'active', 1, %s, %s),
-                (%s, 'admin_b@tenant.com', 'active', 1, %s, %s)
-                ON CONFLICT (id) DO NOTHING""",
-                (ADMIN_A, now, now, ADMIN_B, now, now),
-            )
-            cur.execute(
-                """INSERT INTO credentials
-                (id, identity_id, credential_type, secret_hash, status, created_at, updated_at)
-                VALUES
-                (gen_random_uuid(), %s, 'password', %s, 'active', %s, %s),
-                (gen_random_uuid(), %s, 'password', %s, 'active', %s, %s)
-                ON CONFLICT DO NOTHING""",
-                (ADMIN_A, password_hash, now, now, ADMIN_B, password_hash, now, now),
-            )
-            cur.execute(
-                """INSERT INTO organizations
-                (id, slug, display_name, persisted_status, created_at, updated_at)
-                VALUES
-                (%s, 'tenant-a-ip', '租户A代理所', 'active', %s, %s),
-                (%s, 'tenant-b-ip', '租户B代理所', 'active', %s, %s)
-                ON CONFLICT (id) DO NOTHING""",
-                (ORG_A, now, now, ORG_B, now, now),
-            )
-            cur.execute(
-                """INSERT INTO organization_plan_quotas
-                (id, organization_id, plan_key, monthly_case_allowance, current_period_start, current_period_end, quota_status, created_at, updated_at)
-                VALUES
-                (gen_random_uuid(), %s, 'starter', 2, %s, %s, 'active', %s, %s),
-                (gen_random_uuid(), %s, 'standard', 50, %s, %s, 'active', %s, %s)
-                ON CONFLICT DO NOTHING""",
-                (
-                    ORG_A,
-                    now - timedelta(days=1),
-                    now + timedelta(days=29),
-                    now,
-                    now,
-                    ORG_B,
-                    now - timedelta(days=1),
-                    now + timedelta(days=29),
-                    now,
-                    now,
-                ),
-            )
-            cur.execute(
-                """INSERT INTO organization_memberships
-                (id, organization_id, identity_id, role, status, created_at, updated_at)
-                VALUES
-                (%s, %s, %s, 'organization_admin', 'active', %s, %s),
-                (%s, %s, %s, 'organization_admin', 'active', %s, %s)
-                ON CONFLICT (id) DO NOTHING""",
-                (MEMBER_A, ORG_A, ADMIN_A, now, now, MEMBER_B, ORG_B, ADMIN_B, now, now),
-            )
+        reset_database(conn)
+        seed_admin_tenants(
+            conn,
+            password_hash=password_hash,
+            tenants=[
+                {"org_id": ORG_A, "slug": "tenant-a-ip", "display_name": "租户A代理所", "admin_id": ADMIN_A,
+                 "admin_email": "admin_a@tenant.com", "membership_id": MEMBER_A, "monthly_case_allowance": 2},
+                {"org_id": ORG_B, "slug": "tenant-b-ip", "display_name": "租户B代理所", "admin_id": ADMIN_B,
+                 "admin_email": "admin_b@tenant.com", "membership_id": MEMBER_B, "monthly_case_allowance": 50},
+            ],
+        )
 
 
 @pytest.mark.asyncio
 async def test_case_lifecycle_and_quota_enforcement() -> None:
-    migration_url = postgres_url("PE_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    migration_url = postgres_url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
     clock = Clock()
     _seed_org_and_identities(migration_url, clock())
 
@@ -116,7 +70,7 @@ async def test_case_lifecycle_and_quota_enforcement() -> None:
         base_url="http://testserver",
     ) as client:
         # 1. Login Admin A
-        await login_with_totp(client, "admin_a@tenant.com", PASSWORD)
+        secret_a = await login_with_totp(client, clock=clock, email="admin_a@tenant.com", password=PASSWORD)
 
         # 2. Create Case 1 in Org A
         res1 = await client.post(
@@ -159,7 +113,7 @@ async def test_case_lifecycle_and_quota_enforcement() -> None:
 
         # 5. Duplicate case number in same org -> 409
         # (Login Admin B to test same case number in another org)
-        await login_with_totp(client, "admin_b@tenant.com", PASSWORD)
+        await login_with_totp(client, clock=clock, email="admin_b@tenant.com", password=PASSWORD)
         res_b = await client.post(
             f"/api/v1/organizations/{ORG_B}/cases",
             json={
@@ -176,7 +130,7 @@ async def test_case_lifecycle_and_quota_enforcement() -> None:
         assert res_cross.status_code == 404
 
         # 7. Upload document to Case 1
-        await login_with_totp(client, "admin_a@tenant.com", PASSWORD)
+        await login_with_existing_totp(client, clock=clock, email="admin_a@tenant.com", password=PASSWORD, secret=secret_a)
 
         # Create in-memory docx
         doc = Document()

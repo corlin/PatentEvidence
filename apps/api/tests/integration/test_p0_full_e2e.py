@@ -18,7 +18,7 @@ from patent_evidence_api.core.database import (
     create_worker_session_factory,
 )
 from patent_evidence_api.main import create_app
-from test_support import api_settings, login_with_totp, postgres_url
+from test_support import reset_database, seed_platform_admin, api_settings, login_with_totp, login_with_existing_totp, postgres_url
 
 SUPERADMIN_ID = UUID("80000000-0000-4000-8000-000000000001")
 PASSWORD = "Correct horse battery staple 42"
@@ -34,30 +34,19 @@ class Clock:
 
 
 def _seed_superadmin(migration_url: str, now: datetime) -> None:
-    password_hash = PasswordHasher().hash(PASSWORD)
     with psycopg.connect(migration_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """INSERT INTO global_identities
-                (id, email_normalized, status, security_version, created_at, updated_at)
-                VALUES
-                (%s, 'superadmin_e2e@platform.com', 'active', 1, %s, %s)
-                ON CONFLICT (id) DO NOTHING""",
-                (SUPERADMIN_ID, now, now),
-            )
-            cur.execute(
-                """INSERT INTO credentials
-                (id, identity_id, credential_type, secret_hash, status, created_at, updated_at)
-                VALUES
-                (gen_random_uuid(), %s, 'password', %s, 'active', %s, %s)
-                ON CONFLICT DO NOTHING""",
-                (SUPERADMIN_ID, password_hash, now, now),
-            )
+        reset_database(conn)
+        seed_platform_admin(
+            conn,
+            identity_id=SUPERADMIN_ID,
+            email="superadmin_e2e@platform.com",
+            password_hash=PasswordHasher().hash(PASSWORD),
+        )
 
 
 @pytest.mark.asyncio
 async def test_p0_full_lifecycle_e2e_integration() -> None:
-    migration_url = postgres_url("PE_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    migration_url = postgres_url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
     clock = Clock()
     _seed_superadmin(migration_url, clock())
 
@@ -69,7 +58,7 @@ async def test_p0_full_lifecycle_e2e_integration() -> None:
         base_url="http://testserver",
     ) as client:
         # Step 1: Login Superadmin
-        await login_with_totp(client, "superadmin_e2e@platform.com", PASSWORD)
+        superadmin_secret = await login_with_totp(client, clock=clock, email="superadmin_e2e@platform.com", password=PASSWORD)
 
         # Step 2: Superadmin provisions Organization A
         res_prov = await client.post(
@@ -79,12 +68,16 @@ async def test_p0_full_lifecycle_e2e_integration() -> None:
                 "display_name": "终审验收代理机构A",
                 "admin_email": "tenant_admin_a@firm.com",
                 "monthly_case_allowance": 100,
+                "plan_key": "e2e",
+                "current_period_start": clock().isoformat(),
+                "current_period_end": clock().replace(year=clock().year + 1).isoformat(),
             },
+            headers={"Idempotency-Key": f"e2e-provision-{uuid4()}"},
         )
         assert res_prov.status_code == 201
         prov_data = res_prov.json()
         org_a_id = prov_data["organization"]["id"]
-        invitation_token = prov_data["invitation"]["token"]
+        invitation_token = prov_data["invitation_token"]
 
         # Step 3: Tenant Admin A accepts invitation and sets password
         res_inspect = await client.post(
@@ -101,10 +94,10 @@ async def test_p0_full_lifecycle_e2e_integration() -> None:
                 "password": PASSWORD,
             },
         )
-        assert res_accept.status_code == 200
+        assert res_accept.status_code == 201
 
         # Step 4: Login as Tenant Admin A with TOTP
-        await login_with_totp(client, "tenant_admin_a@firm.com", PASSWORD)
+        await login_with_totp(client, clock=clock, email="tenant_admin_a@firm.com", password=PASSWORD)
 
         # Step 5: Create Patent Case
         res_case = await client.post(
@@ -169,8 +162,9 @@ async def test_p0_full_lifecycle_e2e_integration() -> None:
             f"/api/v1/organizations/{org_a_id}/cases/{case_id}/search/strategies/generate"
         )
         assert res_strat.status_code == 201
+        strategy_id = res_strat.json()["id"]
         res_handoff = await client.get(
-            f"/api/v1/organizations/{org_a_id}/cases/{case_id}/search/handoff"
+            f"/api/v1/organizations/{org_a_id}/cases/{case_id}/search/strategies/{strategy_id}/handoff"
         )
         assert res_handoff.status_code == 200
         assert "CNIPR 官方专利检索人工交接规范包" in res_handoff.json()["markdown"]
@@ -250,7 +244,7 @@ CN118888888A,机械传动系统,一种高耐磨圆柱齿轮与箱体结构,2024-
 
         # Step 17: Cross-Tenant Isolation Security Assertion
         # Provision Organization B and attempt to access Org A's case
-        await login_with_totp(client, "superadmin_e2e@platform.com", PASSWORD)
+        await login_with_existing_totp(client, clock=clock, email="superadmin_e2e@platform.com", password=PASSWORD, secret=superadmin_secret)
         res_prov_b = await client.post(
             "/api/v1/platform/organizations",
             json={
@@ -258,14 +252,18 @@ CN118888888A,机械传动系统,一种高耐磨圆柱齿轮与箱体结构,2024-
                 "display_name": "机构B",
                 "admin_email": "tenant_admin_b@firm.com",
                 "monthly_case_allowance": 100,
+                "plan_key": "e2e",
+                "current_period_start": clock().isoformat(),
+                "current_period_end": clock().replace(year=clock().year + 1).isoformat(),
             },
+            headers={"Idempotency-Key": f"e2e-provision-{uuid4()}"},
         )
-        inv_token_b = res_prov_b.json()["invitation"]["token"]
+        inv_token_b = res_prov_b.json()["invitation_token"]
         await client.post(
             "/api/v1/invitations/accept",
             json={"token": inv_token_b, "display_name": "李合伙人", "password": PASSWORD},
         )
-        await login_with_totp(client, "tenant_admin_b@firm.com", PASSWORD)
+        await login_with_totp(client, clock=clock, email="tenant_admin_b@firm.com", password=PASSWORD)
         org_b_id = res_prov_b.json()["organization"]["id"]
 
         # Org B attempting to read Org A's case or reports MUST return 404

@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.object_storage.client import ObjectStorageClient, build_source_key
+from patent_evidence_api.core.database import lock_organization_authority
 from modules.cases.parser import DocumentParser
 from modules.cases.upload_guard import UploadRejected, inspect_upload
 
@@ -39,15 +40,19 @@ class CaseService:
         if not clean_case_num or not clean_title or not clean_field:
             raise HTTPException(status_code=422, detail="missing_case_required_fields")
 
-        # 1. Lock and check quota
+        # 1. Serialize case creation per organization, then check quota.
+        # A row lock (SELECT ... FOR UPDATE) is not possible here: it needs UPDATE
+        # privilege, and patent_evidence_app may only SELECT organization_plan_quotas.
+        # The organization advisory lock (re-entrant; access.mutation already takes
+        # it) serializes concurrent creations, so the count below cannot race.
+        await lock_organization_authority(session, organization_id)
         quota_row = (
             (
                 await session.execute(
                     text(
                         """SELECT monthly_case_allowance, current_period_start, current_period_end
                         FROM organization_plan_quotas
-                        WHERE organization_id=:org_id
-                        FOR UPDATE"""
+                        WHERE organization_id=:org_id"""
                     ),
                     {"org_id": organization_id},
                 )
