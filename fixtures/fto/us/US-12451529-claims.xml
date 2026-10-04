@@ -1,0 +1,30 @@
+<claims id="claims">
+<claim id="CLM-00001" num="00001">
+<claim-text>1. A battery module capable of detecting swelling comprising:
+<claim-text>a plurality of battery cell assemblies electrically connected and stacked on each other, each battery cell assembly including a battery cell and a cartridge surrounding an edge of the battery cell;</claim-text>
+<claim-text>an uppermost battery cell assembly among the plurality of the battery cell assemblies, the uppermost battery cell assembly including an uppermost battery cell and an uppermost cartridge surrounding an edge of the uppermost battery cell;</claim-text>
+<claim-text>an upper cover arranged on the uppermost battery cell assembly, the upper cover including a guide tube vertically protruding from an upper surface of the upper cover and having a hollow therein, wherein the upper surface of the upper cover faces away from the uppermost battery cell;</claim-text>
+<claim-text>an overcharge protector disposed on the guide tube,</claim-text>
+<claim-text>a strap section disposed over and across an upper surface of the uppermost battery cell, and positioned between the upper surface of the uppermost battery and the upper cover, the strap section has an elongated body part made of an elastically deformable material and disposed across the upper surface of the uppermost battery cell, and a press pin mounted on the elongated body part to reciprocate along the hollow of the guide tube between a contact position and a non-contact position with the overcharge protector; and</claim-text>
+<claim-text>a lower cover arranged on a lowermost battery cell assembly among the plurality of the battery cell assemblies.</claim-text>
+</claim-text>
+</claim>
+<claim id="CLM-00002" num="00002">
+<claim-text>2. The battery module according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein the strap section is disposed in contact with the upper surface of the uppermost battery cell.</claim-text>
+</claim>
+<claim id="CLM-00003" num="00003">
+<claim-text>3. The battery module according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein the uppermost cartridge has insertion holes on opposite sides thereof.</claim-text>
+</claim>
+<claim id="CLM-00004" num="00004">
+<claim-text>4. The battery module according to <claim-ref idref="CLM-00003">claim 3</claim-ref>, wherein the strap section further has fastening parts provided at both ends of the elongated body part and inserted into the insertion holes of the uppermost cartridge.</claim-text>
+</claim>
+<claim id="CLM-00005" num="00005">
+<claim-text>5. The battery module according to <claim-ref idref="CLM-00004">claim 4</claim-ref>, wherein the press pin is coupled to the elongated body part with a socket part positioned at an upper surface of the elongated body part and a ball part positioned at a lower surface of the elongated body part.</claim-text>
+</claim>
+<claim id="CLM-00006" num="00006">
+<claim-text>6. The battery module according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein the guide tube includes a seal made of an elastic membrane material on a hollow cross section of the guide tube.</claim-text>
+</claim>
+<claim id="CLM-00007" num="00007">
+<claim-text>7. The battery module according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein the plurality of the battery cell assemblies, the upper cover, and the lower cover are fastened together by means of a fastening member.</claim-text>
+</claim>
+</claims>

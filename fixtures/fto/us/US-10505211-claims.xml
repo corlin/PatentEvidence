@@ -1,0 +1,65 @@
+<claims id="claims">
+<claim id="CLM-00001" num="00001">
+<claim-text>1. A fuel cell vehicle, comprising:
+<claim-text>a fuel cell unit arranged in an underfloor space of the fuel cell vehicle, the fuel cell unit includes:</claim-text>
+<claim-text>a fuel cell that has a plurality of cells stacked together in a generally horizontal direction, the plurality of cells each including at least one first connector; and</claim-text>
+<claim-text>a cell monitor that is arranged in a side region of the fuel cell, and that monitors a state of each of the plurality of cells, and the cell monitor includes second connectors corresponding to each of the at least one first connector of each of the plurality of cells,</claim-text>
+<claim-text>wherein the second connectors of the cell monitor being arranged facing downward on a surface on a vertically lower side of the cell monitor,</claim-text>
+<claim-text>wherein the vertically lower side of the cell monitor being positioned vertically lower than other sides of the cell monitor,</claim-text>
+<claim-text>wherein the surface on the vertically lower side of the cell monitor extending generally parallel to a stacking direction of the plurality of cells, and</claim-text>
+<claim-text>wherein the fuel cell has a through-hole for discharging reaction gas for generating power and at least one of the at least one first connector of each of the plurality of cells is arranged near the through-hole, the through-hole is arranged below the center of the fuel cell in the vertical direction and arranged on the cell monitor side in the horizontal direction of the fuel cell.</claim-text>
+</claim-text>
+</claim>
+<claim id="CLM-00002" num="00002">
+<claim-text>2. The fuel cell vehicle according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein the fuel cell has a generally rectangular parallelepiped shape with four side surfaces; and the cell monitor is arranged on at least one of the side surfaces of the fuel cell.</claim-text>
+</claim>
+<claim id="CLM-00003" num="00003">
+<claim-text>3. The fuel cell vehicle according to <claim-ref idref="CLM-00002">claim 2</claim-ref>, wherein the cell monitor is arranged on the side surface that extends parallel to a stacking direction of the cells from among the four side surfaces of the fuel cell; and a first connector of each cell is arranged on the side surface, excluding both end plate-side surfaces, from among the four side surfaces of the fuel cell.</claim-text>
+</claim>
+<claim id="CLM-00004" num="00004">
+<claim-text>4. The fuel cell vehicle according to <claim-ref idref="CLM-00003">claim 3</claim-ref>, wherein the first connectors of the cells are arranged in a vertically lower region of the fuel cell.</claim-text>
+</claim>
+<claim id="CLM-00005" num="00005">
+<claim-text>5. The fuel cell vehicle according to <claim-ref idref="CLM-00004">claim 4</claim-ref>, wherein the first connectors of the cells are arranged on a lower surface, from among the surfaces of the fuel cell.</claim-text>
+</claim>
+<claim id="CLM-00006" num="00006">
+<claim-text>6. The fuel cell vehicle according to <claim-ref idref="CLM-00005">claim 5</claim-ref>, wherein the first connectors of the cells are arranged on an end portion, on a cell monitor side, of the lower surface of the fuel cell.</claim-text>
+</claim>
+<claim id="CLM-00007" num="00007">
+<claim-text>7. The fuel cell vehicle according to <claim-ref idref="CLM-00003">claim 3</claim-ref>, wherein the cell monitor has at least one surface that extends generally parallel to the stacking direction of the cells, and second connectors of the cell monitor are arranged on the surface that is positioned nearest the first connectors of the cells.</claim-text>
+</claim>
+<claim id="CLM-00008" num="00008">
+<claim-text>8. The fuel cell vehicle according to <claim-ref idref="CLM-00003">claim 3</claim-ref>, wherein the cell monitor has at least one surface that extends generally parallel to the stacking direction of the cells, and second connectors of the cell monitor are arranged on the surface on a vertically lower side, from among the surfaces of the cell monitor.</claim-text>
+</claim>
+<claim id="CLM-00009" num="00009">
+<claim-text>9. The fuel cell vehicle according to <claim-ref idref="CLM-00007">claim 7</claim-ref>, wherein the second connectors of the cell monitor are lined up in the same direction as the first connectors of the cells.</claim-text>
+</claim>
+<claim id="CLM-00010" num="00010">
+<claim-text>10. The fuel cell vehicle according to <claim-ref idref="CLM-00007">claim 7</claim-ref>, further comprising cables that connect the first connectors of the cells to the second connectors of the cell monitor.</claim-text>
+</claim>
+<claim id="CLM-00011" num="00011">
+<claim-text>11. The fuel cell vehicle according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, wherein the cells are stacked in a vehicle width direction.</claim-text>
+</claim>
+<claim id="CLM-00012" num="00012">
+<claim-text>12. The fuel cell vehicle according to <claim-ref idref="CLM-00008">claim 8</claim-ref>, wherein the second connectors of the cell monitor are lined up in the same direction as the first connectors of the cells.</claim-text>
+</claim>
+<claim id="CLM-00013" num="00013">
+<claim-text>13. The fuel cell vehicle according to <claim-ref idref="CLM-00008">claim 8</claim-ref>, further comprising cables that connect the first connectors of the cells to the second connectors of the cell monitor.</claim-text>
+</claim>
+<claim id="CLM-00014" num="00014">
+<claim-text>14. The fuel cell vehicle according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, further comprising cables that connect first connectors of the cells to second connectors of the cell monitor,
+<claim-text>wherein first connection portions of the cables and the first connectors of the cells are arranged on a lower surface, from among surfaces of the fuel cell.</claim-text>
+</claim-text>
+</claim>
+<claim id="CLM-00015" num="00015">
+<claim-text>15. The fuel cell vehicle according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, further comprising cables that connect first connectors of the cells to second connectors of the cell monitor,
+<claim-text>wherein second connection portions of the cables and the second connectors of the cell monitor are arranged on a lower surface, from among the surfaces of the cell monitor.</claim-text>
+</claim-text>
+</claim>
+<claim id="CLM-00016" num="00016">
+<claim-text>16. The fuel cell vehicle according to <claim-ref idref="CLM-00001">claim 1</claim-ref>, further comprising cables that connect first connectors of the cells to second connectors of the cell monitor,
+<claim-text>wherein first connection portions of the cables and the first connectors of the cells are arranged on a lower surface, from among the surfaces of the fuel cell, and</claim-text>
+</claim-text>
+<claim-text>second connection portions of the cables and the second connectors of the cell monitor are arranged on a lower surface, from among surfaces of the cell monitor.</claim-text>
+</claim>
+</claims>

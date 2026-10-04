@@ -1,0 +1,144 @@
+{
+ "ops:world-patent-data": {
+  "@xmlns": {
+   "ops": "http://ops.epo.org",
+   "$": "http://www.epo.org/exchange",
+   "xlink": "http://www.w3.org/1999/xlink"
+  },
+  "ftxt:fulltext-documents": {
+   "ftxt:fulltext-document": {
+    "@system": "ops.epo.org",
+    "@fulltext-format": "text-only",
+    "bibliographic-data": {
+     "publication-reference": {
+      "@data-format": "docdb",
+      "document-id": {
+       "country": {
+        "$": "EP"
+       },
+       "doc-number": {
+        "$": "3467934"
+       },
+       "kind": {
+        "$": "B1"
+       }
+      }
+     }
+    },
+    "claims": [
+     {
+      "@lang": "DE",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. Wärmeabstrahlkartusche (300, 300a), umfassend:"
+        },
+        {
+         "$": "ein erstes und ein zweites Führungselement (103, 104), die voneinander beabstandet sind, wobei das erste und das zweite Führungselement (103, 104) aus einem wärmeleitenden, nicht-isolierenden Kunststoff gebildet sind und in der Lage sind, beide Längsseiten einer Batterie (200) zu tragen;\nein drittes und ein viertes Führungselement (101, 102), die jeweils mit beiden Enden des ersten und des zweiten Führungselements (103, 104) verbunden sind, um ein Batterieaufnahmedurchgangsloch (110) zu bilden, das von dem ersten, zweiten, dritten und vierten Führungselement (103, 104, 101, 102) umgeben ist, wobei das dritte und das vierte Führungselement (101, 102) aus einem wärmeleitenden Isolationskunststoff gebildet sind; und\neinen Sitzabschnitt (120), der von einer Seitenwand des Batterieaufnahmedurchgangslochs (110) vorsteht, wobei die Batterie (200) in der Lage ist, auf dem Sitzabschnitt (120) zu sitzen,\nwobei jedes der dritten und vierten Führungselemente (101, 102) ein wärmeleitendes Isolierelement (105, 106) umfasst, das wärmeleitende Isolierelement (105, 106) ein leitendes Verbindungselement (211, 212) umfasst und das leitende Verbindungselement (211, 212) dazu konfiguriert ist, mit einem Elektrodenanschluss (201, 202) der Batterie (200) und gleichzeitig mit einem leitenden Verbindungselement (211, 212) einer benachbarten Wärmeabstrahlkartusche (300, 300a) in Kontakt zu sein."
+        },
+        {
+         "$": "2. Wärmeabstrahlkartusche (300, 300a) nach Anspruch 1, wobei das erste Führungselement (103) eine polierte Seitenoberfläche umfasst, mit der ein Wärmetauscher (500) in der Lage ist, in Kontakt zu sein, und eine exponierte äußere Oberfläche des zweiten Führungselements (104) Wärmeabstrahl-Unregelmäßigkeiten (104a) umfasst, die darauf ausgebildet sind."
+        },
+        {
+         "$": "3. Wärmeabstrahlkartusche (300, 300a) nach Anspruch 2, die ferner ein Wärmeleitmaterial (thermal interface material; TIM) (130), mit dem die polierte Seitenoberfläche des ersten Führungselements (103) beschichtet ist, und eine emittierende Beschichtungsschicht, die auf der exponierten äußeren Oberfläche des zweiten Führungselements (104) ausgebildet ist, umfasst, um dadurch die Wärmeabstrahlleistung zu erhöhen."
+        },
+        {
+         "$": "4. Wärmeabstrahlkartusche (300, 300a) nach Anspruch 1, wobei der wärmeleitende, nicht isolierende Kunststoff einen darin dispergierten, elektrisch leitenden, wärmeabstrahlenden Füllstoff umfasst, und der wärmeleitende, isolierende Kunststoff einen darin dispergierten, isolierenden, wärmeabstrahlenden Füllstoff umfasst."
+        },
+        {
+         "$": "5. Wärmeabstrahlkartusche nach Anspruch 1, die ferner ein Wärmeleitmaterial (thermal interface material; TIM) (130) umfasst, das auf einer Oberfläche des Sitzabschnitts (120) ausgebildet ist."
+        },
+        {
+         "$": "6. Batteriepack (510) für ein Elektrofahrzeug, wobei das Batteriepack (510) umfasst:"
+        },
+        {
+         "$": "eine Vielzahl von Wärmeabstrahlkartuschen, die in einer vertikalen Richtung gestapelt oder in einer horizontalen Richtung angrenzend aneinander angeordnet sind; und\neine Vielzahl von Batterien (200), die zwischen der Vielzahl von Wärmeabstrahlkartuschen eingesetzt und angeordnet sind,\nwobei jede der Vielzahl von Wärmeabstrahlkartuschen eine Wärmeabstrahlkartusche (300, 300a) nach einem der Ansprüche 1 bis 5 ist."
+        },
+        {
+         "$": "7. Batteriepack (510) für ein Elektrofahrzeug nach Anspruch 6, ferner umfassend einen Wärmetauscher (500), der eine polierte Seitenoberfläche des ersten Führungselements (103) kontaktiert."
+        },
+        {
+         "$": "8. Batteriepack für ein Elektrofahrzeug nach Anspruch 6, wobei die Vielzahl von Batterien eine Batterie (200) eines Pouch-Typs umfasst."
+        }
+       ]
+      }
+     },
+     {
+      "@lang": "FR",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. Cartouche à rayonnement thermique (300, 300a), comprenant :"
+        },
+        {
+         "$": "un premier et un deuxième élément de guidage (103, 104) qui sont espacés l'un de l'autre, dans lequel le premier et le deuxième élément de guidage (103, 104) sont formés d'un plastique non-isolant thermiquement conducteur et capable de supporter les deux côtés longitudinaux d'une batterie (200) ;\nun troisième et un quatrième élément de guidage (101, 102) connectés aux deux extrémités du premier et du deuxième élément de guidage (103, 104), respectivement, afin de former un orifice de pénétration recevant une batterie (110) entourée du premier, deuxième, troisième et quatrième élément de guidage (103, 104, 101, 102), dans laquelle le troisième et le quatrième élément de guidage (101, 102) sont formés d'un plastique isolant thermiquement conducteur ; et\nune partie d'assise (120) saillant d'une paroi latérale de l'orifice de pénétration recevant une batterie (110), la batterie (200) étant en mesure d'être installée sur la partie d'assise (120),\ndans laquelle chacun des troisième et quatrième éléments de guidage (101, 102) inclut un élément isolant thermiquement conducteur (105, 106), l'élément isolant thermiquement conducteur (105, 106) inclut un élément de raccordement conducteur (211, 212) et l'élément de raccordement conducteur (211, 212) est configuré afin d'être en contact avec une borne d'électrode (201, 202) de la batterie (200) et simultanément avec un élément de raccordement conducteur (211, 212) d'une cartouche à rayonnement thermique avoisinante (300, 300a)."
+        },
+        {
+         "$": "2. Cartouche à rayonnement thermique (300, 300a) selon la revendication 1, dans laquelle le premier élément de guidage (103) inclut une surface latérale polie avec laquelle un échangeur thermique (500) est capable d'être en contact, et une surface extérieure exposée du second élément de guidage (104) inclut des irrégularités de rayonnement thermique (104a) formées dessus."
+        },
+        {
+         "$": "3. Cartouche à rayonnement thermique (300, 300a) selon la revendication 2, comprenant en outre un matériau d'interface thermique (TIM) (130) revêtu sur la surface latérale polie du premier élément de guidage (103) et une couche de revêtement émissive formée sur la surface extérieure exposée du deuxième élément de guidage (104), afin d'augmenter ainsi les performances de rayonnement thermique."
+        },
+        {
+         "$": "4. Cartouche à rayonnement thermique (300, 300a) selon la revendication 1, dans laquelle le plastique non-isolant thermiquement conducteur comprend une charge à rayonnement thermique électriquement conductrice dispersée à l'intérieur et le plastique isolant thermiquement conducteur comprend une charge de rayonnement thermique isolante dispersée à l'intérieur."
+        },
+        {
+         "$": "5. Cartouche à rayonnement thermique (300, 300a) selon la revendication 1, comprenant en outre un matériau d'interface thermique (TIM) (130) formé sur une surface de la partie d'assise (120)."
+        },
+        {
+         "$": "6. Pack de batterie (510) pour un véhicule électrique, le pack de batterie (510) comprenant :"
+        },
+        {
+         "$": "une pluralité de cartouches à rayonnement thermique empilées dans une direction verticale ou disposées les unes près des autres dans une direction horizontale ; et\nune pluralité de batteries (200) insérées et disposées entre la pluralité de cartouches à rayonnement thermique,\ndans lequel chacune de la pluralité de cartouches à rayonnement thermique est une cartouche à rayonnement thermique (300, 300a) selon l'une des revendications 1 à 5."
+        },
+        {
+         "$": "7. Pack de batterie (510) pour un véhicule électrique selon la revendication 6, comprenant en outre un échangeur de chaleur (500) qui entre en contact avec une surface latérale polie du premier élément de guidage (103)."
+        },
+        {
+         "$": "8. Pack de batterie pour un véhicule électrique selon la revendication 6, dans lequel la pluralité de batteries inclut une batterie (200) de type pochette."
+        }
+       ]
+      }
+     },
+     {
+      "@lang": "EN",
+      "claim": {
+       "claim-text": [
+        {
+         "$": "1. A heat-radiating cartridge (300, 300a) comprising:"
+        },
+        {
+         "$": "first and second guide members (103, 104) that are spaced apart from each other, wherein the first and second guide members (103, 104) are formed of a thermally conductive non-insulating plastic and capable of supporting both longitudinal sides of a battery (200);\nthird and fourth guide members (101, 102) connected to both ends of the first and second guide members (103, 104), respectively, to form a battery receiving penetration hole (110) surrounded by the first, second, third and fourth guide members (103, 104, 101, 102), wherein the third and fourth guide members (101, 102) are formed of a thermally conductive insulation plastic; and\na seating portion (120) protruding from a sidewall of the battery receiving penetration hole (110), the battery (200) being capable of being seated on the seating portion (120),\nwherein each of the third and fourth guide members (101, 102) includes a thermally conductive insulating member (105, 106), the thermally conductive insulating member (105, 106) includes a conductive connecting member (211, 212), and the conductive connecting member (211, 212) is configured to be in contact with an electrode terminal (201, 202) of the battery (200) and simultaneously with a conductive connecting member (211, 212) of a neighboring heat-radiating cartridge (300, 300a)."
+        },
+        {
+         "$": "2. The heat-radiating cartridge (300, 300a) of claim 1, wherein the first guide member (103) includes a polished side surface with which a heat exchanger (500) is capable of being in contact, and an exposed outer surface of the second guide member (104) includes heat-radiating irregularities (104a) formed thereon."
+        },
+        {
+         "$": "3. The heat-radiating cartridge (300, 300a) of claim 2, further comprising a thermal interface material (TIM) (130) coated on the polished side surface of the first guide member (103) and an emissive coating layer formed on the exposed outer surface of the second guide member (104), to thereby increase heat-radiating performance."
+        },
+        {
+         "$": "4. The heat-radiating cartridge (300, 300a) of claim 1, wherein the thermally conductive non-insulating plastic comprises an electrically conductive heat-radiating filler dispersed therein, and the thermally conductive insulating plastic comprises an insulating heat-radiating filler dispersed therein."
+        },
+        {
+         "$": "5. The heat-radiating cartridge of claim 1, further comprising a thermal interface material (TIM) (130) formed on a surface of the seating portion (120)."
+        },
+        {
+         "$": "6. A battery pack (510) for an electric vehicle, the battery pack (510) comprising:"
+        },
+        {
+         "$": "a plurality of heat-radiating cartridges stacked in a vertical direction or disposed adjacent to each other in a horizontal direction; and\na plurality of batteries (200) inserted and disposed between the plurality of heat-radiating cartridges,\nwherein each of the plurality of heat-radiating cartridges is a heat-radiating cartridge (300, 300a) according to one of claims 1 to 5."
+        },
+        {
+         "$": "7. The battery pack (510) for an electric vehicle of claim 6, further comprising a heat exchanger (500) contacting a polished side surface of the first guide member (103)."
+        },
+        {
+         "$": "8. The battery pack for an electric vehicle of claim 6, wherein the plurality of batteries include a battery (200) of a pouch-type."
+        }
+       ]
+      }
+     }
+    ]
+   }
+  }
+ }
+}
