@@ -17,7 +17,7 @@ from patent_evidence_api.core.database import (
     create_worker_session_factory,
 )
 from patent_evidence_api.main import create_app
-from test_support import api_settings, login_with_totp, postgres_url
+from test_support import reset_database, seed_admin_tenants, api_settings, login_with_totp, postgres_url
 
 ORG_A = UUID("80000000-0000-4000-8000-000000000001")
 ORG_B = UUID("80000000-0000-4000-8000-000000000002")
@@ -40,68 +40,22 @@ class Clock:
 def _seed_org_and_identities(migration_url: str, now: datetime) -> None:
     password_hash = PasswordHasher().hash(PASSWORD)
     with psycopg.connect(migration_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """INSERT INTO global_identities
-                (id, email_normalized, status, security_version, created_at, updated_at)
-                VALUES
-                (%s, 'admin_a_search@tenant.com', 'active', 1, %s, %s),
-                (%s, 'admin_b_search@tenant.com', 'active', 1, %s, %s)
-                ON CONFLICT (id) DO NOTHING""",
-                (ADMIN_A, now, now, ADMIN_B, now, now),
-            )
-            cur.execute(
-                """INSERT INTO credentials
-                (id, identity_id, credential_type, secret_hash, status, created_at, updated_at)
-                VALUES
-                (gen_random_uuid(), %s, 'password', %s, 'active', %s, %s),
-                (gen_random_uuid(), %s, 'password', %s, 'active', %s, %s)
-                ON CONFLICT DO NOTHING""",
-                (ADMIN_A, password_hash, now, now, ADMIN_B, password_hash, now, now),
-            )
-            cur.execute(
-                """INSERT INTO organizations
-                (id, slug, display_name, persisted_status, created_at, updated_at)
-                VALUES
-                (%s, 'search-org-a', '检索机构A', 'active', %s, %s),
-                (%s, 'search-org-b', '检索机构B', 'active', %s, %s)
-                ON CONFLICT (id) DO NOTHING""",
-                (ORG_A, now, now, ORG_B, now, now),
-            )
-            cur.execute(
-                """INSERT INTO organization_plan_quotas
-                (id, organization_id, plan_key, monthly_case_allowance, current_period_start, current_period_end, quota_status, created_at, updated_at)
-                VALUES
-                (gen_random_uuid(), %s, 'standard', 50, %s, %s, 'active', %s, %s),
-                (gen_random_uuid(), %s, 'standard', 50, %s, %s, 'active', %s, %s)
-                ON CONFLICT DO NOTHING""",
-                (
-                    ORG_A,
-                    now - timedelta(days=1),
-                    now + timedelta(days=29),
-                    now,
-                    now,
-                    ORG_B,
-                    now - timedelta(days=1),
-                    now + timedelta(days=29),
-                    now,
-                    now,
-                ),
-            )
-            cur.execute(
-                """INSERT INTO organization_memberships
-                (id, organization_id, identity_id, role, status, created_at, updated_at)
-                VALUES
-                (%s, %s, %s, 'organization_admin', 'active', %s, %s),
-                (%s, %s, %s, 'organization_admin', 'active', %s, %s)
-                ON CONFLICT (id) DO NOTHING""",
-                (MEMBER_A, ORG_A, ADMIN_A, now, now, MEMBER_B, ORG_B, ADMIN_B, now, now),
-            )
+        reset_database(conn)
+        seed_admin_tenants(
+            conn,
+            password_hash=password_hash,
+            tenants=[
+                {"org_id": ORG_A, "slug": "search-org-a", "display_name": "检索机构A", "admin_id": ADMIN_A,
+                 "admin_email": "admin_a_search@tenant.com", "membership_id": MEMBER_A, "monthly_case_allowance": 50},
+                {"org_id": ORG_B, "slug": "search-org-b", "display_name": "检索机构B", "admin_id": ADMIN_B,
+                 "admin_email": "admin_b_search@tenant.com", "membership_id": MEMBER_B, "monthly_case_allowance": 50},
+            ],
+        )
 
 
 @pytest.mark.asyncio
 async def test_search_planning_and_candidate_triage_lifecycle() -> None:
-    migration_url = postgres_url("PE_MIGRATION_DATABASE_URL", "patent_evidence_migration")
+    migration_url = postgres_url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration")
     clock = Clock()
     _seed_org_and_identities(migration_url, clock())
 
@@ -113,7 +67,7 @@ async def test_search_planning_and_candidate_triage_lifecycle() -> None:
         base_url="http://testserver",
     ) as client:
         # 1. Login Admin A
-        await login_with_totp(client, "admin_a_search@tenant.com", PASSWORD)
+        await login_with_totp(client, clock=clock, email="admin_a_search@tenant.com", password=PASSWORD)
 
         # 2. Create Case & Document & Parse
         res_case = await client.post(
@@ -249,7 +203,7 @@ CN119999888A,另一种大模型稀疏化装置,针对大模型注意力层进行
         assert res_filtered.json()["items"][0]["id"] == cand_1["id"]
 
         # 10. Cross-Tenant Isolation: Admin B cannot access Org A's search strategy or candidates
-        await login_with_totp(client, "admin_b_search@tenant.com", PASSWORD)
+        await login_with_totp(client, clock=clock, email="admin_b_search@tenant.com", password=PASSWORD)
         res_cross = await client.get(
             f"/api/v1/organizations/{ORG_B}/cases/{case_id}/search/strategies/active"
         )

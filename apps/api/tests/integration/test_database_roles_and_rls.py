@@ -5,7 +5,7 @@ from uuid import UUID
 
 import psycopg
 import pytest
-from test_support import postgres_url
+from test_support import postgres_url, reset_database, seed_two_tenant_baseline
 
 
 ORG_A = UUID("00000000-0000-4000-8000-000000000001")
@@ -30,63 +30,8 @@ def migration_connection() -> Iterator[psycopg.Connection[tuple[object, ...]]]:
         _url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration"),
         autocommit=True,
     ) as connection:
-        now = datetime.now(UTC)
-        connection.execute("DELETE FROM platform_audit_events")
-        connection.execute("DELETE FROM audit_events")
-        connection.execute("DELETE FROM user_sessions")
-        connection.execute("DELETE FROM platform_operator_grants")
-        connection.execute("DELETE FROM mfa_recovery_codes")
-        connection.execute("DELETE FROM mfa_credentials")
-        connection.execute("DELETE FROM organization_memberships")
-        connection.execute("DELETE FROM organizations")
-        connection.execute("DELETE FROM global_identities")
-        connection.execute(
-            """INSERT INTO global_identities
-            (id,email_normalized,display_name,status,password_hash,created_at,updated_at)
-            VALUES (%s,'a@example.test','A','active','hash-a',%s,%s),
-                   (%s,'b@example.test','B','active','hash-b',%s,%s),
-                   (%s,'platform@example.test','Platform','active','hash-platform',%s,%s)""",
-            (IDENTITY_A, now, now, IDENTITY_B, now, now, IDENTITY_PLATFORM, now, now),
-        )
-        connection.execute(
-            """INSERT INTO organizations
-            (id,slug,display_name,status,created_by,created_at,updated_at)
-            VALUES (%s,'org-a','Organization A','active',%s,%s,%s),
-                   (%s,'org-b','Organization B','active',%s,%s,%s)""",
-            (ORG_A, IDENTITY_A, now, now, ORG_B, IDENTITY_B, now, now),
-        )
-        connection.execute(
-            """INSERT INTO organization_memberships
-            (id,organization_id,global_identity_id,role,status,created_at,updated_at)
-            VALUES (%s,%s,%s,'organization_admin','active',%s,%s),
-                   (%s,%s,%s,'reviewer','active',%s,%s)""",
-            (
-                MEMBERSHIP_A,
-                ORG_A,
-                IDENTITY_A,
-                now,
-                now,
-                MEMBERSHIP_B,
-                ORG_B,
-                IDENTITY_B,
-                now,
-                now,
-            ),
-        )
-        connection.execute(
-            """INSERT INTO mfa_credentials
-            (id,global_identity_id,credential_type,label,encrypted_secret_ciphertext,status,
-             created_at)
-            VALUES (%s,%s,'totp','primary',
-                    %s,'active',%s)""",
-            (MFA_A, IDENTITY_A, b"ciphertext-a", now),
-        )
-        connection.execute(
-            """INSERT INTO platform_operator_grants
-            (id,global_identity_id,role,status,granted_at)
-            VALUES ('35000000-0000-4000-8000-000000000001',%s,'platform_admin','active',%s)""",
-            (IDENTITY_PLATFORM, now),
-        )
+        reset_database(connection)
+        seed_two_tenant_baseline(connection, datetime.now(UTC))
         yield connection
 
 

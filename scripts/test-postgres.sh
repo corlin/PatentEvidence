@@ -42,11 +42,8 @@ export PYTHONPATH="$repository_root/apps/api/src:$repository_root/apps/api/tests
 cd "$repository_root"
 uv sync --frozen --no-install-project
 .venv/bin/alembic -c apps/api/alembic.ini upgrade head
-.venv/bin/pytest \
-  apps/api/tests/integration/test_database_roles_and_rls.py \
-  apps/api/tests/integration/test_database_context.py \
-  apps/api/tests/integration/test_authentication_api.py \
-  apps/api/tests/integration/test_platform_provisioning_api.py \
-  apps/api/tests/integration/test_organization_administration_api.py
+# Run every integration test file. A hand-kept list let new files silently
+# never run (2026-10-04: 9 of 14 files were not executed by this script).
+.venv/bin/pytest apps/api/tests/integration/
 .venv/bin/alembic -c apps/api/alembic.ini downgrade 0001_identity_tenancy
 .venv/bin/alembic -c apps/api/alembic.ini upgrade head

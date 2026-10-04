@@ -12,7 +12,7 @@ from cryptography.fernet import Fernet
 from httpx import ASGITransport, AsyncClient
 
 from patent_evidence_api.main import create_app
-from test_support import api_settings, postgres_url, totp_code
+from test_support import reset_database, api_settings, postgres_url, totp_code
 
 PLATFORM_EMAIL = "platform-e2e@patentevidence.local"
 ADMIN_A_EMAIL = "admin-a@agency-alpha.com"
@@ -44,25 +44,7 @@ def clean_database() -> Iterator[None]:
         "PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration"
     )
     with psycopg.connect(migration_url, autocommit=True) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """TRUNCATE TABLE
-                platform_audit_events,
-                organization_audit_events,
-                organization_invitations,
-                organization_memberships,
-                organization_plan_quotas,
-                organizations,
-                mfa_recovery_codes,
-                mfa_credentials,
-                user_sessions,
-                password_reset_tokens,
-                platform_operator_grants,
-                platform_organization_idempotency,
-                platform_organization_provisioning_records,
-                global_identities
-                CASCADE"""
-            )
+        reset_database(conn)
     yield
 
 
@@ -86,23 +68,25 @@ async def test_p0_02_full_security_and_lifecycle_e2e(clean_database: None) -> No
         os.path.join(os.path.dirname(__file__), "../../../..")
     )
     bootstrap_script = os.path.join(repo_root, "scripts/bootstrap-platform-admin.py")
+    # The script's contract: positional email and display name; password and
+    # database URL from PATENT_EVIDENCE_* environment variables.
     env = {
         **os.environ,
-        "PE_MIGRATION_DATABASE_URL": migration_url,
-        "PE_BOOTSTRAP_PLATFORM_ADMIN_EMAIL": PLATFORM_EMAIL,
-        "PE_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD": PASSWORD_PLATFORM,
-        "PE_MFA_ENCRYPTION_KEY": MFA_KEY,
+        "PATENT_EVIDENCE_MIGRATION_DATABASE_URL": migration_url,
+        "PATENT_EVIDENCE_BOOTSTRAP_PASSWORD": PASSWORD_PLATFORM,
+        "PATENT_EVIDENCE_MFA_ENCRYPTION_KEY": MFA_KEY,
     }
 
     result = subprocess.run(
-        [sys.executable, bootstrap_script],
+        [sys.executable, bootstrap_script, PLATFORM_EMAIL, "Platform Administrator"],
         capture_output=True,
         text=True,
         env=env,
         check=True,
     )
-    assert "Platform administrator initialized" in result.stdout
-    assert PLATFORM_EMAIL in result.stdout
+    assert "Platform administrator created" in result.stdout
+    # The script promises not to print credential material.
+    assert PASSWORD_PLATFORM not in result.stdout + result.stderr
 
     # 2. Platform Admin Log In & Enroll TOTP MFA
     async with AsyncClient(
@@ -124,7 +108,7 @@ async def test_p0_02_full_security_and_lifecycle_e2e(clean_database: None) -> No
             json={"credential_id": cred_id, "code": totp_code(secret, clock())},
         )
         assert confirm_res.status_code == 200
-        assert confirm_res.json()["status"] == "verified"
+        assert confirm_res.json()["status"] == "confirmed"
 
         session_res = await platform_client.get("/api/v1/auth/session")
         assert session_res.status_code == 200
@@ -290,18 +274,32 @@ async def test_p0_02_full_security_and_lifecycle_e2e(clean_database: None) -> No
             headers={"Idempotency-Key": "suspend-alpha-org-001"},
         )
         assert suspend_res.status_code == 200
-        assert suspend_res.json()["organization"]["effective_status"] == "suspended"
+        assert suspend_res.json()["organization"]["status"] == "suspended"
 
-    # 11. Admin A attempts access after suspension -> safe 404
+    # 11. Admin A attempts access after suspension -> 403 forbidden.
+    # OrganizationAccess returns 404 only to non-members (hiding that the organization
+    # exists) and 403 to members of a non-active organization, who already know it exists.
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as admin_a_client:
-        await admin_a_client.post(
+        # Admin A has already logged in several times under the frozen test clock;
+        # the login limiter allows 4 attempts per minute (DeterministicRateLimiter),
+        # so let real time pass instead of tripping it.
+        clock.advance(timedelta(minutes=1, seconds=1))
+        admin_a_login = await admin_a_client.post(
             "/api/v1/auth/login",
             json={"email": ADMIN_A_EMAIL, "password": PASSWORD_ADMIN_A},
         )
-        # Access members of suspended org -> returns 404
+        assert admin_a_login.status_code == 200, admin_a_login.text
+        # Complete MFA first: without it the API rejects with 401 before the
+        # suspension is ever evaluated, and the assertion below would test nothing.
+        admin_a_challenge = await admin_a_client.post(
+            "/api/v1/auth/mfa/challenge",
+            json={"code": totp_code(mfa_enroll.json()["secret"], clock())},
+        )
+        assert admin_a_challenge.status_code == 200, admin_a_challenge.text
         post_suspend_access = await admin_a_client.get(
             f"/api/v1/organizations/{org_a_id}/members"
         )
-        assert post_suspend_access.status_code == 404
+        assert post_suspend_access.status_code == 403
+        assert post_suspend_access.json() == {"detail": "forbidden"}

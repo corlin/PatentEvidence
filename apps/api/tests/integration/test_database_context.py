@@ -1,8 +1,11 @@
 from uuid import UUID
 
+import psycopg
 import pytest
 from sqlalchemy import text
-from test_support import async_postgres_url
+from datetime import UTC, datetime
+
+from test_support import async_postgres_url, postgres_url, reset_database, seed_two_tenant_baseline
 
 from patent_evidence_api.core.database import (
     MissingTenantContextError,
@@ -31,6 +34,16 @@ RUNTIME_IDENTITY = UUID("10000000-0000-4000-8000-000000000004")
 RUNTIME_SESSION = UUID("50000000-0000-4000-8000-000000000004")
 RUNTIME_INVITATION = UUID("60000000-0000-4000-8000-000000000004")
 INVITATION_HASH = "invitation-hash-runtime-context"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _baseline() -> None:
+    """Seed this module's own data instead of relying on another file running first."""
+    with psycopg.connect(
+        postgres_url("PE_TEST_MIGRATION_DATABASE_URL", "patent_evidence_migration"), autocommit=True
+    ) as connection:
+        reset_database(connection)
+        seed_two_tenant_baseline(connection, datetime.now(UTC))
 
 
 def _async_application_url() -> str:
