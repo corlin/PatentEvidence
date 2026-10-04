@@ -11,9 +11,20 @@ import asyncio
 import base64
 import os
 import time
+from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
+
+
+@dataclass(frozen=True)
+class SourceResponse:
+    """A source answer with the exact bytes received, for hashing and archiving."""
+
+    data: dict[str, Any] | None  # None means "not found" (unknown, not "not in force")
+    raw: bytes | None
+    request_ref: str  # method + URL + parameters, never credentials
 
 
 class LegalStatusSourceError(Exception):
@@ -76,21 +87,28 @@ class UsptoOdpClient:
         await self._client.aclose()
 
     async def file_wrapper(self, patent_number: str) -> dict[str, Any] | None:
+        return (await self.file_wrapper_response(patent_number)).data
+
+    async def file_wrapper_response(self, patent_number: str) -> SourceResponse:
+        params = {"q": f"applicationMetaData.patentNumber:{patent_number}", "limit": 1}
+        request_ref = f"GET {self.SEARCH_URL}?{urlencode(params)}"
         response = await _get_with_retries(
             self._client,
             self.SEARCH_URL,
             headers={"X-API-KEY": self.api_key or "", "Accept": "application/json"},
-            params={"q": f"applicationMetaData.patentNumber:{patent_number}", "limit": 1},
+            params=params,
             backoff_seconds=self._backoff,
         )
         if response.status_code == 404:
-            return None
+            return SourceResponse(None, None, request_ref)
         if response.status_code in (401, 403):
             raise LegalStatusSourceError(f"USPTO ODP refused the request (HTTP {response.status_code})")
         if response.status_code != 200:
             raise LegalStatusSourceError(f"USPTO ODP HTTP {response.status_code}")
         bag = response.json().get("patentFileWrapperDataBag") or []
-        return bag[0] if bag else None
+        if not bag:
+            return SourceResponse(None, None, request_ref)
+        return SourceResponse(bag[0], response.content, request_ref)
 
 
 class EpoOpsLegalClient:
@@ -143,15 +161,20 @@ class EpoOpsLegalClient:
         return self._token
 
     async def legal(self, country: str, number: str, kind: str) -> dict[str, Any] | None:
+        return (await self.legal_response(country, number, kind)).data
+
+    async def legal_response(self, country: str, number: str, kind: str) -> SourceResponse:
+        url = f"{self.BASE_URL}/rest-services/legal/publication/docdb/{country}.{number}.{kind}"
+        request_ref = f"GET {url}"
         token = await self._access_token()
         response = await _get_with_retries(
             self._client,
-            f"{self.BASE_URL}/rest-services/legal/publication/docdb/{country}.{number}.{kind}",
+            url,
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
             backoff_seconds=self._backoff,
         )
         if response.status_code == 404:
-            return None
+            return SourceResponse(None, None, request_ref)
         if response.status_code == 403:
             text = response.text
             if "quota" in text.lower() or "throttl" in text.lower():
@@ -159,4 +182,4 @@ class EpoOpsLegalClient:
             raise LegalStatusSourceError("EPO OPS refused the request (HTTP 403)")
         if response.status_code != 200:
             raise LegalStatusSourceError(f"EPO OPS HTTP {response.status_code}")
-        return response.json()
+        return SourceResponse(response.json(), response.content, request_ref)
