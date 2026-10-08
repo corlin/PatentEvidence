@@ -29,7 +29,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from adapters.legal_status.clients import EpoOpsLegalClient, SourceResponse, UsptoOdpClient
 from adapters.object_storage.client import ObjectStorageClient
 from modules.legal_status.ep import assess_ep
-from modules.legal_status.models import LegalStatusAssessment
 from modules.legal_status.serialize import (
     RULES_VERSION,
     assessment_to_dict,
@@ -94,6 +93,11 @@ class LegalStatusRefresher:
             response = await self._odp.file_wrapper_response(number)
             extract = us_extract(response.data) if response.data is not None else None
             data_as_of = extract.get("lastIngestionDateTime") if extract else None
+            assessment = (
+                assess_us(extract, publication_number=publication_number, as_of=as_of)
+                if extract is not None
+                else None
+            )
         else:
             if self._ops is None:
                 raise RuntimeError("EPO OPS client is not configured")
@@ -103,21 +107,19 @@ class LegalStatusRefresher:
             response = await self._ops.legal_response(country, number, kind)
             extract = ep_extract(response.data) if response.data is not None else None
             data_as_of = None  # OPS reports no data snapshot time
+            assessment = (
+                assess_ep(
+                    extract,
+                    publication_number=publication_number,
+                    filing_date=ep_filing_date,
+                    as_of=as_of,
+                )
+                if extract is not None
+                else None
+            )
 
         retrieved_at = self._clock()
         raw_sha, raw_key = await self._archive(source, response)
-
-        assessment: LegalStatusAssessment | None = None
-        if extract is not None:
-            if country == "US":
-                assessment = assess_us(extract, publication_number=publication_number, as_of=as_of)
-            else:
-                assessment = assess_ep(
-                    extract,
-                    publication_number=publication_number,
-                    filing_date=ep_filing_date,  # type: ignore[arg-type]
-                    as_of=as_of,
-                )
 
         record_id = uuid.uuid4()
         assessment_id: uuid.UUID | None = None

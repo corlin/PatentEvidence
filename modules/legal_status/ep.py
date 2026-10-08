@@ -27,10 +27,11 @@ from typing import Any
 from modules.legal_status.models import (
     CountryStatus,
     LegalStatusAssessment,
+    Status,
     StatusEvidence,
     TermComputation,
 )
-from modules.legal_status.us import add_years
+from modules.legal_status.us import add_years, parse_date
 
 SOURCE = "EPO OPS INPADOC"
 REINSTATEMENT_CODES = {"PGRI"}
@@ -77,13 +78,6 @@ def _yyyymmdd(value: str | None) -> date | None:
         return None
 
 
-def _iso(value: Any) -> date | None:
-    try:
-        return date.fromisoformat(str(value)[:10]) if value else None
-    except ValueError:
-        return None
-
-
 def parse_inpadoc(payload: dict[str, Any]) -> list[LegalEvent]:
     """Flatten an OPS ``legal`` JSON response into events (pure function)."""
     raw: list[dict[str, Any]] = []
@@ -124,7 +118,7 @@ def parse_inpadoc(payload: dict[str, Any]) -> list[LegalEvent]:
                 code=str(item.get("@code", "")).strip(),
                 description=str(item.get("@desc", "")).strip(),
                 influence=str(item.get("@infl", " ")),
-                gazette_date=_iso((item.get("ops:L007EP") or {}).get("$")),
+                gazette_date=parse_date((item.get("ops:L007EP") or {}).get("$")),
                 fields=fields,
                 lines=tuple(lines),
             )
@@ -226,12 +220,12 @@ def assess_ep(
         }
     )
 
-    def result(status: str) -> LegalStatusAssessment:
+    def result(status: Status) -> LegalStatusAssessment:
         return LegalStatusAssessment(
             jurisdiction="EP",
             publication_number=publication_number,
             as_of=as_of,
-            status=status,  # type: ignore[arg-type]
+            status=status,
             term=term,
             evidence=evidence,
             review_reasons=tuple(reasons),
