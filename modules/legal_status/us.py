@@ -34,6 +34,7 @@ from typing import Any
 
 from modules.legal_status.models import (
     LegalStatusAssessment,
+    Status,
     StatusEvidence,
     TermComputation,
 )
@@ -48,7 +49,7 @@ EXPIRY_EVENT = "EXP."
 EVIDENCE_EVENT_PREFIXES = ("M155", "M255", "M355", "EXP", "REM")
 
 
-def _parse_date(value: Any) -> date | None:
+def parse_date(value: Any) -> date | None:
     if not value:
         return None
     try:
@@ -67,13 +68,13 @@ def add_years(day: date, years: int) -> date:
 
 def term_start(record: dict[str, Any]) -> tuple[date | None, str]:
     meta = record.get("applicationMetaData") or {}
-    own = _parse_date(meta.get("filingDate"))
+    own = parse_date(meta.get("filingDate"))
     candidates: list[tuple[date, str]] = []
     if own:
         candidates.append((own, f"own filing date {own.isoformat()}"))
     for parent in record.get("parentContinuityBag") or []:
         code = parent.get("claimParentageTypeCode")
-        parent_date = _parse_date(parent.get("parentApplicationFilingDate"))
+        parent_date = parse_date(parent.get("parentApplicationFilingDate"))
         if code in TERM_PARENT_CODES and parent_date:
             candidates.append(
                 (
@@ -100,7 +101,7 @@ def assess_us(
             SOURCE,
             "STATUS",
             status_text,
-            _parse_date(meta.get("applicationStatusDate")),
+            parse_date(meta.get("applicationStatusDate")),
         )
     ]
     for event in events:
@@ -111,12 +112,12 @@ def assess_us(
                     SOURCE,
                     code,
                     event.get("eventDescriptionText") or "",
-                    _parse_date(event.get("eventDate")),
+                    parse_date(event.get("eventDate")),
                 )
             )
 
     reasons: list[str] = []
-    grant = _parse_date(meta.get("grantDate"))
+    grant = parse_date(meta.get("grantDate"))
     start, basis = term_start(record)
     pta = (record.get("patentTermAdjustmentData") or {}).get("adjustmentTotalQuantity")
 
@@ -125,12 +126,12 @@ def assess_us(
         expiry = add_years(start, 20) + timedelta(days=int(pta or 0))
         term = TermComputation(start, basis, 20, int(pta or 0), expiry)
 
-    def result(status: str) -> LegalStatusAssessment:
+    def result(status: Status) -> LegalStatusAssessment:
         return LegalStatusAssessment(
             jurisdiction="US",
             publication_number=publication_number,
             as_of=as_of,
-            status=status,  # type: ignore[arg-type]
+            status=status,
             term=term,
             evidence=tuple(evidence),
             review_reasons=tuple(reasons),
@@ -142,7 +143,7 @@ def assess_us(
         return result("undetermined")
 
     expiry_event_dates = [
-        _parse_date(e.get("eventDate")) for e in events if e.get("eventCode") == EXPIRY_EVENT
+        parse_date(e.get("eventDate")) for e in events if e.get("eventCode") == EXPIRY_EVENT
     ]
     if LAPSED_STATUS_MARKER in status_text:
         if EXPIRY_EVENT not in event_codes:
